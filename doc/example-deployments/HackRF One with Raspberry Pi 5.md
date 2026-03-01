@@ -15,6 +15,23 @@
 
 # Software Installation
 
+- Install Ubuntu Server 25.10
+- Update Ubuntu
+- Upgrade Ubuntu
+- Install Docker by [using the apt repository](https://docs.docker.com/engine/install/ubuntu/)
+- Install HackRF firmware and tools
+  ```bash
+  sudo apt install hackrf*
+  ```
+- Install RTLSdr tools
+  ```bash
+  sudo apt install rtl-sdr*
+  ```
+- Install [Blah2](https://github.com/30hours/blah2)
+- Make sure to place the correct config file for HackRF One in ```/opt/blah2/config/config.yml```. Another type of SDR device could be there be default. All example config files reside in the same directory.
+
+
+
 
 
 # Physical build
