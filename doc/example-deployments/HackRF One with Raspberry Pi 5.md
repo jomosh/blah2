@@ -5,13 +5,17 @@
 - (Optional, but highly recommended) HackRF TCXO
 - 2x antennas tuned for the chosen frequency
 - (Optional for ADS-B) Omni-directional ADS-B antenna
+- Good quality RF cables. Ideally, cables with 50ohm impedance.
+- RF Cable connectors (e.g. SMA)
 - (Optional for ADS-B) RTL-sdr (RTL2832U & R820T2 are fine. No need for an expensive one)
 - (Optional for ADS-B) Low Noise Amplifier (LNA)
 - (Optional for ADS-B & Cooling fan) DC-to-DC Converter
 - (Optional) Cooling fan (5v or 12v)
 - USB Cables (to connect HackRf One and RTL-sdr to RPI)
 - Soldering kit
-- Patch cables
+- Cable crimping tool.
+- Heatshrink sleeves
+- Patch cables (to power LNA, use RPI GPIO, etc.)
 
 # Physical build
 
