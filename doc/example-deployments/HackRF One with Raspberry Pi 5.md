@@ -24,7 +24,7 @@
 
 <img width="1100" height="1058" alt="HackRF-wiring" src="https://github.com/user-attachments/assets/313615b9-5ef6-4165-a537-a4924f94ec22" />
 
-- If you are using a TCXO to enhance the clock stability, put it on the Surviellance device (not shown on the above photo)
+- If you are using a TCXO to enhance the clock stability, put it on the Surveillance device (not shown on the above photo)
 - If you are using an original HackRF One, make sure to have an antenna plugged in all the time when operating the SDR. Otherwise, you may damage the board. (The Clifford Heath version which you can find on AliExpress has a protection circuit against this).
 - Some of the ADS-B packages you'll find below may fail to install correctly if you don't have the RTL-sdr dongle plugged in.
 
@@ -45,6 +45,7 @@
 - Install [blah2](https://github.com/30hours/blah2)
 - Obtain the HackRF One serial numbers by running ```hackrf_info```.
 - Make sure to place the correct config file for HackRF One in ```/opt/blah2/config/config.yml```. Another type of SDR device config could be there be default. All example config files reside in the same directory.
+- At this stage, you just need to put the serial numbers of the reference and surveillance HackRF One devices. Tuning other parameters will be discussed separately.
 - (Optional) As I have been testing outdoors, it may take the HackRF board a bit of time after a cold start to warm up and stabilise. Hence, I force blah2 to restart after 10mins of boot time
   ```bash
   sudo crontab -e
@@ -65,7 +66,7 @@ sudo mv /etc/lighttpd/conf-enabled/88-tar1090.conf /etc/lighttpd/conf-enabled/88
 ```
 The service can be accessed now from ```http://ip_address:8504/```
 
-**Cooling fan**
+**Cooling fan - Optional**
 
 - If you're going to install a cooling fan in your enclosure to cool it down, install "sensors" to get readings from sensors onboard the RPI.
 ```bash
@@ -73,6 +74,19 @@ sudo apt install lm-sensors
 sudo sensors-detect
 sensors
 ```
+- Create the file ```create /opt/automation/fan.sh``` and copy the content of [fan.sh](./fan.sh) inside it.
+- Run
+```bash
+chmod 755 /opt/automation/fan.sh
+sudo crontab -e
+```
+Insert the following line at the end of the file
+```bash
+* * * * * sudo /opt/automation/fan.sh
+```
 
+# Tuning and Troubleshooting
+
+TBC
 
 
