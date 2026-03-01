@@ -28,7 +28,11 @@
 
 <img width="1100" height="1058" alt="HackRF-wiring" src="https://github.com/user-attachments/assets/313615b9-5ef6-4165-a537-a4924f94ec22" />
 
-- If you are using a TCXO to enhance the clock stability, put it on the Surveillance device (not shown on the above photo).
+- If you are using a TCXO to enhance the clock stability, put it on the Surveillance device as shown below.
+
+<img width="994" height="542" src="https://github.com/user-attachments/assets/d157d47c-bcb3-4411-9916-32b2aa0c02ed" />
+
+  
 - If you are using an original HackRF One, make sure to have an antenna plugged in all the time when operating the SDR. Otherwise, you may damage the board. (The Clifford Heath version which you can find on AliExpress has a protection circuit against this).
 - Some of the ADS-B packages you'll find below may fail to install correctly if you don't have the RTL-sdr dongle plugged in.
 
