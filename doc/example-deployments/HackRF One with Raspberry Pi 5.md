@@ -51,7 +51,7 @@
   sudo apt install rtl-sdr*
   ```
 - Install [blah2](https://github.com/30hours/blah2)
-- If the installation had failed, this is likely due to the default Dockerfile. It was written for x64 machines. You need to replace it with [this file](/30hours/blah2/blob/main/contrib/raspberrypi/Dockerfile) that was written for ARM devices.
+- If the installation had failed, this is likely due to the default Dockerfile. It was written for x64 machines. You need to replace it with [this Dockerfile](/30hours/blah2/blob/main/contrib/raspberrypi/Dockerfile) that was written for ARM devices.
 - Obtain the HackRF One serial numbers by running ```hackrf_info```.
 - Make sure to place the correct config file for HackRF One in ```/opt/blah2/config/config.yml```. Another type of SDR device config could be there be default. All example config files reside in the same directory.
 - At this stage, you just need to put the serial numbers of the reference and surveillance HackRF One devices. Tuning other parameters will be discussed separately.
