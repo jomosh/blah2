@@ -17,8 +17,13 @@
 
 **Circuit Diagram**
 
-<img width="717" height="369" alt="Circuit-Diagram" src="https://github.com/user-attachments/assets/c50fbe89-3d40-4739-a544-893498f0a7ee" />
+<img alt="Circuit-Diagram" src="https://github.com/user-attachments/assets/c50fbe89-3d40-4739-a544-893498f0a7ee" />
 
+**Wiring of the 2 HackRF One devices**
+
+<img width="1100" height="1058" alt="HackRF-wiring" src="https://github.com/user-attachments/assets/313615b9-5ef6-4165-a537-a4924f94ec22" />
+
+- If you are using a TCXO to enhance the clock stability, put it on the Surviellance device (not shown on the above photo)
 - If you are using an original HackRF One, make sure to have an antenna plugged in all the time when operating the SDR. Otherwise, you may damage the board. (The Clifford Heath version which you can find on AliExpress has a protection circuit against this).
 - Some of the ADS-B packages you'll find below may fail to install correctly if you don't have the RTL-sdr dongle plugged in.
 
