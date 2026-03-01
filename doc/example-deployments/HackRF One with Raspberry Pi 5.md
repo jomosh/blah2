@@ -28,7 +28,7 @@
   sudo apt install rtl-sdr*
   ```
 - Install [Blah2](https://github.com/30hours/blah2)
-- Make sure to place the correct config file for HackRF One in ```/opt/blah2/config/config.yml```. Another type of SDR device could be there be default. All example config files reside in the same directory.
+- Make sure to place the correct config file for HackRF One in ```/opt/blah2/config/config.yml```. Another type of SDR device config could be there be default. All example config files reside in the same directory.
 
 
 
