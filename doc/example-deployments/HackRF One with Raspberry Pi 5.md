@@ -1,15 +1,15 @@
 # Components 
 
-- Raspberry Pi 5 with 16GB RAM
+- Raspberry Pi 5 (RPI) with 16GB RAM
 - 2x HackRF One SDR
-- (Highly recommended) HackRF TCXO
+- (Optional, but highly recommended) HackRF TCXO
 - 2x antennas tuned for the chosen frequency
 - (Optional for ADS-B) Omni-directional ADS-B antenna
 - (Optional for ADS-B) RTL-sdr (RTL2832U & R820T2 are fine. No need for an expensive one)
 - (Optional for ADS-B) Low Noise Amplifier (LNA)
 - (Optional for ADS-B & Cooling fan) DC-to-DC Converter
 - (Optional) Cooling fan (5v or 12v)
-- USB Cables
+- USB Cables (to connect HackRf One and RTL-sdr to RPI)
 - Soldering kit
 - Patch cables
 
@@ -17,7 +17,8 @@
 
 **Circuit Diagram**
 
-<img alt="Circuit-Diagram" src="https://github.com/user-attachments/assets/c50fbe89-3d40-4739-a544-893498f0a7ee" />
+<img width="898" height="484" alt="HackRF-Circuit-diagram" src="https://github.com/user-attachments/assets/f7eaefdf-f8d7-41a9-b56f-dfaa40f566fa" />
+
 
 **Wiring of the 2 HackRF One devices**
 
@@ -35,9 +36,9 @@
 - Install Docker by [using the apt repository](https://docs.docker.com/engine/install/ubuntu/)
 - Install HackRF firmware and tools
   ```bash
-  sudo apt install hackrf*
+  sudo apt install hackrf
   ```
-- Install RTLSdr tools
+- Install RTL-sdr tools
   ```bash
   sudo apt install rtl-sdr*
   ```
@@ -52,6 +53,26 @@
   ```bash
   @reboot sleep 600 && sudo docker compose -f /opt/blah2/docker-compose.yml down; sudo docker compose -f /opt/blah2/docker-compose.yml up
   ```
+- Install [adsb2dd](https://github.com/30hours/adsb2dd). No additional configuration is required for adsb2dd.
+- Install readsb (it helps if the rtl-sdr dongle is plugged in!). Instruction can be found [here](https://github.com/wiedehopf/adsb-scripts/wiki/Automatic-installation-for-readsb).
+- Set your radar location by putting the right coordinates. (latitude, longitude)
+  ```bash
+  sudo readsb-set-location 0.00000001 0.00000001
+  ```
+- Install [tar1090](https://github.com/wiedehopf/tar1090). After installation, do the following.
+```bash
+sudo mv /etc/lighttpd/conf-enabled/88-tar1090.conf /etc/lighttpd/conf-enabled/88-tar1090.conf_archived
+```
+The service can be accessed now from ```http://ip_address:8504/```
+
+**Cooling fan**
+
+- If you're going to install a cooling fan in your enclosure to cool it down, install "sensors" to get readings from sensors onboard the RPI.
+```bash
+sudo apt install lm-sensors
+sudo sensors-detect
+sensors
+```
 
 
 
