@@ -1,21 +1,21 @@
 # Components 
 
-- Raspberry Pi 5 (RPI) with 16GB RAM
-- 2x HackRF One SDR
-- (Optional, but highly recommended) HackRF TCXO
-- 2x antennas tuned for the chosen frequency
-- (Optional for ADS-B) Omni-directional ADS-B antenna
+- Raspberry Pi 5 (RPI) with 16GB RAM.
+- 2x HackRF One SDR.
+- (Optional, but highly recommended) HackRF TCXO.
+- 2x antennas tuned for the chosen frequency.
+- (Optional for ADS-B) Omni-directional ADS-B antenna.
 - Good quality RF cables. Ideally, cables with 50ohm impedance.
-- RF Cable connectors (e.g. SMA)
-- (Optional for ADS-B) RTL-sdr (RTL2832U & R820T2 are fine. No need for an expensive one)
-- (Optional for ADS-B) Low Noise Amplifier (LNA)
-- (Optional for ADS-B & Cooling fan) DC-to-DC Converter
-- (Optional) Cooling fan (5v or 12v)
-- USB Cables (to connect HackRf One and RTL-sdr to RPI)
-- Soldering kit
+- RF Cable connectors (e.g. SMA).
+- (Optional for ADS-B) RTL-sdr (RTL2832U & R820T2 are fine. No need for an expensive one).
+- (Optional for ADS-B) Low Noise Amplifier (LNA).
+- (Optional for ADS-B & Cooling fan) DC-to-DC Converter.
+- (Optional) Cooling fan (5v or 12v).
+- USB Cables (to connect HackRf One and RTL-sdr to RPI).
+- Soldering kit.
 - Cable crimping tool.
-- Heatshrink sleeves
-- Patch cables (to power LNA, use RPI GPIO, etc.)
+- Heatshrink sleeves.
+- Patch cables (to power LNA, use RPI GPIO, etc.).
 
 # Physical build
 
@@ -28,7 +28,7 @@
 
 <img width="1100" height="1058" alt="HackRF-wiring" src="https://github.com/user-attachments/assets/313615b9-5ef6-4165-a537-a4924f94ec22" />
 
-- If you are using a TCXO to enhance the clock stability, put it on the Surveillance device (not shown on the above photo)
+- If you are using a TCXO to enhance the clock stability, put it on the Surveillance device (not shown on the above photo).
 - If you are using an original HackRF One, make sure to have an antenna plugged in all the time when operating the SDR. Otherwise, you may damage the board. (The Clifford Heath version which you can find on AliExpress has a protection circuit against this).
 - Some of the ADS-B packages you'll find below may fail to install correctly if you don't have the RTL-sdr dongle plugged in.
 
