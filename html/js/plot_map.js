@@ -146,7 +146,7 @@ var data = [
       opacity: 1.0,
       color: 'rgba(255, 255, 0, 1)'
     },
-    hovertemplate: '%{text}<br>Range: %{x}<br>Doppler: %{y}',
+    hovertemplate: 'ADS-B Target: %{text}<br>Range: %{x}<br>Doppler: %{y}',
     name: 'Selected ADS-B'
   }
 ];
