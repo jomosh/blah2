@@ -9,32 +9,19 @@ var range_y = [];
 var urlTimestamp;
 var urlDetection;
 var urlAdsb;
-var urlAdsbLink;
 var urlConfig;
 if (isLocalHost) {
   urlTimestamp = '//' + host + ':3000/api/timestamp';
-} else {
-  urlTimestamp = '//' + host + '/api/timestamp';
-}
-if (isLocalHost) {
   urlDetection = '//' + host + ':3000/api/detection';
-} else {
-  urlDetection = '//' + host + '/api/detection';
-}
-if (isLocalHost) {
+  urlAdsb = '//' + host + ':3000/api/adsb';
+  urlConfig = '//' + host + ':3000/api/config';
   urlMap = '//' + host + ':3000' + urlMap;
 } else {
-  urlMap = '//' + host + urlMap;
-}
-if (isLocalHost) {
-  urlAdsbLink = '//' + host + ':3000/api/adsb2dd';
-} else {
-  urlAdsbLink = '//' + host + '/api/adsb2dd';
-}
-if (isLocalHost) {
-  urlConfig = '//' + host + ':3000/api/config';
-} else {
+  urlTimestamp = '//' + host + '/api/timestamp';
+  urlDetection = '//' + host + '/api/detection';
+  urlAdsb = '//' + host + '/api/adsb';
   urlConfig = '//' + host + '/api/config';
+  urlMap = '//' + host + urlMap;
 }
 
 // get truth flag
@@ -43,13 +30,6 @@ $.getJSON(urlConfig, function () { })
 .done(function (data_config) {
   if (data_config.truth.adsb.enabled === true) {
     isTruth = true;
-    $.getJSON(urlAdsbLink, function () { })
-    .done(function (data) {
-      urlAdsb = data.url;
-      if (!is_localhost(new URL(urlAdsb).hostname)) {
-        urlAdsb = urlAdsb.replace(/^http:/, 'https:');
-      }
-    })
   }
 });
 
@@ -292,7 +272,7 @@ var intervalId = window.setInterval(function () {
             detection = data_detection;
           });
 
-        // get ADS-B data if enabled in config
+        // get ADS-B data from the C++ pipeline if enabled
         if (isTruth) {
           $.getJSON(urlAdsb, function () { })
             .done(function (data_adsb) {

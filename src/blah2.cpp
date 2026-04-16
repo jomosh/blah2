@@ -18,6 +18,7 @@
 #include "process/utility/Socket.h"
 #include "data/meta/Constants.h"
 
+#include <httplib.h>
 #include <ryml/ryml.hpp>
 #include <ryml/ryml_std.hpp> // optional header, provided for std:: interop
 #include <c4/format.hpp> // needed for the examples below
@@ -42,6 +43,7 @@ std::unique_ptr<Socket> socket_track;
 std::unique_ptr<Socket> socket_timestamp;
 std::unique_ptr<Socket> socket_timing;
 std::unique_ptr<Socket> socket_iqdata;
+std::unique_ptr<Socket> socket_adsb;
 
 void signal_callback_handler(int signum);
 void getopt_print_help();
@@ -88,7 +90,7 @@ int main(int argc, char **argv)
   // set up socket
   sleep(2);
   uint16_t port_map, port_detection, port_timestamp, 
-    port_timing, port_iqdata, port_track;
+    port_timing, port_iqdata, port_track, port_adsb;
   std::string ip;
   tree["network"]["ports"]["map"] >> port_map;
   tree["network"]["ports"]["detection"] >> port_detection;
@@ -96,6 +98,7 @@ int main(int argc, char **argv)
   tree["network"]["ports"]["timestamp"] >> port_timestamp;
   tree["network"]["ports"]["timing"] >> port_timing;
   tree["network"]["ports"]["iqdata"] >> port_iqdata;
+  tree["network"]["ports"]["adsb"] >> port_adsb;
   tree["network"]["ip"] >> ip;
   
   try {
@@ -105,6 +108,7 @@ int main(int argc, char **argv)
     socket_timestamp = std::make_unique<Socket>(ip, port_timestamp);
     socket_timing = std::make_unique<Socket>(ip, port_timing);
     socket_iqdata = std::make_unique<Socket>(ip, port_iqdata);
+    socket_adsb = std::make_unique<Socket>(ip, port_adsb);
   } catch (const std::exception& e) {
     std::cerr << "Failed to initialize socket connections: " << e.what() << "\n";
     std::cerr << "Make sure the server at " << ip << " is reachable." << "\n";
@@ -193,6 +197,22 @@ int main(int argc, char **argv)
   rangeRes = (double)Constants::c/fs;
   lambda = (double)Constants::c/fc;
   Tracker *tracker = new Tracker(m, n, nDelete, ambiguity->get_cpi(), maxAcc, rangeRes, lambda);
+
+  // set up ADS-B ingestion if available
+  bool isAdsb = false;
+  std::string adsbHost;
+  std::string tar1090;
+  double rxLatitude = 0.0, rxLongitude = 0.0, rxAltitude = 0.0;
+  double txLatitude = 0.0, txLongitude = 0.0, txAltitude = 0.0;
+  tree["truth"]["adsb"]["enabled"] >> isAdsb;
+  tree["truth"]["adsb"]["adsb2dd"] >> adsbHost;
+  tree["truth"]["adsb"]["tar1090"] >> tar1090;
+  tree["location"]["rx"]["latitude"] >> rxLatitude;
+  tree["location"]["rx"]["longitude"] >> rxLongitude;
+  tree["location"]["rx"]["altitude"] >> rxAltitude;
+  tree["location"]["tx"]["latitude"] >> txLatitude;
+  tree["location"]["tx"]["longitude"] >> txLongitude;
+  tree["location"]["tx"]["altitude"] >> txAltitude;
 
   // set up process spectrum analyser
   double spectrumBandwidth = 2000;
@@ -326,6 +346,26 @@ int main(int argc, char **argv)
             jsonTracker = track->to_json(time[0]/1000);
             socket_track->sendData(jsonTracker);
           }
+
+          // output ADS-B truth from external source through the C++ pipeline
+          std::string jsonAdsb = "{}";
+          if (isAdsb && !adsbHost.empty())
+          {
+            httplib::Client cli(("http://" + adsbHost).c_str());
+            std::ostringstream query;
+            query << "/api/dd?rx=" << rxLatitude << "," << rxLongitude << "," << rxAltitude;
+            query << "&tx=" << txLatitude << "," << txLongitude << "," << txAltitude;
+            query << "&fc=" << (fc / 1000000.0);
+            query << "&server=" << "http://" << tar1090;
+            if (auto res = cli.Get(query.str().c_str()))
+            {
+              if (res->status == 200 && !res->body.empty())
+              {
+                jsonAdsb = res->body;
+              }
+            }
+          }
+          socket_adsb->sendData(jsonAdsb);
 
           // output radar data timer
           timing_helper(timing_name, timing_time, time, "output_radar_data");

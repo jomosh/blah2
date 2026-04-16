@@ -24,15 +24,17 @@ const HOST = config.network.ip;
 var map = '';
 var detection = '';
 var track = '';
+var adsb = '{}';
 var timestamp = '';
 var timing = '';
 var iqdata = '';
-var data_map;
-var data_detection;
-var data_tracker;
-var data_timestamp;
-var data_timing;
-var data_iqdata;
+var data_map = '';
+var data_detection = '';
+var data_tracker = '';
+var data_adsb = '';
+var data_timestamp = '';
+var data_timing = '';
+var data_iqdata = '';
 var capture = false;
 
 // api server
@@ -56,6 +58,10 @@ app.get('/api/detection', (req, res) => {
 });
 app.get('/api/tracker', (req, res) => {
   res.send(track);
+});
+app.get('/api/adsb', (req, res) => {
+  res.header('Content-Type', 'application/json');
+  res.send(adsb);
 });
 app.get('/api/timestamp', (req, res) => {
   res.send(timestamp);
@@ -166,6 +172,22 @@ const server_tracker = net.createServer((socket)=>{
   })
 });
 server_tracker.listen(config.network.ports.track);
+
+// tcp listener adsb
+const server_adsb = net.createServer((socket)=>{
+  socket.on("data",(msg)=>{
+      data_adsb = data_adsb + msg.toString();
+      if (data_adsb.slice(-1) === "}")
+      {
+        adsb = data_adsb;
+        data_adsb = '';
+      }
+  });
+  socket.on("close",()=>{
+      console.log("Connection closed.");
+  })
+});
+server_adsb.listen(config.network.ports.adsb);
 
 // tcp listener timestamp
 const server_timestamp = net.createServer((socket)=>{
