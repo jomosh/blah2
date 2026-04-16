@@ -52,6 +52,7 @@ network:
     map: 3001
     detection: 3002
     track: 3003
+    adsb: 3004    
     timestamp: 4000
     timing: 4001
     iqdata: 4002
