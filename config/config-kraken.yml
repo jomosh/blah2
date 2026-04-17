@@ -52,11 +52,24 @@ network:
     map: 3001
     detection: 3002
     track: 3003
-    adsb: 3004    
+    adsb: 3004
     timestamp: 4000
     timing: 4001
     iqdata: 4002
     config: 4003
+
+learning:
+  enabled: false      # true = learning mode, false = production
+  path: ""           # optional path for learning log output
+  use_model: false     # apply inline model values in production
+  model:
+    type: "linear"   # currently only linear scoring supported
+    threshold: 0.5
+    weights:
+      delay: 0.0
+      doppler: 0.0
+      snr: 1.0
+    bias: 0.0
 
 truth:
   adsb:
