@@ -62,7 +62,7 @@ network:
 
 learning:
   enabled: false      # true = learning mode, false = production
-  path: "/blah2/save/"           # optional path for learning log output
+  path: ""           # optional path for learning log output
   use_model: false     # apply inline model values in production
   model:
     type: "linear"   # currently only linear scoring supported
