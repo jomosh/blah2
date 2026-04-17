@@ -28,6 +28,7 @@
 #include <vector>
 #include <fstream>
 #include <sstream>
+#include <algorithm>
 #include <thread>
 #include <chrono>
 #include <sys/time.h>
@@ -54,6 +55,67 @@ uint64_t current_time_us();
 void timing_helper(std::vector<std::string>& timing_name, 
   std::vector<double>& timing_time, std::vector<uint64_t>& time_us, 
   std::string name);
+
+struct MlModelConfig
+{
+  bool loaded = false;
+  std::string type = "linear";
+  double threshold = 0.0;
+  double weight_delay = 0.0;
+  double weight_doppler = 0.0;
+  double weight_snr = 0.0;
+  double bias = 0.0;
+};
+
+double score_detection_sample(double delay, double doppler, double snr, const MlModelConfig &model);
+std::unique_ptr<Detection> filter_detection_by_model(std::unique_ptr<Detection> detection, const MlModelConfig &model);
+
+double score_detection_sample(double delay, double doppler, double snr, const MlModelConfig &model)
+{
+  if (model.type == "linear")
+  {
+    return model.weight_delay * delay + model.weight_doppler * doppler + model.weight_snr * snr + model.bias;
+  }
+  return model.weight_delay * delay + model.weight_doppler * doppler + model.weight_snr * snr + model.bias;
+}
+
+std::unique_ptr<Detection> filter_detection_by_model(std::unique_ptr<Detection> detection, const MlModelConfig &model)
+{
+  if (!detection || !model.loaded)
+  {
+    return detection;
+  }
+
+  const std::vector<double> delays = detection->get_delay();
+  const std::vector<double> dopplers = detection->get_doppler();
+  const std::vector<double> snrs = detection->get_snr();
+  size_t count = std::min({delays.size(), dopplers.size(), snrs.size()});
+
+  std::vector<double> filteredDelay;
+  std::vector<double> filteredDoppler;
+  std::vector<double> filteredSnr;
+  filteredDelay.reserve(count);
+  filteredDoppler.reserve(count);
+  filteredSnr.reserve(count);
+
+  for (size_t i = 0; i < count; i++)
+  {
+    double score = score_detection_sample(delays[i], dopplers[i], snrs[i], model);
+    if (score >= model.threshold)
+    {
+      filteredDelay.push_back(delays[i]);
+      filteredDoppler.push_back(dopplers[i]);
+      filteredSnr.push_back(snrs[i]);
+    }
+  }
+
+  if (filteredDelay.size() == count)
+  {
+    return detection;
+  }
+
+  return std::make_unique<Detection>(filteredDelay, filteredDoppler, filteredSnr);
+}
 
 int main(int argc, char **argv)
 {
@@ -204,9 +266,27 @@ int main(int argc, char **argv)
   std::string tar1090;
   double rxLatitude = 0.0, rxLongitude = 0.0, rxAltitude = 0.0;
   double txLatitude = 0.0, txLongitude = 0.0, txAltitude = 0.0;
+  bool isLearning = false;
+  std::string learningPath;
+  bool useModel = false;
+  std::string modelType;
+  double modelThreshold = 0.5;
+  double modelWeightDelay = 0.0;
+  double modelWeightDoppler = 0.0;
+  double modelWeightSnr = 1.0;
+  double modelBias = 0.0;
   tree["truth"]["adsb"]["enabled"] >> isAdsb;
   tree["truth"]["adsb"]["adsb2dd"] >> adsbHost;
   tree["truth"]["adsb"]["tar1090"] >> tar1090;
+  tree["learning"]["enabled"] >> isLearning;
+  tree["learning"]["path"] >> learningPath;
+  tree["learning"]["use_model"] >> useModel;
+  tree["learning"]["model"]["type"] >> modelType;
+  tree["learning"]["model"]["threshold"] >> modelThreshold;
+  tree["learning"]["model"]["weights"]["delay"] >> modelWeightDelay;
+  tree["learning"]["model"]["weights"]["doppler"] >> modelWeightDoppler;
+  tree["learning"]["model"]["weights"]["snr"] >> modelWeightSnr;
+  tree["learning"]["model"]["bias"] >> modelBias;
   tree["location"]["rx"]["latitude"] >> rxLatitude;
   tree["location"]["rx"]["longitude"] >> rxLongitude;
   tree["location"]["rx"]["altitude"] >> rxAltitude;
@@ -233,7 +313,7 @@ int main(int argc, char **argv)
   tree["save"]["map"] >> saveMap;
   tree["save"]["detection"] >> saveDetection;
   std::string savePath, saveMapPath, saveDetectionPath;
-  if (saveIq || saveMap || saveDetection)
+  if (saveIq || saveMap || saveDetection || isLearning)
   {
     char startTimeStr[16];
     struct timeval currentTime = {0, 0};
@@ -241,6 +321,7 @@ int main(int argc, char **argv)
     strftime(startTimeStr, 16, "%Y%m%d-%H%M%S", localtime(&currentTime.tv_sec));
     savePath = path + startTimeStr;
   }
+  std::ofstream learningLog;
   if (saveMap)
   {
     saveMapPath = savePath + ".map";
@@ -248,6 +329,26 @@ int main(int argc, char **argv)
   if (saveDetection)
   {
     saveDetectionPath = savePath + ".detection";
+  }
+  if (isLearning)
+  {
+    if (learningPath.empty())
+    {
+      learningPath = savePath + ".learning.jsonl";
+    }
+    else if (learningPath.back() == '/')
+    {
+      learningPath += "learning.jsonl";
+    }
+    learningLog.open(learningPath, std::ios::out | std::ios::app);
+    if (!learningLog.is_open())
+    {
+      std::cerr << "Warning: could not open learning log file " << learningPath << "\n";
+    }
+    else
+    {
+      std::cout << "Learning mode enabled. Logging examples to " << learningPath << "\n";
+    }
   }
 
   // set up output timing
@@ -258,8 +359,21 @@ int main(int argc, char **argv)
   std::string jsonTiming;
   std::vector<uint64_t> time;
 
+  MlModelConfig mlModel;
+  if (!isLearning && useModel)
+  {
+    mlModel.loaded = true;
+    mlModel.type = modelType.empty() ? "linear" : modelType;
+    mlModel.threshold = modelThreshold;
+    mlModel.weight_delay = modelWeightDelay;
+    mlModel.weight_doppler = modelWeightDoppler;
+    mlModel.weight_snr = modelWeightSnr;
+    mlModel.bias = modelBias;
+    std::cout << "Loaded inline ML model for production scoring (type=" << mlModel.type << ", threshold=" << mlModel.threshold << ")\n";
+  }
+
   // set up output json
-  std::string mapJson, detectionJson, jsonTracker, jsonIqData;
+  std::string mapJson, detectionJson, jsonTracker, jsonIqData, trackJson;
 
   // run process
   std::thread t2([&]{
@@ -308,6 +422,11 @@ int main(int argc, char **argv)
             timing_helper(timing_name, timing_time, time, "detector");
           }
 
+          if (!isLearning && useModel && mlModel.loaded)
+          {
+            detection = filter_detection_by_model(std::move(detection), mlModel);
+          }
+
           // tracker process
           if (isTracker)
           {
@@ -335,15 +454,21 @@ int main(int argc, char **argv)
             detectionJson = detection->delay_bin_to_km(detectionJson, fs);
             socket_detection->sendData(detectionJson);
           }
+          else
+          {
+            detectionJson = "{}";
+          }
           if (saveDetection)
           {
             detection->save(detectionJson, saveDetectionPath);
           }
 
           // output tracker data
+          trackJson = "{}";
           if (isTracker)
           {
             jsonTracker = track->to_json(time[0]/1000);
+            trackJson = jsonTracker;
             socket_track->sendData(jsonTracker);
           }
 
@@ -366,6 +491,14 @@ int main(int argc, char **argv)
             }
           }
           socket_adsb->sendData(jsonAdsb);
+
+          if (isLearning && learningLog.is_open())
+          {
+            learningLog << "{\"timestamp\":" << (time[0]/1000)
+                        << ",\"detection\":" << detectionJson
+                        << ",\"track\":" << trackJson
+                        << ",\"adsb\":" << jsonAdsb << "}\n";
+          }
 
           // output radar data timer
           timing_helper(timing_name, timing_time, time, "output_radar_data");
