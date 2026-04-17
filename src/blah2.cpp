@@ -58,7 +58,6 @@ void timing_helper(std::vector<std::string>& timing_name,
 
 struct MlModelConfig
 {
-  bool loaded = false;
   std::string type = "linear";
   double threshold = 0.0;
   double weight_delay = 0.0;
@@ -72,23 +71,19 @@ std::unique_ptr<Detection> filter_detection_by_model(std::unique_ptr<Detection> 
 
 double score_detection_sample(double delay, double doppler, double snr, const MlModelConfig &model)
 {
-  if (model.type == "linear")
-  {
-    return model.weight_delay * delay + model.weight_doppler * doppler + model.weight_snr * snr + model.bias;
-  }
   return model.weight_delay * delay + model.weight_doppler * doppler + model.weight_snr * snr + model.bias;
 }
 
 std::unique_ptr<Detection> filter_detection_by_model(std::unique_ptr<Detection> detection, const MlModelConfig &model)
 {
-  if (!detection || !model.loaded)
+  if (!detection)
   {
     return detection;
   }
 
-  const std::vector<double> delays = detection->get_delay();
-  const std::vector<double> dopplers = detection->get_doppler();
-  const std::vector<double> snrs = detection->get_snr();
+  const std::vector<double> &delays = detection->get_delay_ref();
+  const std::vector<double> &dopplers = detection->get_doppler_ref();
+  const std::vector<double> &snrs = detection->get_snr_ref();
   size_t count = std::min({delays.size(), dopplers.size(), snrs.size()});
 
   std::vector<double> filteredDelay;
@@ -362,7 +357,6 @@ int main(int argc, char **argv)
   MlModelConfig mlModel;
   if (!isLearning && useModel)
   {
-    mlModel.loaded = true;
     mlModel.type = modelType.empty() ? "linear" : modelType;
     mlModel.threshold = modelThreshold;
     mlModel.weight_delay = modelWeightDelay;
@@ -422,7 +416,7 @@ int main(int argc, char **argv)
             timing_helper(timing_name, timing_time, time, "detector");
           }
 
-          if (!isLearning && useModel && mlModel.loaded)
+          if (!isLearning && useModel)
           {
             detection = filter_detection_by_model(std::move(detection), mlModel);
           }
@@ -467,8 +461,7 @@ int main(int argc, char **argv)
           trackJson = "{}";
           if (isTracker)
           {
-            jsonTracker = track->to_json(time[0]/1000);
-            jsonTracker = track->delay_bin_to_km(jsonTracker, fs);
+            jsonTracker = track->to_json(time[0]/1000, fs);
             trackJson = jsonTracker;
             socket_track->sendData(jsonTracker);
           }

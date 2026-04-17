@@ -29,10 +29,14 @@ if (isLocalHost) {
 
 // get truth flag
 var isTruth = false;
+var isTrackerEnabled = false;
 $.getJSON(urlConfig, function () { })
 .done(function (data_config) {
   if (data_config.truth.adsb.enabled === true) {
     isTruth = true;
+  }
+  if (data_config.process && data_config.process.tracker && data_config.process.tracker.enable === true) {
+    isTrackerEnabled = true;
   }
 });
 
@@ -240,7 +244,7 @@ function getTrackTraceSelection(track) {
   });
 
   var merged = {delay: [], doppler: [], flight: []};
-  Object.keys(maxholdTrackHistory).sort().forEach(function (key) {
+  Object.keys(maxholdTrackHistory).forEach(function (key) {
     merged.delay.push(maxholdTrackHistory[key].delay);
     merged.doppler.push(maxholdTrackHistory[key].doppler);
     merged.flight.push(maxholdTrackHistory[key].flight);
@@ -346,10 +350,17 @@ var intervalId = window.setInterval(function () {
           });
 
         // get tracker data for the doppler map overlay
-        $.getJSON(urlTracker, function () { })
-          .done(function (data_tracker) {
-            track = data_tracker;
-          });
+        if (isTrackerEnabled) {
+          $.getJSON(urlTracker, function () { })
+            .done(function (data_tracker) {
+              track = data_tracker;
+            })
+            .fail(function () {
+              track = {};
+            });
+        } else {
+          track = {};
+        }
 
         // get ADS-B data from the C++ pipeline if enabled
         if (isTruth) {
