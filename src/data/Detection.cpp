@@ -29,12 +29,27 @@ std::vector<double> Detection::get_delay()
   return delay;
 }
 
+const std::vector<double>& Detection::get_delay_ref() const
+{
+  return delay;
+}
+
 std::vector<double> Detection::get_doppler()
 {
   return doppler;
 }
 
+const std::vector<double>& Detection::get_doppler_ref() const
+{
+  return doppler;
+}
+
 std::vector<double> Detection::get_snr()
+{
+  return snr;
+}
+
+const std::vector<double>& Detection::get_snr_ref() const
 {
   return snr;
 }
