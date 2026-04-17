@@ -156,6 +156,12 @@ public:
   /// @return JSON string.
   std::string to_json(uint64_t timestamp);
 
+  /// @brief Convert delay fields in track JSON from bins to km.
+  /// @param json Track JSON string.
+  /// @param fs Sampling frequency (Hz).
+  /// @return Track JSON string with delay values in km.
+  std::string delay_bin_to_km(std::string json, uint32_t fs);
+
   /// @brief Append the map to a save file.
   /// @param json JSON string of map and metadata.
   /// @param path Path of file to save.
