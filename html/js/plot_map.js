@@ -139,9 +139,14 @@ var data = [
     mode: 'markers',
     type: 'scatter',
     marker: {
-      size: 14,
-      opacity: 0.9,
-      color: 'rgba(255, 0, 0, 0.9)'
+      size: 20,
+      symbol: 'x',
+      opacity: 1.0,
+      color: 'rgba(255, 0, 0, 1)',
+      line: {
+        width: 2,
+        color: 'rgba(255, 255, 255, 1)'
+      }
     },
     hovertemplate: 'Track: %{text}<br>Range: %{x}<br>Doppler: %{y}',
     name: 'Tracks'
@@ -413,9 +418,14 @@ var intervalId = window.setInterval(function () {
                 mode: 'markers',
                 type: 'scatter',
                 marker: {
-                  size: 14,
-                  opacity: 0.9,
-                  color: 'rgba(255, 0, 0, 0.9)'
+                  size: 20,
+                  symbol: 'x',
+                  opacity: 1.0,
+                  color: 'rgba(255, 0, 0, 1)',
+                  line: {
+                    width: 2,
+                    color: 'rgba(255, 255, 255, 1)'
+                  }
                 },
                 hovertemplate: 'Track: %{text}<br>Range: %{x}<br>Doppler: %{y}',
                 name: 'Tracks'
