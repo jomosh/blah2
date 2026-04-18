@@ -56,6 +56,15 @@ public:
   /// @return JSON string.
   std::string to_json(uint64_t timestamp);
 
+  /// @brief Generate JSON of detections for learning schema v2.
+  /// @param timestamp Current time (POSIX ms).
+  /// @param fs Sampling frequency (Hz).
+  /// @param includeDerived Include optional derived feature placeholders.
+  /// @param maxCandidates Maximum candidates to include (0 = no cap).
+  /// @return JSON string.
+  std::string to_learning_json(uint64_t timestamp, uint32_t fs,
+    bool includeDerived, uint32_t maxCandidates);
+
   /// @brief Update JSON to convert delay bins to km.
   /// @param json Input JSON string with delay field.
   /// @param fs Sampling frequency (Hz).

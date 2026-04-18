@@ -36,6 +36,9 @@
 #include <atomic>
 #include <memory>
 #include <iostream>
+#include <functional>
+
+#include "rapidjson/document.h"
 
 Capture *CAPTURE_POINTER = NULL;
 std::unique_ptr<Socket> socket_map;
@@ -269,6 +272,11 @@ int main(int argc, char **argv)
   bool isLearning = false;
   std::string learningPath;
   bool useModel = false;
+  uint32_t learningSchemaVersion = 1;
+  std::string learningLabelingMode = "none";
+  uint32_t learningMaxCandidates = 0;
+  bool learningIncludeTentativeTracks = false;
+  bool learningIncludeDerivedFeatures = true;
   std::string modelType;
   double modelThreshold = 0.5;
   double modelWeightDelay = 0.0;
@@ -281,6 +289,29 @@ int main(int argc, char **argv)
   tree["learning"]["enabled"] >> isLearning;
   tree["learning"]["path"] >> learningPath;
   tree["learning"]["use_model"] >> useModel;
+  if (tree["learning"].has_child("schema_version"))
+  {
+    tree["learning"]["schema_version"] >> learningSchemaVersion;
+  }
+  if (tree["learning"].has_child("labeling_mode"))
+  {
+    tree["learning"]["labeling_mode"] >> learningLabelingMode;
+  }
+  if (tree["learning"].has_child("logging"))
+  {
+    if (tree["learning"]["logging"].has_child("max_candidates"))
+    {
+      tree["learning"]["logging"]["max_candidates"] >> learningMaxCandidates;
+    }
+    if (tree["learning"]["logging"].has_child("include_tentative_tracks"))
+    {
+      tree["learning"]["logging"]["include_tentative_tracks"] >> learningIncludeTentativeTracks;
+    }
+    if (tree["learning"]["logging"].has_child("include_derived_features"))
+    {
+      tree["learning"]["logging"]["include_derived_features"] >> learningIncludeDerivedFeatures;
+    }
+  }
   tree["learning"]["model"]["type"] >> modelType;
   tree["learning"]["model"]["threshold"] >> modelThreshold;
   tree["learning"]["model"]["weights"]["delay"] >> modelWeightDelay;
@@ -322,6 +353,12 @@ int main(int argc, char **argv)
     savePath = path + startTimeStr;
   }
   std::ofstream learningLog;
+  size_t configHash = std::hash<std::string>{}(contents);
+  std::stringstream configHashStream;
+  configHashStream << std::hex << configHash;
+  std::string configHashString = configHashStream.str();
+  std::string runId = std::to_string(current_time_ms()) + "-" + configHashString;
+  uint64_t cpiIndex = 0;
   if (saveMap)
   {
     saveMapPath = savePath + ".map";
@@ -348,6 +385,11 @@ int main(int argc, char **argv)
     else
     {
       std::cout << "Learning mode enabled. Logging examples to " << learningPath << "\n";
+      std::cout << "Learning schema v" << learningSchemaVersion
+                << " (labeling_mode=" << learningLabelingMode
+                << ", max_candidates=" << learningMaxCandidates
+                << ", include_tentative_tracks=" << learningIncludeTentativeTracks
+                << ")\n";
     }
   }
 
@@ -474,6 +516,11 @@ int main(int argc, char **argv)
 
           // output ADS-B truth from external source through the C++ pipeline
           std::string jsonAdsb = "{}";
+          bool adsbAvailable = isAdsb && !adsbHost.empty();
+          bool adsbQueryOk = false;
+          int64_t adsbAgeMs = -1;
+          uint64_t adsbTargetCount = 0;
+          std::string adsbError = "";
           if (isAdsb && !adsbHost.empty())
           {
             httplib::Client cli(("http://" + adsbHost).c_str());
@@ -487,17 +534,105 @@ int main(int argc, char **argv)
               if (res->status == 200 && !res->body.empty())
               {
                 jsonAdsb = res->body;
+                adsbQueryOk = true;
+
+                rapidjson::Document adsbDoc;
+                adsbDoc.Parse(jsonAdsb.c_str());
+                if (!adsbDoc.HasParseError() && adsbDoc.IsObject())
+                {
+                  if (adsbDoc.HasMember("age_ms") && adsbDoc["age_ms"].IsInt64())
+                  {
+                    adsbAgeMs = adsbDoc["age_ms"].GetInt64();
+                  }
+                  if (adsbDoc.HasMember("targets") && adsbDoc["targets"].IsArray())
+                  {
+                    adsbTargetCount = adsbDoc["targets"].Size();
+                  }
+                  else if (adsbDoc.HasMember("data") && adsbDoc["data"].IsArray())
+                  {
+                    adsbTargetCount = adsbDoc["data"].Size();
+                  }
+                  else if (adsbDoc.HasMember("n") && adsbDoc["n"].IsUint64())
+                  {
+                    adsbTargetCount = adsbDoc["n"].GetUint64();
+                  }
+                }
               }
+              else
+              {
+                adsbError = "status_" + std::to_string(res->status);
+              }
+            }
+            else
+            {
+              adsbError = "request_failed";
             }
           }
           socket_adsb->sendData(jsonAdsb);
 
           if (isLearning && learningLog.is_open())
           {
-            learningLog << "{\"timestamp\":" << (time[0]/1000)
-                        << ",\"detection\":" << detectionJson
-                        << ",\"track\":" << trackJson
-                        << ",\"adsb\":" << jsonAdsb << "}\n";
+            uint64_t rowTimestamp = time[0]/1000;
+            std::string detectionLearningJson =
+              "{\"timestamp\":" + std::to_string(rowTimestamp) +
+              ",\"n\":0,\"truncated\":false,\"candidates\":[]}";
+            if (isDetection && detection)
+            {
+              detectionLearningJson = detection->to_learning_json(
+                rowTimestamp, fs, learningIncludeDerivedFeatures, learningMaxCandidates);
+            }
+
+            std::string trackLearningJson =
+              "{\"timestamp\":" + std::to_string(rowTimestamp) +
+              ",\"n\":0,\"nTentative\":0,\"nAssociated\":0,\"nActive\":0,"
+              "\"nCoasting\":0,\"include_tentative\":" +
+              std::string(learningIncludeTentativeTracks ? "true" : "false") +
+              ",\"data\":[]}";
+            if (isTracker && track)
+            {
+              trackLearningJson = track->to_learning_json(
+                rowTimestamp, learningIncludeTentativeTracks);
+            }
+
+            std::string modelContext = "{\"use_model\":" +
+              std::string(useModel ? "true" : "false") +
+              ",\"type\":\"" + modelType + "\",\"threshold\":" +
+              std::to_string(modelThreshold) +
+              ",\"weights\":{\"delay\":" + std::to_string(modelWeightDelay) +
+              ",\"doppler\":" + std::to_string(modelWeightDoppler) +
+              ",\"snr\":" + std::to_string(modelWeightSnr) +
+              "},\"bias\":" + std::to_string(modelBias) + "}";
+
+            bool rowValid = learningSchemaVersion > 0 && !runId.empty();
+            if (rowValid)
+            {
+              learningLog << "{\"timestamp\":" << rowTimestamp
+                          << ",\"meta\":{\"run_id\":\"" << runId
+                          << "\",\"cpi_index\":" << cpiIndex
+                          << ",\"schema_version\":" << learningSchemaVersion
+                          << ",\"labeling_mode\":\"" << learningLabelingMode
+                          << "\",\"config_hash\":\"" << configHashString
+                          << "\",\"device_type\":\"" << type
+                          << "\",\"fs\":" << fs
+                          << ",\"fc\":" << fc
+                          << "}"
+                          << ",\"adsb_meta\":{\"adsb_available\":" << (adsbAvailable ? "true" : "false")
+                          << ",\"adsb_query_ok\":" << (adsbQueryOk ? "true" : "false")
+                          << ",\"adsb_age_ms\":" << adsbAgeMs
+                          << ",\"adsb_target_count\":" << adsbTargetCount
+                          << ",\"adsb_error\":\"" << adsbError << "\"}"
+                          << ",\"model_context\":" << modelContext
+                          << ",\"detection\":" << detectionLearningJson
+                          << ",\"track\":" << trackLearningJson
+                          << ",\"adsb\":" << jsonAdsb
+                          << ",\"labels\":{\"match_status\":\"unknown\"}"
+                          << "}\n";
+              cpiIndex++;
+            }
+            else
+            {
+              std::cerr << "Warning: learning row skipped due to invalid schema metadata\n";
+            }
           }
 
           // output radar data timer

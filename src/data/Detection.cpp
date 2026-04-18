@@ -3,6 +3,8 @@
 #include <iostream>
 #include <cstdlib>
 #include <chrono>
+#include <cmath>
+#include <algorithm>
 
 #include "rapidjson/document.h"
 #include "rapidjson/writer.h"
@@ -76,6 +78,53 @@ std::string Detection::to_json(uint64_t timestamp)
   document.AddMember("doppler", arrayDoppler, allocator);
   document.AddMember("snr", arraySnr, allocator);
   
+  rapidjson::StringBuffer strbuf;
+  rapidjson::Writer<rapidjson::StringBuffer> writer(strbuf);
+  writer.SetMaxDecimalPlaces(2);
+  document.Accept(writer);
+
+  return strbuf.GetString();
+}
+
+std::string Detection::to_learning_json(uint64_t timestamp, uint32_t fs,
+  bool includeDerived, uint32_t maxCandidates)
+{
+  rapidjson::Document document;
+  document.SetObject();
+  rapidjson::Document::AllocatorType &allocator = document.GetAllocator();
+
+  size_t count = std::min({delay.size(), doppler.size(), snr.size()});
+  bool truncated = false;
+  if (maxCandidates > 0 && count > maxCandidates)
+  {
+    count = maxCandidates;
+    truncated = true;
+  }
+
+  rapidjson::Value candidateArray(rapidjson::kArrayType);
+  for (size_t i = 0; i < count; i++)
+  {
+    rapidjson::Value candidate(rapidjson::kObjectType);
+    candidate.AddMember("candidate_id", static_cast<uint64_t>(i), allocator);
+    candidate.AddMember("delay_bin", delay[i], allocator);
+    candidate.AddMember("delay_km", 1.0 * delay[i] * (Constants::c / (double)fs) / 1000, allocator);
+    candidate.AddMember("doppler_hz", doppler[i], allocator);
+    candidate.AddMember("abs_doppler_hz", std::abs(doppler[i]), allocator);
+    candidate.AddMember("snr", snr[i], allocator);
+    if (includeDerived)
+    {
+      candidate.AddMember("local_density", rapidjson::Value().SetNull(), allocator);
+      candidate.AddMember("persistence_hint", rapidjson::Value().SetNull(), allocator);
+    }
+    candidate.AddMember("match_status", "unknown", allocator);
+    candidateArray.PushBack(candidate, allocator);
+  }
+
+  document.AddMember("timestamp", timestamp, allocator);
+  document.AddMember("n", static_cast<uint64_t>(count), allocator);
+  document.AddMember("truncated", truncated, allocator);
+  document.AddMember("candidates", candidateArray, allocator);
+
   rapidjson::StringBuffer strbuf;
   rapidjson::Writer<rapidjson::StringBuffer> writer(strbuf);
   writer.SetMaxDecimalPlaces(2);

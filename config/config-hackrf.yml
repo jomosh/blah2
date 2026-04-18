@@ -61,6 +61,12 @@ network:
 learning:
   enabled: false      # true = learning mode, false = production
   path: ""           # optional path for learning log output
+  schema_version: 2   # learning row schema version
+  labeling_mode: "offline"   # none, offline, online_shadow
+  logging:
+    max_candidates: 0           # 0 = no cap
+    include_tentative_tracks: true
+    include_derived_features: true
   use_model: false     # apply inline model values in production
   model:
     type: "linear"   # currently only linear scoring supported

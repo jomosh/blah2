@@ -234,3 +234,74 @@ std::string Track::to_json(uint64_t timestamp)
 
   return strbuf.GetString();
 }
+
+std::string Track::to_learning_json(uint64_t timestamp, bool includeTentative)
+{
+  rapidjson::Document document;
+  document.SetObject();
+  rapidjson::Document::AllocatorType &allocator = document.GetAllocator();
+
+  rapidjson::Value dataArray(rapidjson::kArrayType);
+  for (uint64_t i = 0; i < get_n(); i++)
+  {
+    if (!includeTentative && get_state(i) == STATE_TENTATIVE)
+    {
+      continue;
+    }
+
+    rapidjson::Value object1(rapidjson::kObjectType);
+    object1.AddMember("id", rapidjson::Value(id.at(i).c_str(),
+      document.GetAllocator()).Move(), document.GetAllocator());
+    object1.AddMember("state", rapidjson::Value(
+      state.at(i).at(state.at(i).size()-1).c_str(),
+      document.GetAllocator()).Move(), document.GetAllocator());
+    object1.AddMember("delay",
+      current.at(i).get_delay().at(0),
+      document.GetAllocator());
+    object1.AddMember("doppler",
+      current.at(i).get_doppler().at(0),
+      document.GetAllocator());
+    object1.AddMember("acceleration",
+      acceleration.at(i), document.GetAllocator());
+    object1.AddMember("n",
+      associated.at(i).size(), document.GetAllocator());
+    object1.AddMember("nInactive",
+      nInactive.at(i), document.GetAllocator());
+
+    rapidjson::Value associatedDelay(rapidjson::kArrayType);
+    rapidjson::Value associatedDoppler(rapidjson::kArrayType);
+    rapidjson::Value associatedState(rapidjson::kArrayType);
+    for (size_t j = 0; j < associated.at(i).size(); j++)
+    {
+      associatedDelay.PushBack(associated.at(i).at(j).get_delay().at(0),
+        document.GetAllocator());
+      associatedDoppler.PushBack(associated.at(i).at(j).get_doppler().at(0),
+        document.GetAllocator());
+      associatedState.PushBack(rapidjson::Value(state.at(i).at(j).c_str(),
+        document.GetAllocator()).Move(), document.GetAllocator());
+    }
+    object1.AddMember("associated_delay",
+      associatedDelay, document.GetAllocator());
+    object1.AddMember("associated_doppler",
+      associatedDoppler, document.GetAllocator());
+    object1.AddMember("associated_state",
+      associatedState, document.GetAllocator());
+    dataArray.PushBack(object1, document.GetAllocator());
+  }
+
+  document.AddMember("timestamp", timestamp, allocator);
+  document.AddMember("n", get_n(), allocator);
+  document.AddMember("nTentative", get_nState(STATE_TENTATIVE), allocator);
+  document.AddMember("nAssociated", get_nState(STATE_ASSOCIATED), allocator);
+  document.AddMember("nActive", get_nState(STATE_ACTIVE), allocator);
+  document.AddMember("nCoasting", get_nState(STATE_COASTING), allocator);
+  document.AddMember("include_tentative", includeTentative, allocator);
+  document.AddMember("data", dataArray, document.GetAllocator());
+
+  rapidjson::StringBuffer strbuf;
+  rapidjson::Writer<rapidjson::StringBuffer> writer(strbuf);
+  writer.SetMaxDecimalPlaces(2);
+  document.Accept(writer);
+
+  return strbuf.GetString();
+}

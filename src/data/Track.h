@@ -156,6 +156,12 @@ public:
   /// @return JSON string.
   std::string to_json(uint64_t timestamp);
 
+  /// @brief Generate JSON of tracks for learning schema v2.
+  /// @param timestamp Current time (POSIX ms).
+  /// @param includeTentative Include tentative tracks in detailed output.
+  /// @return JSON string.
+  std::string to_learning_json(uint64_t timestamp, bool includeTentative);
+
   /// @brief Append the map to a save file.
   /// @param json JSON string of map and metadata.
   /// @param path Path of file to save.
