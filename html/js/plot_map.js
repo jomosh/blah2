@@ -10,17 +10,20 @@ var urlTimestamp;
 var urlDetection;
 var urlAdsb;
 var urlConfig;
+var urlTracker;
 if (isLocalHost) {
   urlTimestamp = '//' + host + ':3000/api/timestamp';
   urlDetection = '//' + host + ':3000/api/detection';
   urlAdsb = '//' + host + ':3000/api/adsb';
   urlConfig = '//' + host + ':3000/api/config';
+  urlTracker = '//' + host + ':3000/api/tracker';
   urlMap = '//' + host + ':3000' + urlMap;
 } else {
   urlTimestamp = '//' + host + '/api/timestamp';
   urlDetection = '//' + host + '/api/detection';
   urlAdsb = '//' + host + '/api/adsb';
   urlConfig = '//' + host + '/api/config';
+  urlTracker = '//' + host + '/api/tracker';
   urlMap = '//' + host + urlMap;
 }
 
@@ -128,11 +131,30 @@ var data = [
     },
     hovertemplate: 'ADS-B Target: %{text}<br>Range: %{x}<br>Doppler: %{y}',
     name: 'Selected ADS-B'
+  },
+  {
+    x: [],
+    y: [],
+    text: [],
+    mode: 'markers',
+    type: 'scatter',
+    marker: {
+      size: 5,
+      opacity: 1.0,
+      color: 'rgba(255, 0, 0, 1)'
+    },
+    hovertemplate: 'Track: %{text}<br>Range: %{x}<br>Doppler: %{y}',
+    name: 'Tracks'
   }
 ];
 var detection = [];
 var adsbTargets = {};
 var selectedAdsbTarget = 'all';
+var track = {};
+var isMaxholdMap = (typeof urlMap === 'string' && urlMap.indexOf('/stash/map') !== -1);
+var maxholdTrackHistory = {};
+var maxholdTrackTtlCpi = 20;
+var maxholdFrame = 0;
 
 function getAdsbTargetFilterValue() {
   return document.querySelector('#adsb-target-filter')?.value.trim().toLowerCase() || '';
@@ -174,6 +196,61 @@ function getSelectedAdsbTraceSelection() {
     return {delay: [], doppler: [], flight: []};
   }
   return normalizeAdsbTarget(adsbTargets[selectedAdsbTarget], selectedAdsbTarget);
+}
+
+function normalizeTrackData(track) {
+  if (!track || !Array.isArray(track.data)) {
+    return {delay: [], doppler: [], flight: []};
+  }
+  var delay = [];
+  var doppler = [];
+  var flight = [];
+  track.data.forEach(function (target) {
+    if (target.delay !== undefined && target.doppler !== undefined) {
+      delay.push(target.delay);
+      doppler.push(target.doppler);
+      flight.push('Track ' + target.id + ' (' + target.state + ')');
+    }
+  });
+  return {delay: delay, doppler: doppler, flight: flight};
+}
+
+function getTrackTraceSelection(track) {
+  var current = normalizeTrackData(track);
+  if (!isMaxholdMap) {
+    return current;
+  }
+
+  maxholdFrame += 1;
+
+  if (track && Array.isArray(track.data)) {
+    track.data.forEach(function (target, i) {
+      if (target.delay !== undefined && target.doppler !== undefined) {
+        var id = target.id || ('idx_' + i);
+        maxholdTrackHistory[id] = {
+          delay: target.delay,
+          doppler: target.doppler,
+          flight: 'Track ' + id + ' (' + target.state + ')',
+          frame: maxholdFrame
+        };
+      }
+    });
+  }
+
+  Object.keys(maxholdTrackHistory).forEach(function (id) {
+    if ((maxholdFrame - maxholdTrackHistory[id].frame) >= maxholdTrackTtlCpi) {
+      delete maxholdTrackHistory[id];
+    }
+  });
+
+  var merged = {delay: [], doppler: [], flight: []};
+  Object.keys(maxholdTrackHistory).sort().forEach(function (id) {
+    merged.delay.push(maxholdTrackHistory[id].delay);
+    merged.doppler.push(maxholdTrackHistory[id].doppler);
+    merged.flight.push(maxholdTrackHistory[id].flight);
+  });
+
+  return merged;
 }
 
 function updateAdsbTargetTable() {
@@ -272,6 +349,12 @@ var intervalId = window.setInterval(function () {
             detection = data_detection;
           });
 
+        // get tracker data for the doppler map overlay
+        $.getJSON(urlTracker, function () { })
+          .done(function (data_tracker) {
+            track = data_tracker;
+          });
+
         // get ADS-B data from the C++ pipeline if enabled
         if (isTruth) {
           $.getJSON(urlAdsb, function () { })
@@ -350,6 +433,7 @@ var intervalId = window.setInterval(function () {
                 hovertemplate: 'ADS-B Target: %{text}<br>Range: %{x}<br>Doppler: %{y}',
                 name: 'ADS-B'
               };
+              var trackSelection = getTrackTraceSelection(track);
               var trace4 = {
                 x: selectedSelection.delay,
                 y: selectedSelection.doppler,
@@ -364,21 +448,36 @@ var intervalId = window.setInterval(function () {
                 hovertemplate: 'ADS-B Target:%{text}<br>Range: %{x}<br>Doppler: %{y}',
                 name: 'Selected ADS-B'
               };
+              var trace5 = {
+                x: trackSelection.delay,
+                y: trackSelection.doppler,
+                text: trackSelection.flight,
+                mode: 'markers',
+                type: 'scatter',
+                marker: {
+                  size: 5,
+                  opacity: 1.0,
+                  color: 'rgba(255, 0, 0, 1)'
+                },
+                hovertemplate: 'Track: %{text}<br>Range: %{x}<br>Doppler: %{y}',
+                name: 'Tracks'
+              };
 
-              var data_trace = [trace1, trace2, trace3, trace4];
+              var data_trace = [trace1, trace2, trace3, trace4, trace5];
               Plotly.newPlot('data', data_trace, layout, config);
             }
             // case update plot
             else {
               var allSelection = getAllAdsbTraceSelection();
               var selectedSelection = getSelectedAdsbTraceSelection();
+              var trackSelection = getTrackTraceSelection(track);
               var detectionText = Array.isArray(detection.delay) ? Array(detection.delay.length).fill('Blah2 Target') : [];
               var trace_update = {
-                x: [data.delay, detection.delay, allSelection.delay, selectedSelection.delay],
-                y: [data.doppler, detection.doppler, allSelection.doppler, selectedSelection.doppler],
-                z: [data.data, [], [], []],
-                zmax: [Math.max(13, data.maxPower), [], [], []],
-                text: [[], detectionText, allSelection.flight, selectedSelection.flight]
+                x: [data.delay, detection.delay, allSelection.delay, selectedSelection.delay, trackSelection.delay],
+                y: [data.doppler, detection.doppler, allSelection.doppler, selectedSelection.doppler, trackSelection.doppler],
+                z: [data.data, [], [], [], []],
+                zmax: [Math.max(13, data.maxPower), [], [], [], []],
+                text: [[], detectionText, allSelection.flight, selectedSelection.flight, trackSelection.flight]
               };
               Plotly.update('data', trace_update);
             }

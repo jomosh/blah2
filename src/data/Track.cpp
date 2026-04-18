@@ -1,4 +1,5 @@
 #include "Track.h"
+#include "data/meta/Constants.h"
 #include <iostream>
 #include <sstream>
 #include <iomanip>
@@ -227,6 +228,49 @@ std::string Track::to_json(uint64_t timestamp)
   document.AddMember("nCoasting", get_nState(STATE_COASTING), allocator);
   document.AddMember("data", dataArray, document.GetAllocator());
   
+  rapidjson::StringBuffer strbuf;
+  rapidjson::Writer<rapidjson::StringBuffer> writer(strbuf);
+  writer.SetMaxDecimalPlaces(2);
+  document.Accept(writer);
+
+  return strbuf.GetString();
+}
+
+std::string Track::delay_bin_to_km(std::string json, uint32_t fs)
+{
+  rapidjson::Document document;
+  document.Parse(json.c_str());
+  if (!document.IsObject() || !document.HasMember("data") || !document["data"].IsArray())
+  {
+    return json;
+  }
+
+  rapidjson::Document::AllocatorType &allocator = document.GetAllocator();
+  rapidjson::Value &trackData = document["data"];
+
+  for (auto &trackEntry : trackData.GetArray())
+  {
+    if (trackEntry.IsObject() && trackEntry.HasMember("delay") && trackEntry["delay"].IsNumber())
+    {
+      const double delayKm = trackEntry["delay"].GetDouble() * (Constants::c / (double)fs) / 1000.0;
+      trackEntry["delay"].SetDouble(delayKm);
+    }
+
+    if (trackEntry.IsObject() && trackEntry.HasMember("associated_delay") && trackEntry["associated_delay"].IsArray())
+    {
+      rapidjson::Value convertedDelay(rapidjson::kArrayType);
+      for (auto &delayValue : trackEntry["associated_delay"].GetArray())
+      {
+        if (delayValue.IsNumber())
+        {
+          const double delayKm = delayValue.GetDouble() * (Constants::c / (double)fs) / 1000.0;
+          convertedDelay.PushBack(delayKm, allocator);
+        }
+      }
+      trackEntry["associated_delay"] = convertedDelay;
+    }
+  }
+
   rapidjson::StringBuffer strbuf;
   rapidjson::Writer<rapidjson::StringBuffer> writer(strbuf);
   writer.SetMaxDecimalPlaces(2);

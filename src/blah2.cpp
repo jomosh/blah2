@@ -344,6 +344,7 @@ int main(int argc, char **argv)
           if (isTracker)
           {
             jsonTracker = track->to_json(time[0]/1000);
+            jsonTracker = track->delay_bin_to_km(jsonTracker, fs);
             socket_track->sendData(jsonTracker);
           }
 
