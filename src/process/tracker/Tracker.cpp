@@ -73,18 +73,10 @@ void Tracker::update(Detection *detection, uint64_t current)
     Detection detectionCurrent = track.get_current(i);
     acc = track.get_acceleration(i);
     Detection prediction = predict(detectionCurrent, acc, T);
-    delayPredict = prediction.get_delay().front();
-    dopplerPredict = prediction.get_doppler().front();
-    bool associatedThisCycle = false;
     
     // loop over detections to associate
     for (size_t j = 0; j < detection->get_nDetections(); j++)
     {
-      if (doNotInitiate[j])
-      {
-        continue;
-      }
-
       // associate detections
       if (delay[j] > delayPredict-1 &&
         delay[j] < delayPredict+1 &&
@@ -93,41 +85,34 @@ void Tracker::update(Detection *detection, uint64_t current)
       {
         Detection associated(delay[j], doppler[j], snr[j]);
         track.set_current(i, associated);
-        if (T > 0)
-        {
-          track.set_acceleration(i, (doppler[j]-detectionCurrent.get_doppler().front())/T);
-        }
+        track.set_acceleration(i, (doppler[j]-detectionCurrent.get_doppler().front())/T);
         track.set_nInactive(i, 0);
         doNotInitiate[j] = true;
         state = "ASSOCIATED";
         track.set_state(i, state);
         // promote track if passes threshold
         track.promote(i, m, n);
-        associatedThisCycle = true;
         break;
       }
     }
 
     // update state if no detections associated
-    if (!associatedThisCycle)
+    track.set_current(i, prediction);
+    if (track.get_state(i) == "ACTIVE")
     {
-      track.set_current(i, prediction);
-      if (track.get_state(i) == "ACTIVE")
-      {
-        state = "COASTING";
-        track.set_state(i, state);
-      }
-      else if (track.get_state(i) == "ASSOCIATED")
-      {
-        state = "TENTATIVE";
-        track.set_state(i, state);
-      }
-      else
-      {
-        track.set_state(i, track.get_state(i));
-      }
-      track.set_nInactive(i, track.get_nInactive(i)+1);
+      state = "COASTING";
+      track.set_state(i, state);
     }
+    else if (track.get_state(i) == "ASSOCIATED")
+    {
+      state = "TENTATIVE";
+      track.set_state(i, state);
+    }
+    else
+    {
+      track.set_state(i, track.get_state(i));
+    }
+    track.set_nInactive(i, track.get_nInactive(i)+1);
 
     // remove if tentative or coasting too long
     if (track.get_nInactive(i) > nDelete)
