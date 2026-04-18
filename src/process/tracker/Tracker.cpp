@@ -65,6 +65,8 @@ void Tracker::update(Detection *detection, uint64_t current)
   // get time between detections
   double T = ((double)(current - timestamp))/1000;
   timestamp = current;
+  const double delayGateBins = 3.0;
+  const double dopplerGateHz = 3.0 * (1.0 / cpi);
 
   // loop over each track
   for (uint64_t i = 0; i < track.get_n(); i++)
@@ -86,10 +88,10 @@ void Tracker::update(Detection *detection, uint64_t current)
       }
 
       // associate detections
-      if (delay[j] > delayPredict-1 &&
-        delay[j] < delayPredict+1 &&
-        doppler[j] > dopplerPredict-1*(1/cpi) &&
-        doppler[j] < dopplerPredict+1*(1/cpi))
+      if (delay[j] > delayPredict-delayGateBins &&
+        delay[j] < delayPredict+delayGateBins &&
+        doppler[j] > dopplerPredict-dopplerGateHz &&
+        doppler[j] < dopplerPredict+dopplerGateHz)
       {
         Detection associated(delay[j], doppler[j], snr[j]);
         track.set_current(i, associated);
@@ -143,7 +145,7 @@ Detection Tracker::predict(Detection current, double acc, double T)
   double delayTrack = current.get_delay().front();
   double dopplerTrack = current.get_doppler().front();
   double delayPredict = delayTrack+((dopplerTrack*T*lambda)+
-    (0.5*acc*T*T))/rangeRes;
+    (0.5*acc*T*T*lambda))/rangeRes;
   double dopplerPredict = dopplerTrack+(acc*T);
   Detection prediction(delayPredict, dopplerPredict, 0);
   return prediction;
