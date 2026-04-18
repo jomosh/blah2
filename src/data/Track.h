@@ -62,13 +62,6 @@ private:
   /// @brief String for state ASSOCIATED.
   static const std::string STATE_ASSOCIATED;
 
-  /// @brief Shared JSON serializer used by public overloads.
-  /// @param timestamp Current time (POSIX ms).
-  /// @param convertDelayToKm Convert delay values from bins to km when true.
-  /// @param fs Sampling frequency (Hz), only used when converting delay values.
-  /// @return JSON string.
-  std::string to_json_impl(uint64_t timestamp, bool convertDelayToKm, uint32_t fs);
-
 public:
   /// @brief Constructor.
   /// @return The object.
@@ -162,12 +155,6 @@ public:
   /// @param timestamp Current time (POSIX ms).
   /// @return JSON string.
   std::string to_json(uint64_t timestamp);
-
-  /// @brief Generate JSON of the map and metadata with delay in km.
-  /// @param timestamp Current time (POSIX ms).
-  /// @param fs Sampling frequency (Hz).
-  /// @return JSON string.
-  std::string to_json(uint64_t timestamp, uint32_t fs);
 
   /// @brief Append the map to a save file.
   /// @param json JSON string of map and metadata.

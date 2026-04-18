@@ -23,7 +23,7 @@ const PORT = config.network.ports.api;
 const HOST = config.network.ip;
 var map = '';
 var detection = '';
-var track = '{}';
+var track = '';
 var adsb = '{}';
 var timestamp = '';
 var timing = '';
@@ -57,7 +57,6 @@ app.get('/api/detection', (req, res) => {
   res.send(detection);
 });
 app.get('/api/tracker', (req, res) => {
-  res.header('Content-Type', 'application/json');
   res.send(track);
 });
 app.get('/api/adsb', (req, res) => {

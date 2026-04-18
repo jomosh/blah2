@@ -1,5 +1,4 @@
 #include "Track.h"
-#include "data/meta/Constants.h"
 #include <iostream>
 #include <sstream>
 #include <iomanip>
@@ -172,104 +171,61 @@ void Track::remove(uint64_t index)
 
 std::string Track::to_json(uint64_t timestamp)
 {
-  return to_json_impl(timestamp, false, 0);
-}
-
-std::string Track::to_json(uint64_t timestamp, uint32_t fs)
-{
-  return to_json_impl(timestamp, true, fs);
-}
-
-std::string Track::to_json_impl(uint64_t timestamp, bool convertDelayToKm, uint32_t fs)
-{
   rapidjson::Document document;
   document.SetObject();
   rapidjson::Document::AllocatorType &allocator = document.GetAllocator();
-  const uint64_t trackCount = get_n();
-  uint64_t nTentative = 0;
-  uint64_t nAssociated = 0;
-  uint64_t nActive = 0;
-  uint64_t nCoasting = 0;
-  const double delayScale = convertDelayToKm ? (Constants::c / static_cast<double>(fs)) / 1000.0 : 1.0;
 
   // store track data
   rapidjson::Value dataArray(rapidjson::kArrayType);
-  dataArray.Reserve(trackCount, allocator);
-  for (uint64_t i = 0; i < trackCount; i++)
+  for (uint64_t i = 0; i < get_n(); i++)
   {
-    const std::string &trackState = state.at(i).back();
-    if (trackState == STATE_TENTATIVE)
+    if (get_state(i) != STATE_TENTATIVE)
     {
-      nTentative++;
-      continue;
+      rapidjson::Value object1(rapidjson::kObjectType);
+      object1.AddMember("id", rapidjson::Value(id.at(i).c_str(), 
+        document.GetAllocator()).Move(), document.GetAllocator());
+      object1.AddMember("state", rapidjson::Value(
+        state.at(i).at(state.at(i).size()-1).c_str(), 
+        document.GetAllocator()).Move(), document.GetAllocator());
+      object1.AddMember("delay", 
+        current.at(i).get_delay().at(0),
+        document.GetAllocator());
+      object1.AddMember("doppler", 
+        current.at(i).get_doppler().at(0), 
+        document.GetAllocator());
+      object1.AddMember("acceleration", 
+        acceleration.at(i), document.GetAllocator());
+      object1.AddMember("n", associated.at(i).size(), 
+        document.GetAllocator());
+      rapidjson::Value associatedDelay(rapidjson::kArrayType);
+      rapidjson::Value associatedDoppler(rapidjson::kArrayType);
+      rapidjson::Value associatedState(rapidjson::kArrayType);
+      for (size_t j = 0; j < associated.at(i).size(); j++)
+      {
+        associatedDelay.PushBack(associated.at(i).at(j).get_delay().at(0), 
+          document.GetAllocator());
+        associatedDoppler.PushBack(associated.at(i).at(j).get_doppler().at(0), 
+          document.GetAllocator());
+        associatedState.PushBack(rapidjson::Value(state.at(i).at(j).c_str(), 
+          document.GetAllocator()).Move(), document.GetAllocator());
+      }
+      object1.AddMember("associated_delay", 
+        associatedDelay, document.GetAllocator());
+      object1.AddMember("associated_doppler", 
+        associatedDoppler, document.GetAllocator());
+      object1.AddMember("associated_state", 
+        associatedState, document.GetAllocator());
+      dataArray.PushBack(object1, document.GetAllocator());
     }
-    if (trackState == STATE_ASSOCIATED)
-    {
-      nAssociated++;
-    }
-    else if (trackState == STATE_ACTIVE)
-    {
-      nActive++;
-    }
-    else if (trackState == STATE_COASTING)
-    {
-      nCoasting++;
-    }
-
-    const Detection &currentDetection = current.at(i);
-    const std::vector<double> &currentDelay = currentDetection.get_delay_ref();
-    const std::vector<double> &currentDoppler = currentDetection.get_doppler_ref();
-    const std::vector<Detection> &associatedTrack = associated.at(i);
-    const std::vector<std::string> &trackStateHistory = state.at(i);
-
-    rapidjson::Value object1(rapidjson::kObjectType);
-    object1.AddMember("id", rapidjson::Value(id.at(i).c_str(), 
-      allocator).Move(), allocator);
-    object1.AddMember("state", rapidjson::Value(
-      trackState.c_str(), 
-      allocator).Move(), allocator);
-    object1.AddMember("delay", 
-      currentDelay.at(0) * delayScale,
-      allocator);
-    object1.AddMember("doppler", 
-      currentDoppler.at(0), 
-      allocator);
-    object1.AddMember("acceleration", 
-      acceleration.at(i), allocator);
-    object1.AddMember("n", associatedTrack.size(), 
-      allocator);
-    rapidjson::Value associatedDelay(rapidjson::kArrayType);
-    rapidjson::Value associatedDoppler(rapidjson::kArrayType);
-    rapidjson::Value associatedState(rapidjson::kArrayType);
-    associatedDelay.Reserve(associatedTrack.size(), allocator);
-    associatedDoppler.Reserve(associatedTrack.size(), allocator);
-    associatedState.Reserve(associatedTrack.size(), allocator);
-    for (size_t j = 0; j < associatedTrack.size(); j++)
-    {
-      const Detection &associatedDetection = associatedTrack.at(j);
-      associatedDelay.PushBack(associatedDetection.get_delay_ref().at(0) * delayScale, 
-        allocator);
-      associatedDoppler.PushBack(associatedDetection.get_doppler_ref().at(0), 
-        allocator);
-      associatedState.PushBack(rapidjson::Value(trackStateHistory.at(j).c_str(), 
-        allocator).Move(), allocator);
-    }
-    object1.AddMember("associated_delay", 
-      associatedDelay, allocator);
-    object1.AddMember("associated_doppler", 
-      associatedDoppler, allocator);
-    object1.AddMember("associated_state", 
-      associatedState, allocator);
-    dataArray.PushBack(object1, allocator);
   }
 
   document.AddMember("timestamp", timestamp, allocator);
-  document.AddMember("n", trackCount, allocator);
-  document.AddMember("nTentative", nTentative, allocator);
-  document.AddMember("nAssociated", nAssociated, allocator);
-  document.AddMember("nActive", nActive, allocator);
-  document.AddMember("nCoasting", nCoasting, allocator);
-  document.AddMember("data", dataArray, allocator);
+  document.AddMember("n", get_n(), allocator);
+  document.AddMember("nTentative", get_nState(STATE_TENTATIVE), allocator);
+  document.AddMember("nAssociated", get_nState(STATE_ASSOCIATED), allocator);
+  document.AddMember("nActive", get_nState(STATE_ACTIVE), allocator);
+  document.AddMember("nCoasting", get_nState(STATE_COASTING), allocator);
+  document.AddMember("data", dataArray, document.GetAllocator());
   
   rapidjson::StringBuffer strbuf;
   rapidjson::Writer<rapidjson::StringBuffer> writer(strbuf);

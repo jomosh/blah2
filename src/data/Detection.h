@@ -39,25 +39,13 @@ public:
   /// @return Detections in delay (bins).
   std::vector<double> get_delay();
 
-  /// @brief Get detections in delay by const reference.
-  /// @return Detections in delay (bins).
-  const std::vector<double>& get_delay_ref() const;
-
   /// @brief Get detections in Doppler.
   /// @return Detections in Doppler (Hz).
   std::vector<double> get_doppler();
 
-  /// @brief Get detections in Doppler by const reference.
-  /// @return Detections in Doppler (Hz).
-  const std::vector<double>& get_doppler_ref() const;
-
   /// @brief Detections in SNR.
   /// @return Detections in SNR.
   std::vector<double> get_snr();
-
-  /// @brief Get detections in SNR by const reference.
-  /// @return Detections in SNR.
-  const std::vector<double>& get_snr_ref() const;
 
   /// @brief Get number of detections.
   /// @return Number of detections

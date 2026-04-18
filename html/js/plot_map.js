@@ -29,14 +29,10 @@ if (isLocalHost) {
 
 // get truth flag
 var isTruth = false;
-var isTrackerEnabled = false;
 $.getJSON(urlConfig, function () { })
 .done(function (data_config) {
   if (data_config.truth.adsb.enabled === true) {
     isTruth = true;
-  }
-  if (data_config.process && data_config.process.tracker && data_config.process.tracker.enable === true) {
-    isTrackerEnabled = true;
   }
 });
 
@@ -143,7 +139,7 @@ var data = [
     mode: 'markers',
     type: 'scatter',
     marker: {
-      size: 7,
+      size: 14,
       opacity: 0.9,
       color: 'rgba(255, 0, 0, 0.9)'
     },
@@ -155,10 +151,6 @@ var detection = [];
 var adsbTargets = {};
 var selectedAdsbTarget = 'all';
 var track = {};
-var isMaxholdMap = (typeof urlMap === 'string' && urlMap.indexOf('/stash/map') !== -1);
-var maxholdTrackHistory = {};
-var maxholdTrackTtlCpi = 20;
-var maxholdFrame = 0;
 
 function getAdsbTargetFilterValue() {
   return document.querySelector('#adsb-target-filter')?.value.trim().toLowerCase() || '';
@@ -217,40 +209,6 @@ function normalizeTrackData(track) {
     }
   });
   return {delay: delay, doppler: doppler, flight: flight};
-}
-
-function getTrackTraceSelection(track) {
-  var current = normalizeTrackData(track);
-  if (!isMaxholdMap) {
-    return current;
-  }
-
-  maxholdFrame += 1;
-
-  for (var i = 0; i < current.delay.length; i++) {
-    var key = current.flight[i];
-    maxholdTrackHistory[key] = {
-      delay: current.delay[i],
-      doppler: current.doppler[i],
-      flight: current.flight[i],
-      frame: maxholdFrame
-    };
-  }
-
-  Object.keys(maxholdTrackHistory).forEach(function (key) {
-    if ((maxholdFrame - maxholdTrackHistory[key].frame) >= maxholdTrackTtlCpi) {
-      delete maxholdTrackHistory[key];
-    }
-  });
-
-  var merged = {delay: [], doppler: [], flight: []};
-  Object.keys(maxholdTrackHistory).forEach(function (key) {
-    merged.delay.push(maxholdTrackHistory[key].delay);
-    merged.doppler.push(maxholdTrackHistory[key].doppler);
-    merged.flight.push(maxholdTrackHistory[key].flight);
-  });
-
-  return merged;
 }
 
 function updateAdsbTargetTable() {
@@ -350,17 +308,10 @@ var intervalId = window.setInterval(function () {
           });
 
         // get tracker data for the doppler map overlay
-        if (isTrackerEnabled) {
-          $.getJSON(urlTracker, function () { })
-            .done(function (data_tracker) {
-              track = data_tracker;
-            })
-            .fail(function () {
-              track = {};
-            });
-        } else {
-          track = {};
-        }
+        $.getJSON(urlTracker, function () { })
+          .done(function (data_tracker) {
+            track = data_tracker;
+          });
 
         // get ADS-B data from the C++ pipeline if enabled
         if (isTruth) {
@@ -440,7 +391,7 @@ var intervalId = window.setInterval(function () {
                 hovertemplate: 'ADS-B Target: %{text}<br>Range: %{x}<br>Doppler: %{y}',
                 name: 'ADS-B'
               };
-              var trackSelection = getTrackTraceSelection(track);
+              var trackSelection = normalizeTrackData(track);
               var trace4 = {
                 x: selectedSelection.delay,
                 y: selectedSelection.doppler,
@@ -462,7 +413,7 @@ var intervalId = window.setInterval(function () {
                 mode: 'markers',
                 type: 'scatter',
                 marker: {
-                  size: 7,
+                  size: 14,
                   opacity: 0.9,
                   color: 'rgba(255, 0, 0, 0.9)'
                 },
@@ -477,7 +428,7 @@ var intervalId = window.setInterval(function () {
             else {
               var allSelection = getAllAdsbTraceSelection();
               var selectedSelection = getSelectedAdsbTraceSelection();
-              var trackSelection = getTrackTraceSelection(track);
+              var trackSelection = normalizeTrackData(track);
               var detectionText = Array.isArray(detection.delay) ? Array(detection.delay.length).fill('Blah2 Target') : [];
               var trace_update = {
                 x: [data.delay, detection.delay, allSelection.delay, selectedSelection.delay, trackSelection.delay],
