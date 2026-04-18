@@ -58,7 +58,7 @@ std::unique_ptr<Detection> CfarDetector1D::process(Map<std::complex<double>> *x)
       std::vector<int> iTrain;
       for (int k = j-nGuard-nTrain; k < j-nGuard; k++)
       {
-        if (k > 0 && k < nDelayBins)
+        if (k >= 0 && k < nDelayBins)
         {
           iTrain.push_back(k);
         }
@@ -73,6 +73,10 @@ std::unique_ptr<Detection> CfarDetector1D::process(Map<std::complex<double>> *x)
 
       // compute threshold
       int nCells = iTrain.size();
+      if (nCells <= 0)
+      {
+        continue;
+      }
       double alpha = nCells * (pow(pfa, -1.0 / nCells) - 1);
       double trainNoise = 0.0;
       for (int k = 0; k < nCells; k++)
