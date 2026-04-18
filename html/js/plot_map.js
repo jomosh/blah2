@@ -139,14 +139,9 @@ var data = [
     mode: 'markers',
     type: 'scatter',
     marker: {
-      size: 20,
-      symbol: 'x',
+      size: 5,
       opacity: 1.0,
-      color: 'rgba(255, 0, 0, 1)',
-      line: {
-        width: 2,
-        color: 'rgba(255, 255, 255, 1)'
-      }
+      color: 'rgba(255, 0, 0, 1)'
     },
     hovertemplate: 'Track: %{text}<br>Range: %{x}<br>Doppler: %{y}',
     name: 'Tracks'
@@ -156,6 +151,10 @@ var detection = [];
 var adsbTargets = {};
 var selectedAdsbTarget = 'all';
 var track = {};
+var isMaxholdMap = (typeof urlMap === 'string' && urlMap.indexOf('/stash/map') !== -1);
+var maxholdTrackHistory = {};
+var maxholdTrackTtlCpi = 20;
+var maxholdFrame = 0;
 
 function getAdsbTargetFilterValue() {
   return document.querySelector('#adsb-target-filter')?.value.trim().toLowerCase() || '';
@@ -214,6 +213,44 @@ function normalizeTrackData(track) {
     }
   });
   return {delay: delay, doppler: doppler, flight: flight};
+}
+
+function getTrackTraceSelection(track) {
+  var current = normalizeTrackData(track);
+  if (!isMaxholdMap) {
+    return current;
+  }
+
+  maxholdFrame += 1;
+
+  if (track && Array.isArray(track.data)) {
+    track.data.forEach(function (target, i) {
+      if (target.delay !== undefined && target.doppler !== undefined) {
+        var id = target.id || ('idx_' + i);
+        maxholdTrackHistory[id] = {
+          delay: target.delay,
+          doppler: target.doppler,
+          flight: 'Track ' + id + ' (' + target.state + ')',
+          frame: maxholdFrame
+        };
+      }
+    });
+  }
+
+  Object.keys(maxholdTrackHistory).forEach(function (id) {
+    if ((maxholdFrame - maxholdTrackHistory[id].frame) >= maxholdTrackTtlCpi) {
+      delete maxholdTrackHistory[id];
+    }
+  });
+
+  var merged = {delay: [], doppler: [], flight: []};
+  Object.keys(maxholdTrackHistory).sort().forEach(function (id) {
+    merged.delay.push(maxholdTrackHistory[id].delay);
+    merged.doppler.push(maxholdTrackHistory[id].doppler);
+    merged.flight.push(maxholdTrackHistory[id].flight);
+  });
+
+  return merged;
 }
 
 function updateAdsbTargetTable() {
@@ -396,7 +433,7 @@ var intervalId = window.setInterval(function () {
                 hovertemplate: 'ADS-B Target: %{text}<br>Range: %{x}<br>Doppler: %{y}',
                 name: 'ADS-B'
               };
-              var trackSelection = normalizeTrackData(track);
+              var trackSelection = getTrackTraceSelection(track);
               var trace4 = {
                 x: selectedSelection.delay,
                 y: selectedSelection.doppler,
@@ -418,14 +455,9 @@ var intervalId = window.setInterval(function () {
                 mode: 'markers',
                 type: 'scatter',
                 marker: {
-                  size: 20,
-                  symbol: 'x',
+                  size: 5,
                   opacity: 1.0,
-                  color: 'rgba(255, 0, 0, 1)',
-                  line: {
-                    width: 2,
-                    color: 'rgba(255, 255, 255, 1)'
-                  }
+                  color: 'rgba(255, 0, 0, 1)'
                 },
                 hovertemplate: 'Track: %{text}<br>Range: %{x}<br>Doppler: %{y}',
                 name: 'Tracks'
@@ -438,7 +470,7 @@ var intervalId = window.setInterval(function () {
             else {
               var allSelection = getAllAdsbTraceSelection();
               var selectedSelection = getSelectedAdsbTraceSelection();
-              var trackSelection = normalizeTrackData(track);
+              var trackSelection = getTrackTraceSelection(track);
               var detectionText = Array.isArray(detection.delay) ? Array(detection.delay.length).fill('Blah2 Target') : [];
               var trace_update = {
                 x: [data.delay, detection.delay, allSelection.delay, selectedSelection.delay, trackSelection.delay],
