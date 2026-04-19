@@ -173,12 +173,28 @@ int main(int argc, char **argv)
   double pfa, minDoppler;
   int8_t nGuard, nTrain;
   int8_t minDelay;
+  std::string cfarModeString = "CA";
+  CfarMode cfarMode = CfarMode::CA;
   tree["process"]["detection"]["pfa"] >> pfa;
   tree["process"]["detection"]["nGuard"] >> nGuard;
   tree["process"]["detection"]["nTrain"] >> nTrain;
   tree["process"]["detection"]["minDelay"] >> minDelay;
   tree["process"]["detection"]["minDoppler"] >> minDoppler;
-  CfarDetector1D *cfarDetector1D = new CfarDetector1D(pfa, nGuard, nTrain, minDelay, minDoppler);
+  auto cfarModeNode = tree["process"]["detection"]["cfarMode"];
+  if (cfarModeNode.valid())
+  {
+    cfarModeNode >> cfarModeString;
+  }
+  if (cfarModeString == "CAGO")
+  {
+    cfarMode = CfarMode::CAGO;
+  }
+  else if (cfarModeString != "CA")
+  {
+    std::cout << "Warning: Unsupported cfarMode '" << cfarModeString << "'. Falling back to CA." << "\n";
+    cfarMode = CfarMode::CA;
+  }
+  CfarDetector1D *cfarDetector1D = new CfarDetector1D(pfa, nGuard, nTrain, minDelay, minDoppler, cfarMode);
   Interpolate *interpolate = new Interpolate(true, true);
 
   // set up process centroid

@@ -14,6 +14,12 @@
 #include <complex>
 #include <memory>
 
+enum class CfarMode
+{
+  CA,
+  CAGO
+};
+
 class CfarDetector1D
 {
 private:
@@ -32,6 +38,9 @@ private:
   /// @brief Minimum absolute Doppler to process detections (Hz).
   double minDoppler;
 
+  /// @brief CFAR mode.
+  CfarMode mode;
+
   /// @brief Pointer to detection data to store result.
   Detection *detection;
 
@@ -42,8 +51,9 @@ public:
   /// @param nTrain Number of single-sided training cells.
   /// @param minDelay Minimum delay to process detections (bins).
   /// @param minDoppler Minimum absolute Doppler to process detections (Hz).
+  /// @param mode CFAR mode.
   /// @return The object.
-  CfarDetector1D(double pfa, int8_t nGuard, int8_t nTrain, int8_t minDelay, double minDoppler);
+  CfarDetector1D(double pfa, int8_t nGuard, int8_t nTrain, int8_t minDelay, double minDoppler, CfarMode mode = CfarMode::CA);
 
   /// @brief Destructor.
   /// @return Void.
