@@ -303,6 +303,10 @@ std::unique_ptr<Detection> CfarDetector1D::process(Map<std::complex<double>> *x)
           {
             alpha = it->second;
           }
+
+          // Keep CAGO robust in the field by enforcing a conservative floor.
+          // This avoids under-thresholding if numeric GOCA calibration drifts low.
+          alpha = std::max(alpha, ca_alpha(pfa, nCells));
         }
       }
 
