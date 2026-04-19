@@ -14,9 +14,13 @@
 #include <complex>
 #include <memory>
 
+/// @brief CFAR thresholding mode.
 enum class CfarMode
 {
+  /// @brief Cell-averaging CFAR (best for homogeneous background noise).
   CA,
+
+  /// @brief Greatest-of cell-averaging CFAR (more robust to clutter edges).
   CAGO
 };
 
