@@ -129,7 +129,20 @@ target_link_libraries(testDetectionPhaseA PRIVATE
 set_target_properties(testDetectionPhaseA PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_TEST_UNIT_DIR}")
 
+add_executable(testDetectionPhaseB
+  test/unit/process/detection/TestDetectionPhaseB.cpp
+  src/data/Map.cpp
+  src/data/Detection.cpp
+  src/process/detection/CfarDetector1D.cpp
+)
+target_link_libraries(testDetectionPhaseB PRIVATE
+  Catch2::Catch2WithMain
+)
+set_target_properties(testDetectionPhaseB PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_TEST_UNIT_DIR}")
+
 # TODO: Unsure if will be using CTest.
 add_test(NAME testAmbiguity COMMAND testAmbiguity)
 add_test(NAME testTracker COMMAND testTracker)
 add_test(NAME testDetectionPhaseA COMMAND testDetectionPhaseA)
+add_test(NAME testDetectionPhaseB COMMAND testDetectionPhaseB)

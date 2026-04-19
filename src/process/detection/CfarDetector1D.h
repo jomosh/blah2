@@ -13,10 +13,15 @@
 #include <stdint.h>
 #include <complex>
 #include <memory>
+#include <unordered_map>
 
+/// @brief CFAR thresholding mode.
 enum class CfarMode
 {
+  /// @brief Cell-averaging CFAR (best for homogeneous background noise).
   CA,
+
+  /// @brief Greatest-of cell-averaging CFAR (more robust to clutter edges).
   CAGO
 };
 
@@ -40,6 +45,9 @@ private:
 
   /// @brief CFAR mode.
   CfarMode mode;
+
+  /// @brief Cache for CFAR scaling factors keyed by leading/trailing counts.
+  std::unordered_map<uint32_t, double> alphaCache;
 
   /// @brief Pointer to detection data to store result.
   Detection *detection;
