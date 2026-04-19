@@ -10,6 +10,7 @@
 
 #include <complex>
 #include <cmath>
+#include <random>
 
 namespace
 {
@@ -76,4 +77,43 @@ TEST_CASE("CFAR_CAGO_MatchesCAInHomogeneousNoise", "[detection][cfar][phaseb]")
   REQUIRE(has_delay(caResult.get(), 3.0));
   REQUIRE(has_delay(cagoResult.get(), 3.0));
   CHECK(caResult->get_nDetections() == cagoResult->get_nDetections());
+}
+
+TEST_CASE("CFAR_CAGO_EmpiricalPfaIsControlled", "[detection][cfar][phaseb][calibration]")
+{
+  const double pfaTarget = 0.05;
+  const int nTrials = 8000;
+  const int nCols = 33;
+  const int cutIndex = 16;
+
+  CfarDetector1D cfarCago(pfaTarget, 1, 6, 0, 0.0, CfarMode::CAGO);
+
+  std::mt19937 rng(1337);
+  std::exponential_distribution<double> expPower(1.0);
+
+  int nFalseAtCut = 0;
+  for (int trial = 0; trial < nTrials; trial++)
+  {
+    Map<std::complex<double>> map(1, nCols);
+    map.noisePower = 0.0;
+    map.doppler = {20.0};
+    map.delay.clear();
+    for (int j = 0; j < nCols; j++)
+    {
+      map.delay.push_back(j);
+      const double power = expPower(rng);
+      const double amplitude = std::sqrt(power);
+      map.data[0][j] = std::complex<double>(amplitude, 0.0);
+    }
+
+    std::unique_ptr<Detection> detection = cfarCago.process(&map);
+    if (has_delay(detection.get(), cutIndex))
+    {
+      nFalseAtCut++;
+    }
+  }
+
+  const double empiricalPfa = (double)nFalseAtCut / nTrials;
+  CHECK(empiricalPfa <= pfaTarget * 1.2);
+  CHECK(empiricalPfa >= pfaTarget * 0.2);
 }

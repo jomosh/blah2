@@ -5,6 +5,7 @@
 #include <vector>
 #include <cmath>
 #include <unordered_map>
+#include <algorithm>
 
 namespace
 {
@@ -155,6 +156,7 @@ CfarDetector1D::CfarDetector1D(double _pfa, int8_t _nGuard, int8_t _nTrain, int8
   minDelay = _minDelay;
   minDoppler = _minDoppler;
   mode = _mode;
+  alphaCache.clear();
 }
 
 CfarDetector1D::~CfarDetector1D()
@@ -173,7 +175,6 @@ std::unique_ptr<Detection> CfarDetector1D::process(Map<std::complex<double>> *x)
   std::vector<double> delay;
   std::vector<double> doppler;
   std::vector<double> snr;
-  std::unordered_map<uint32_t, double> alphaCache;
 
   // loop over every cell
   for (int i = 0; i < nDopplerBins; i++)
