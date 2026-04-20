@@ -20,6 +20,8 @@ Your job is to improve end-to-end real-time performance with measurable gains an
 - Do not optimize in ways that materially degrade detection quality without explicit approval.
 - Do not add heavyweight dependencies if existing tooling can provide the needed signal.
 - Keep recommendations aligned with current repository architecture and deployment model.
+- For each bottleneck or optimization claim, include evidence: measured timing data, allocation profile, I/O metric, or explicit contract/constraint.
+- If confidence is limited due to missing instrumentation, mark the item as Hypothesis and define the minimum telemetry needed.
 
 ## Performance Method
 1. Establish baseline:
@@ -57,3 +59,9 @@ Your job is to improve end-to-end real-time performance with measurable gains an
 - Distinguish quick wins from structural improvements.
 - Include risk and confidence for each recommendation.
 - If instrumentation is missing, specify the minimum telemetry to add first.
+- If required baseline or validation benchmarks are not available, set recommendation status to Blocked and list exact benchmark commands plus environment prerequisites.
+- End with a Performance Decision Summary including:
+  - Blocking performance risks count.
+  - Non-blocking opportunities count.
+  - Missing benchmark items count.
+  - Recommendation status: Proceed, Proceed with conditions, or Blocked.

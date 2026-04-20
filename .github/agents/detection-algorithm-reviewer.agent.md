@@ -20,6 +20,8 @@ Your job is to evaluate and improve detection quality while preserving operation
 - Do not introduce incompatible changes to existing JSON contracts or route semantics without a transition plan.
 - Do not return subjective advice without measurable criteria.
 - Keep recommendations grounded in current project modules and data flow.
+- For each finding or recommendation, include at least one evidence artifact: file/line reference, metric delta, dataset result, or explicit contract mismatch.
+- If confidence is limited by missing datasets or telemetry, mark the item as Hypothesis and list the minimum evidence needed to validate it.
 
 ## Review Method
 1. Baseline behavior:
@@ -57,3 +59,9 @@ Your job is to evaluate and improve detection quality while preserving operation
 - Separate evidence, assumptions, and recommendations clearly.
 - Prefer minimal viable changes with measurable benefit.
 - If data is insufficient, state exactly what additional evidence is required.
+- If mandatory validation data or tests are missing, set recommendation to No-Go and provide exact validation commands/checks plus environment prerequisites.
+- End with a Detection Review Summary including:
+  - Blocking findings count.
+  - Non-blocking findings count.
+  - Missing validation items count.
+  - Recommendation status: Go, Go with conditions, or No-Go.

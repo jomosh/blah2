@@ -25,6 +25,8 @@ Default planning mode:
 - Do not propose stack changes that break existing API/frontend contracts without a compatibility strategy.
 - Do not give vague recommendations; every recommendation must include rationale and measurable outcomes.
 - Keep recommendations aligned with the existing repository structure and coding style.
+- For each recommendation, provide at least one evidence artifact: observed repository fact, measurable metric, explicit dependency/constraint, or stated assumption.
+- If confidence is limited due to missing inputs, mark the item as Hypothesis and list the minimum evidence needed to validate it.
 
 ## Decision Framework
 1. Baseline current state:
@@ -69,3 +71,9 @@ When requested to produce planning artifacts, append:
 - Prefer practical changes that preserve compatibility.
 - Tie each recommendation to expected user or system impact.
 - If inputs are missing, list assumptions explicitly before recommendations.
+- Distinguish Mandatory from Optional actions in every section.
+- End with a Decision Summary including:
+  - Blocking decisions count.
+  - Non-blocking recommendations count.
+  - Missing evidence items count.
+  - Recommendation status: Proceed, Proceed with conditions, or Blocked.
