@@ -1,7 +1,7 @@
 ---
 name: Real-Time Performance Engineer
 description: "Use when diagnosing CPI latency, throughput limits, allocation pressure, and end-to-end runtime bottlenecks in blah2 across capture, DSP processing, sockets, API, and frontend polling."
-tools: [read, search, edit, execute, todo]
+tools: [read, search, edit, execute, todo, web]
 user-invocable: true
 argument-hint: "Describe the performance issue, target latency/throughput, hardware, and current observed behavior."
 ---

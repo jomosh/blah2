@@ -1,7 +1,7 @@
 ---
 name: Hardware Integration Planner
 description: "Use when planning SDR hardware bring-up, compatibility validation, driver/runtime prerequisites, and phased support expansion for blah2 across RSPduo, USRP, HackRF, KrakenSDR, and future devices."
-tools: [read, search, edit, todo]
+tools: [read, search, edit, todo, web]
 user-invocable: true
 argument-hint: "Describe the target hardware, host environment, current support level, and desired acceptance criteria."
 ---
