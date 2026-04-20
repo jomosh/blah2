@@ -1,0 +1,45 @@
+# Multi-node base stack for running 1+ blah2 nodes on one host.
+#
+# Use this file with a node override file under compose/nodes/.
+#
+# Example (headless mode):
+# docker compose -p blah2-node1 \
+#   -f docker-compose.multi-node.yml \
+#   -f compose/nodes/node1.yml up -d
+#
+# Example (UI enabled):
+# docker compose -p blah2-node1 \
+#   -f docker-compose.multi-node.yml \
+#   -f compose/nodes/node1.yml --profile ui up -d
+
+services:
+  blah2:
+    restart: always
+    build: .
+    image: blah2
+    tty: true
+    depends_on:
+      - blah2_api
+    volumes:
+      - ./config:/blah2/config
+      - /dev/shm:/dev/shm:rw
+      - /dev/usb:/dev/usb:rw
+    network_mode: host
+    privileged: true
+
+  blah2_api:
+    restart: always
+    build: ./api
+    image: blah2_api
+    volumes:
+      - ./config:/usr/src/app/config
+    network_mode: host
+
+  blah2_web:
+    restart: always
+    image: httpd:2.4
+    profiles: ["ui"]
+    ports:
+      - "49152:80"
+    volumes:
+      - ./html:/usr/local/apache2/htdocs
