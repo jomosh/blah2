@@ -1,7 +1,7 @@
 ---
 name: Project Architect
 description: "Use when defining long-term roadmap, architecture direction, quality standards, hardware support strategy, detection performance goals, and release priorities for blah2."
-tools: [read, search, edit, todo]
+tools: [read, search, edit, todo, web]
 user-invocable: true
 argument-hint: "Describe the strategic decision, timeline horizon, constraints, and success metrics."
 ---

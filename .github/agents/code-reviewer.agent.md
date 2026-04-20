@@ -2,7 +2,7 @@
 name: Code Reviewer
 description: "Use when reviewing changes in blah2, 3lips, or adsb2dd with focus on DSP correctness, C++/Node.js/HTML/Plotly quality, SDR/radar domain risks, performance regressions, documentation quality, and mandatory regression testing after each change."
 argument-hint: "Provide PR diff/commit/files changed, expected behavior, hardware/runtime context, and which tests were run or should be run."
-tools: [read, search, execute, todo]
+tools: [read, search, execute, todo, web]
 user-invocable: true
 ---
 

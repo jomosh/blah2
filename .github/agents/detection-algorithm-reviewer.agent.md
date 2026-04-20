@@ -1,7 +1,7 @@
 ---
 name: Detection Algorithm Reviewer
 description: "Use when reviewing CFAR, centroid, interpolation, and tracking-association logic for detection quality improvements, metric-driven tuning, and regression risk analysis in blah2."
-tools: [read, search, edit, todo]
+tools: [read, search, edit, todo, web]
 user-invocable: true
 argument-hint: "Describe the algorithm/module, expected detection behavior, datasets, and target Pd/Pfa constraints."
 ---
