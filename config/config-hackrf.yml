@@ -49,6 +49,7 @@ process:
 network:
   ip: 0.0.0.0
   ports:
+    # node1 suggestion
     api: 3000
     map: 3001
     detection: 3002
@@ -58,6 +59,17 @@ network:
     timing: 4001
     iqdata: 4002
     config: 4003
+
+    # node2 example port-offset (+100)
+    # api: 3100
+    # map: 3101
+    # detection: 3102
+    # track: 3103
+    # adsb: 3104
+    # timestamp: 4100
+    # timing: 4101
+    # iqdata: 4102
+    # config: 4103
 
 truth:
   adsb:

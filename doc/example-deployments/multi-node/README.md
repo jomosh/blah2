@@ -14,20 +14,19 @@ This deployment pattern is for running multiple blah2 nodes that feed data into 
 - Node overrides:
   - `compose/nodes/node1.yml`
   - `compose/nodes/node2.yml`
-- Config templates:
-  - `config/config-node-template-rspduo.yml`
-  - `config/config-node-template-usrp.yml`
-  - `config/config-node-template-hackrf.yml`
-  - `config/config-node-template-kraken.yml`
-  - `config/config-node-template.yml` (legacy/general template)
+- Base configs:
+  - `config/config.yml` (RspDuo/default)
+  - `config/config-usrp.yml`
+  - `config/config-hackrf.yml`
+  - `config/config-kraken.yml`
 
 ## Setup
 
 1. Create one config file per node from the template:
 
 ```bash
-cp config/config-node-template-rspduo.yml config/config-node1-rspduo.yml
-cp config/config-node-template-rspduo.yml config/config-node2-rspduo.yml
+cp config/config.yml config/config-node1-rspduo.yml
+cp config/config.yml config/config-node2-rspduo.yml
 ```
 
 2. Update node override files under `compose/nodes/` so each node points to the intended config file and save path.
