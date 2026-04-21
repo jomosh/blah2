@@ -18,6 +18,11 @@ var stash_detection = require('./stash/detection.js');
 var stash_iqdata = require('./stash/iqdata.js');
 var stash_timing = require('./stash/timing.js');
 
+stash_map.init(config);
+stash_detection.init(config);
+stash_iqdata.init(config);
+stash_timing.init(config);
+
 // constants
 const PORT = config.network.ports.api;
 const HOST = config.network.ip;

@@ -1,23 +1,11 @@
 var timestamp = -1;
 var nRows = 3;
-var host = window.location.hostname;
-var isLocalHost = is_localhost(host);
 var range_x = [];
 var range_y = [];
 
 // setup API
-var urlTimestamp;
-var urlMap;
-if (isLocalHost) {
-  urlTimestamp = '//' + host + ':3000/api/timestamp';
-} else {
-  urlTimestamp = '//' + host + '/api/timestamp';
-}
-if (isLocalHost) {
-  urlMap = '//' + host + ':3000' + '/stash/iqdata';
-} else {
-  urlMap = '//' + host + '/stash/iqdata';
-}
+var urlTimestamp = build_api_url('/api/timestamp');
+var urlMap = build_api_url('/stash/iqdata');
 
 // setup plotly
 var layout = {

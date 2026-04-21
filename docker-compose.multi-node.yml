@@ -39,7 +39,5 @@ services:
     restart: always
     image: httpd:2.4
     profiles: ["ui"]
-    ports:
-      - "49152:80"
     volumes:
       - ./html:/usr/local/apache2/htdocs

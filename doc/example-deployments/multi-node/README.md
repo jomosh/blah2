@@ -29,7 +29,9 @@ cp config/config.yml config/config-node1-rspduo.yml
 cp config/config.yml config/config-node2-rspduo.yml
 ```
 
-2. Update node override files under `compose/nodes/` so each node points to the intended config file and save path.
+2. Update node override files under `compose/nodes/` so each node points to the intended config file, save path, and UI host port.
+
+- Set a unique `blah2_web.ports` mapping in each node override when UI is enabled (examples: node1 `49152:80`, node2 `49153:80`).
 
 3. Edit each node config:
 
@@ -44,11 +46,11 @@ cp config/config.yml config/config-node2-rspduo.yml
 ```bash
 docker compose -p blah2-node1 \
   -f docker-compose.multi-node.yml \
-  -f compose/nodes/node1.yml up -d
+  -f compose/nodes/node1.yml up -d --build
 
 docker compose -p blah2-node2 \
   -f docker-compose.multi-node.yml \
-  -f compose/nodes/node2.yml up -d
+  -f compose/nodes/node2.yml up -d --build
 ```
 
 5. Start any node with UI for debugging:
@@ -56,7 +58,7 @@ docker compose -p blah2-node2 \
 ```bash
 docker compose -p blah2-node1 \
   -f docker-compose.multi-node.yml \
-  -f compose/nodes/node1.yml --profile ui up -d
+  -f compose/nodes/node1.yml --profile ui up -d --build
 ```
 
 6. Scale to additional nodes by copying a node override and updating values:
@@ -65,12 +67,14 @@ docker compose -p blah2-node1 \
 - a unique config file in `command` fields
 - unique ports in that config file
 - a unique save path mount
-- optional unique UI port override (only if UI is enabled)
+- a unique `blah2_web.ports` mapping (only if UI is enabled)
 
 ## Notes
 
-- The current frontend scripts still assume API port 3000 in several places.
-- For non-default API ports, update frontend/api stash modules to use config-driven API base.
+- Frontend pages support API targeting via query parameters:
+  - `?api_port=<port>` (example: `?api_port=3100`)
+  - `?api_base=//<host>:<port>` (example: `?api_base=//localhost:3100`)
+- If neither parameter is provided, frontend defaults to `:3000` on localhost and same-origin host elsewhere.
 - Device-level sharing constraints still apply; use separate SDR devices unless replay mode is used.
 
 ## Validation checklist

@@ -4,16 +4,25 @@ var nCpi = 20;
 var map = [];
 var maxhold = '';
 var timestamp = '';
-const options_timestamp = {
+var pollInterval = null;
+const DEFAULT_API_PORT = 3000;
+var options_timestamp = {
   host: '127.0.0.1',
   path: '/api/timestamp',
-  port: 3000
+  port: null
 };
-const options_map = {
+var options_map = {
   host: '127.0.0.1',
   path: '/api/map',
-  port: 3000
+  port: null
 };
+
+function request_with_error_handling(options, onResponse) {
+  const req = http.get(options, onResponse);
+  req.on('error', (err) => {
+    console.error(`stash maxhold request failed (${options.path}): ${err.code || err.message}`);
+  });
+}
 
 function process(matrixArray) {
 
@@ -37,13 +46,13 @@ function process(matrixArray) {
 function update_data() {
 
   // check if timestamp is updated
-  http.get(options_timestamp, function(res) {
+  request_with_error_handling(options_timestamp, function(res) {
     res.setEncoding('utf8');
     res.on('data', function (body) {
       if (timestamp != body)
       {
         timestamp = body;
-        http.get(options_map, function(res) {
+        request_with_error_handling(options_map, function(res) {
           let body_map = '';
           res.setEncoding('utf8');
           res.on('data', (chunk) => {
@@ -68,10 +77,18 @@ function update_data() {
 
 };
 
-setInterval(update_data, 100);
+function init(config) {
+  const apiPort = config && config.network && config.network.ports ? config.network.ports.api : DEFAULT_API_PORT;
+  options_timestamp.port = apiPort;
+  options_map.port = apiPort;
+  if (pollInterval === null) {
+    pollInterval = setInterval(update_data, 100);
+  }
+}
 
 function get_data() {
   return maxhold;
 };
 
 module.exports.get_data_map = get_data;
+module.exports.init = init;
