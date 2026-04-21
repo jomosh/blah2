@@ -36,7 +36,7 @@ private:
   /// @brief Check status of HackRF API returns.
   /// @param status Return code of API call.
   /// @param message Message if API call error.
-  void check_status(uint8_t status, std::string message);
+  void check_status(int status, std::string message);
 
 protected:
   /// @brief Array of pointers to HackRF devices.
