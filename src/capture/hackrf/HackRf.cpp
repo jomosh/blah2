@@ -192,10 +192,15 @@ void HackRf::stop()
 void HackRf::process(IqData *buffer1, IqData *buffer2)
 {
     int status;
+  std::cout << "Starting HackRF RX stream on surveillance device..." << std::endl;
     status = hackrf_start_rx(dev[1], rx_callback, buffer2);
-    check_status(status, "Failed to start RX streaming.");
+  check_status(status, "Failed to start RX streaming on surveillance device.");
+  std::cout << "HackRF RX stream active on surveillance device." << std::endl;
+
+  std::cout << "Starting HackRF RX stream on reference device..." << std::endl;
     status = hackrf_start_rx(dev[0], rx_callback, buffer1);
-    check_status(status, "Failed to start RX streaming.");
+  check_status(status, "Failed to start RX streaming on reference device.");
+  std::cout << "HackRF RX stream active on reference device." << std::endl;
 }
 
 int HackRf::rx_callback(hackrf_transfer* transfer)
