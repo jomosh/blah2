@@ -2,7 +2,7 @@ const http = require('http');
 
 var nCpi = 20;
 var spectrum = [];
-frequency = [];
+var frequency = [];
 var timestamp = [];
 var ts = '';
 var output = [];
