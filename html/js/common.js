@@ -70,8 +70,17 @@ function sanitize_api_base(apiBase) {
   }
 }
 
+function format_host_for_url(host) {
+  if (host.includes(':') && !host.startsWith('[') && !host.endsWith(']')) {
+    return '[' + host + ']';
+  }
+
+  return host;
+}
+
 function get_api_base_url() {
   const host = window.location.hostname;
+  const hostForUrl = format_host_for_url(host);
   const query = new URLSearchParams(window.location.search);
   const apiBase = query.get('api_base');
   const apiPort = query.get('api_port');
@@ -84,15 +93,15 @@ function get_api_base_url() {
   if (apiPort && /^\d+$/.test(apiPort)) {
     const port = Number(apiPort);
     if (port >= 1 && port <= 65535) {
-      return '//' + host + ':' + port;
+      return '//' + hostForUrl + ':' + port;
     }
   }
 
   if (is_localhost(host)) {
-    return '//' + host + ':3000';
+    return '//' + hostForUrl + ':3000';
   }
 
-  return '//' + host;
+  return '//' + hostForUrl;
 }
 
 function build_api_url(path) {

@@ -8,9 +8,20 @@ const dns = require('dns');
 var config;
 try {
   const file = process.argv[2];
+  if (!file) {
+    console.error('Missing config path argument. Usage: node server.js <config.yml>');
+    process.exit(1);
+  }
+
   config = yaml.load(fs.readFileSync(file, 'utf8'));
 } catch (e) {
   console.error('Error reading or parsing the YAML file:', e);
+  process.exit(1);
+}
+
+if (!config || !config.network || !config.network.ports || !config.network.ip) {
+  console.error('Invalid config: expected network.ip and network.ports to be defined.');
+  process.exit(1);
 }
 
 var stash_map = require('./stash/maxhold.js');
