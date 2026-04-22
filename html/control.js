@@ -1,10 +1,8 @@
-var host = window.location.hostname;
-
 $(document).on('keypress', function (e) {
   if (e.which == 32) {
-    url = "/capture/toggle";
+    const url = build_api_url('/capture/toggle');
 
-    $.getJSON('http://' + host + ':3000/capture/toggle', function () { })
+    $.getJSON(url, function () { })
 
       .done(function (data) {
         console.log('API worked');

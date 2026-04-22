@@ -57,20 +57,20 @@
 - [ ] Profile hot paths in DSP pipeline
 - [ ] Optimize memory allocations in tight loops
 - [ ] Benchmark network payload generation
-- [ ] A feature to turn off the UI when running blah2 nodes for 3lips ingestion
+- [X] A feature to turn off the UI when running blah2 nodes for 3lips ingestion
 
 ## Installation Architecture
 
-- [ ] Refactor code so multiple blah2 nodes can run on the same host (currently there's a conflict between other shared docker images)
+- [X] Refactor code so multiple blah2 nodes can run on the same host (currently there's a conflict between other shared docker images)
 
 ## 3lips Localisation Readiness (Q2-Q3 2026)
 
 ### Q2 Milestones
 
-- [ ] Add headless node mode profile (run processor + API without web UI)
-- [ ] Remove fixed Docker container names to allow multi-instance deployment
-- [ ] Parameterize API/web port bindings per node instance
-- [ ] Replace hardcoded localhost:3000 assumptions in stash modules
+- [X] Add headless node mode profile (run processor + API without web UI)
+- [X] Remove fixed Docker container names to allow multi-instance deployment
+- [X] Parameterize API/web port bindings per node instance
+- [X] Replace hardcoded localhost:3000 assumptions in stash modules
 - [ ] Add null-safe handling for `/capture` polling in capture thread
 
 ### Q3 Milestones

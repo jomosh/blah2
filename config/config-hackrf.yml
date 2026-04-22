@@ -3,7 +3,7 @@ capture:
   fc: 204640000
   device:
     type: "HackRF"
-    serial: 
+    serial:
       - "REFERENCE_DEVICE_SERIAL_NUMBER"
       - "SURVILLANCE_DEVICE_SERIAL_NUMBER"
     gain_lna: [32, 32]
@@ -54,7 +54,7 @@ network:
     map: 3001
     detection: 3002
     track: 3003
-    adsb: 3004    
+    adsb: 3004
     timestamp: 4000
     timing: 4001
     iqdata: 4002

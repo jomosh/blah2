@@ -25,8 +25,8 @@ This deployment pattern is for running multiple blah2 nodes that feed data into 
 1. Create one config file per node from the template:
 
 ```bash
-cp config/config.yml config/config-node1-rspduo.yml
-cp config/config.yml config/config-node2-rspduo.yml
+cp config/config.yml config/config-node1.yml
+cp config/config.yml config/config-node2.yml
 ```
 
 2. Update node override files under `compose/nodes/` so each node points to the intended config file, save path, and UI host port.
@@ -74,6 +74,12 @@ docker compose -p blah2-node1 \
 - Frontend pages support API targeting via query parameters:
   - `?api_port=<port>` (example: `?api_port=3100`)
   - `?api_base=//<host>:<port>` (example: `?api_base=//localhost:3100`)
+- Controller behavior follows the same API targeting rules:
+  - API/Stash links on `/controller` are rewritten using the active `api_port`/`api_base` values.
+  - Spacebar capture toggle on `/` calls the API using the same resolved base URL.
+- Example node2 UI URLs:
+  - `http://localhost:49153/?api_port=3100`
+  - `http://localhost:49153/controller?api_port=3100`
 - If neither parameter is provided, frontend defaults to `:3000` on localhost and same-origin host elsewhere.
 - Device-level sharing constraints still apply; use separate SDR devices unless replay mode is used.
 

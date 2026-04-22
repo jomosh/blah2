@@ -66,18 +66,17 @@
 <script src="../js/common.js"></script>
 <script>
   window.onload = function() {
-  var host = window.location.hostname;
-  var isLocalHost = is_localhost(host);
-  var anchors = document.getElementsByTagName("a");
-  if (isLocalHost) {
-    for (var i = 0; i < anchors.length; i++) {
-      if (anchors[i].href.includes('/api/') || anchors[i].href.includes('/stash/')) {
-        console.log(anchors[i].href);
-        anchors[i].href = anchors[i].href.split(":49152")[0] + ":3000" + anchors[i].href.split(":49152")[1];
-        console.log(anchors[i].href);
-      }
+  var anchors = document.getElementsByTagName('a');
+  for (var i = 0; i < anchors.length; i++) {
+    var rawHref = anchors[i].getAttribute('href');
+    if (!rawHref) {
+      continue;
+    }
+
+    if (rawHref.startsWith('/api/') || rawHref.startsWith('/stash/') || rawHref.startsWith('/capture/')) {
+      anchors[i].href = build_api_url(rawHref);
     }
   }
-}
+};
 </script>
 </html>
