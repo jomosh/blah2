@@ -191,16 +191,43 @@ void HackRf::stop()
 
 void HackRf::process(IqData *buffer1, IqData *buffer2)
 {
-    int status;
+  int status;
   std::cout << "Starting HackRF RX stream on surveillance device..." << std::endl;
-    status = hackrf_start_rx(dev[1], rx_callback, buffer2);
+  status = hackrf_start_rx(dev[1], rx_callback, buffer2);
   check_status(status, "Failed to start RX streaming on surveillance device.");
   std::cout << "HackRF RX stream active on surveillance device." << std::endl;
 
   std::cout << "Starting HackRF RX stream on reference device..." << std::endl;
-    status = hackrf_start_rx(dev[0], rx_callback, buffer1);
+  status = hackrf_start_rx(dev[0], rx_callback, buffer1);
   check_status(status, "Failed to start RX streaming on reference device.");
   std::cout << "HackRF RX stream active on reference device." << std::endl;
+
+  // Non-fatal diagnostic: check that callbacks are actually filling both buffers.
+  bool hasData = false;
+  for (int i = 0; i < 50; ++i)
+  {
+    uint32_t lenRef = 0;
+    uint32_t lenSurv = 0;
+    buffer1->lock();
+    lenRef = buffer1->get_length();
+    buffer1->unlock();
+    buffer2->lock();
+    lenSurv = buffer2->get_length();
+    buffer2->unlock();
+    if (lenRef > 0 && lenSurv > 0)
+    {
+      std::cout << "HackRF callback data detected. reference=" << lenRef
+                << ", surveillance=" << lenSurv << std::endl;
+      hasData = true;
+      break;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  }
+  if (!hasData)
+  {
+    std::cout << "[HackRF] Warning: RX streams active but no callback data observed in first 5s."
+              << " Check sync wiring/trigger, serial assignments, and device contention." << std::endl;
+  }
 }
 
 int HackRf::rx_callback(hackrf_transfer* transfer)
