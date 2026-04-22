@@ -25,8 +25,8 @@ This deployment pattern is for running multiple blah2 nodes that feed data into 
 1. Create one config file per node from the template:
 
 ```bash
-cp config/config.yml config/config-node1-rspduo.yml
-cp config/config.yml config/config-node2-rspduo.yml
+cp config/config.yml config/config-node1.yml
+cp config/config.yml config/config-node2.yml
 ```
 
 2. Update node override files under `compose/nodes/` so each node points to the intended config file, save path, and UI host port.
