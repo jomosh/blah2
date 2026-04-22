@@ -1,7 +1,5 @@
 var timestamp = -1;
 var nRows = 3;
-var host = window.location.hostname;
-var isLocalHost = is_localhost(host);
 var range_x = [];
 var range_y = [];
 
@@ -11,21 +9,12 @@ var urlDetection;
 var urlAdsb;
 var urlConfig;
 var urlTracker;
-if (isLocalHost) {
-  urlTimestamp = '//' + host + ':3000/api/timestamp';
-  urlDetection = '//' + host + ':3000/api/detection';
-  urlAdsb = '//' + host + ':3000/api/adsb';
-  urlConfig = '//' + host + ':3000/api/config';
-  urlTracker = '//' + host + ':3000/api/tracker';
-  urlMap = '//' + host + ':3000' + urlMap;
-} else {
-  urlTimestamp = '//' + host + '/api/timestamp';
-  urlDetection = '//' + host + '/api/detection';
-  urlAdsb = '//' + host + '/api/adsb';
-  urlConfig = '//' + host + '/api/config';
-  urlTracker = '//' + host + '/api/tracker';
-  urlMap = '//' + host + urlMap;
-}
+urlTimestamp = build_api_url('/api/timestamp');
+urlDetection = build_api_url('/api/detection');
+urlAdsb = build_api_url('/api/adsb');
+urlConfig = build_api_url('/api/config');
+urlTracker = build_api_url('/api/tracker');
+urlMap = build_api_url(urlMap);
 
 // get truth flag
 var isTruth = false;
