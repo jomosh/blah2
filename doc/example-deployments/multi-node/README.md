@@ -16,7 +16,6 @@ The primary deployment path is through a single-file workflow using `docker-comp
   - `config/config-usrp.yml`
   - `config/config-hackrf.yml`
   - `config/config-kraken.yml`
-  - `config/config-node2.yml` (optional additional node)
 
 ## Setup
 
