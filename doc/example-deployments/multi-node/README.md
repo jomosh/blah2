@@ -1,6 +1,6 @@
 # Multi-node blah2 deployment (same host)
 
-The primary deployment path is now a single-file workflow using `docker-compose.yml`.
+The primary deployment path is through a single-file workflow using `docker-compose.yml`.
 
 ## Goals
 
