@@ -1,6 +1,6 @@
 # Multi-node blah2 deployment (same host)
 
-This deployment pattern is for running multiple blah2 nodes that feed data into 3lips.
+The primary deployment path is now a single-file workflow using `docker-compose.yml`.
 
 ## Goals
 
@@ -10,30 +10,38 @@ This deployment pattern is for running multiple blah2 nodes that feed data into 
 
 ## Files
 
-- Compose template: `docker-compose.multi-node.yml`
-- Node overrides:
-  - `compose/nodes/node1.yml`
-  - `compose/nodes/node2.yml`
+- Main compose file: `docker-compose.yml`
 - Base configs:
   - `config/config.yml` (RspDuo/default)
   - `config/config-usrp.yml`
   - `config/config-hackrf.yml`
   - `config/config-kraken.yml`
+  - `config/config-node2.yml` (optional additional node)
 
 ## Setup
 
-1. Create one config file per node from the template:
+1. Start node1 with a single command:
 
 ```bash
-cp config/config.yml config/config-node1.yml
+sudo docker compose up -d --build
+```
+
+2. UI on/off toggle is controlled directly in `docker-compose.yml`:
+
+- UI ON: keep the `blah2_web_node1` service block.
+- UI OFF (headless): comment out the `blah2_web_node1` service block.
+
+3. Enable an additional node from the commented template inside `docker-compose.yml`:
+
+- Uncomment `blah2_node2` and `blah2_api_node2`.
+- Optional UI: uncomment `blah2_web_node2`.
+- Create node2 config from a template:
+
+```bash
 cp config/config.yml config/config-node2.yml
 ```
 
-2. Update node override files under `compose/nodes/` so each node points to the intended config file, save path, and UI host port.
-
-- Set a unique `blah2_web.ports` mapping in each node override when UI is enabled (examples: node1 `49152:80`, node2 `49153:80`).
-
-3. Edit each node config:
+4. Edit each enabled node config:
 
 - Ensure every node has a unique `network.ports` block.
 - Recommended offset pattern per node index `n` (starting at 0):
@@ -41,33 +49,19 @@ cp config/config.yml config/config-node2.yml
   - map/detection/track/adsb: `3001-3004 + 100n`
   - timestamp/timing/iqdata/config: `4000-4003 + 100n`
 
-4. Start each node in headless mode (no UI) as a separate compose project:
+5. Recreate the stack after enabling node2 or changing configs:
 
 ```bash
-docker compose -p blah2-node1 \
-  -f docker-compose.multi-node.yml \
-  -f compose/nodes/node1.yml up -d --build
-
-docker compose -p blah2-node2 \
-  -f docker-compose.multi-node.yml \
-  -f compose/nodes/node2.yml up -d --build
+sudo docker compose up -d --build --force-recreate
 ```
 
-5. Start any node with UI for debugging:
+6. Scale to additional nodes by copying the commented service template blocks and updating values:
 
-```bash
-docker compose -p blah2-node1 \
-  -f docker-compose.multi-node.yml \
-  -f compose/nodes/node1.yml --profile ui up -d --build
-```
-
-6. Scale to additional nodes by copying a node override and updating values:
-
-- a unique compose project name (`-p blah2-nodeX`)
+- unique service names and container names
 - a unique config file in `command` fields
 - unique ports in that config file
 - a unique save path mount
-- a unique `blah2_web.ports` mapping (only if UI is enabled)
+- a unique UI host-port mapping (only if UI is enabled)
 
 ## Notes
 

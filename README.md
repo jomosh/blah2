@@ -45,7 +45,6 @@ sudo chown -R $USER .
 sudo chmod a+x ./lib/sdrplay-3.15.2/SDRplay_RSP_API-Linux-3.15.2.run
 sudo ./lib/sdrplay-3.15.2/SDRplay_RSP_API-Linux-3.15.2.run --tar -xvf -C ./lib/sdrplay-3.15.2
 cd lib/sdrplay-3.15.2/ && sudo ./install_lib.sh && cd ../../
-sudo docker network create blah2
 sudo systemctl enable docker
 sudo docker compose up -d --build
 ```
