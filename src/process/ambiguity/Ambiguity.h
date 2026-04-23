@@ -109,12 +109,6 @@ private:
   /// @brief Number of samples to perform FFT per pulse.
   uint32_t nfft;
 
-  /// @brief Vector storage for ambiguity processing
-  /// @{
-  std::vector<Complex> corr;
-  std::vector<Complex> delayProfile;
-  /// @}
-
   /// @brief Map to store result.
   std::unique_ptr<Map<Complex>> map;
 

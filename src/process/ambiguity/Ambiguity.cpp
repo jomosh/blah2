@@ -138,34 +138,28 @@ Map<std::complex<double>> *Ambiguity::process(IqData *x, IqData *y)
       dataCorr[j + nDelayBins] = dataZi[j];
     }
 
-    // cast from std::complex to std::vector
-    corr.clear();
+    // write current correlation slice directly to map row
     for (uint16_t j = 0; j < nDelayBins; j++)
     {
-      corr.push_back(dataCorr[nDelayBins + delayMin + j - 1 + 1]);
+      map->data[i][j] = dataCorr[nDelayBins + delayMin + j - 1 + 1];
     }
-
-    map->set_row(i, corr);
   }
 
   // doppler processing
   for (uint16_t i = 0; i < nDelayBins; i++)
   {
-    delayProfile = map->get_col(i);
     for (uint16_t j = 0; j < nDopplerBins; j++)
     {
-      dataDoppler[j] = {delayProfile[j].real(), delayProfile[j].imag()};
+      dataDoppler[j] = map->data[j][i];
     }
 
     fftw_execute(fftDoppler);
 
-    corr.clear();
+    // write fftshifted Doppler response directly to map column
     for (uint16_t j = 0; j < nDopplerBins; j++)
     {
-      corr.push_back(dataDoppler[(j + int(nDopplerBins / 2) + 1) % nDopplerBins]);
+      map->data[j][i] = dataDoppler[(j + int(nDopplerBins / 2) + 1) % nDopplerBins];
     }
-
-    map->set_col(i, corr);
   }
 
   return map.get();

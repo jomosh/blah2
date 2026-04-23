@@ -167,9 +167,12 @@ std::unique_ptr<Detection> CfarDetector1D::process(Map<std::complex<double>> *x)
 { 
   int32_t nDelayBins = x->get_nCols();
   int32_t nDopplerBins = x->get_nRows();
+  const int guard = static_cast<int>(nGuard);
+  const int train = static_cast<int>(nTrain);
 
-  std::vector<std::complex<double>> mapRow;
-  std::vector<double> mapRowSquare, mapRowSnr;
+  std::vector<double> mapRowSquare(nDelayBins, 0.0);
+  std::vector<double> mapRowSnr(nDelayBins, 0.0);
+  std::vector<double> prefixEnergy(nDelayBins + 1, 0.0);
 
   // store detections temporarily
   std::vector<double> delay;
@@ -183,79 +186,51 @@ std::unique_ptr<Detection> CfarDetector1D::process(Map<std::complex<double>> *x)
     if (std::abs(x->doppler[i]) < minDoppler)
     {
       continue;
-    } 
-    mapRow = x->get_row(i);
+    }
+
+    prefixEnergy[0] = 0.0;
     for (int j = 0; j < nDelayBins; j++)
     {
-      mapRowSquare.push_back((double) std::abs(mapRow[j]*mapRow[j]));
-      mapRowSnr.push_back((double)10 * std::log10(std::abs(mapRow[j])) - x->noisePower);
+      mapRowSquare[j] = std::norm(x->data[i][j]);
+      mapRowSnr[j] = (double)10 * std::log10(std::abs(x->data[i][j])) - x->noisePower;
+      prefixEnergy[j + 1] = prefixEnergy[j] + mapRowSquare[j];
     }
+
     for (int j = 0; j < nDelayBins; j++)
     {
       // skip if less than min delay
       if (x->delay[j] < minDelay)
       {
         continue;
-      } 
-      // get train cell indices
-      std::vector<int> iTrainLeading;
-      std::vector<int> iTrainTrailing;
-      for (int k = j-nGuard-nTrain; k < j-nGuard; k++)
-      {
-        if (k >= 0 && k < nDelayBins)
-        {
-          iTrainLeading.push_back(k);
-        }
-      }
-      for (int k = j+nGuard+1; k < j+nGuard+nTrain+1; k++)
-      {
-        if (k >= 0 && k < nDelayBins)
-        {
-          iTrainTrailing.push_back(k);
-        }
       }
 
+      const int leadingStart = std::max(0, j - guard - train);
+      const int leadingEnd = std::max(0, std::min(nDelayBins, j - guard));
+      const int trailingStart = std::min(nDelayBins, j + guard + 1);
+      const int trailingEnd = std::min(nDelayBins, j + guard + train + 1);
+
       // compute threshold
-      int nLeading = iTrainLeading.size();
-      int nTrailing = iTrainTrailing.size();
+      const int nLeading = std::max(0, leadingEnd - leadingStart);
+      const int nTrailing = std::max(0, trailingEnd - trailingStart);
       int nCells = 0;
       double trainNoise = 0.0;
       double alpha = 0.0;
+      const double leadingNoise = (nLeading > 0) ? (prefixEnergy[leadingEnd] - prefixEnergy[leadingStart]) : 0.0;
+      const double trailingNoise = (nTrailing > 0) ? (prefixEnergy[trailingEnd] - prefixEnergy[trailingStart]) : 0.0;
 
       if (mode == CfarMode::CA)
       {
         nCells = nLeading + nTrailing;
         if (nCells > 0)
         {
-          double leadingNoise = 0.0;
-          double trailingNoise = 0.0;
-          for (int k = 0; k < nLeading; k++)
-          {
-            leadingNoise += mapRowSquare[iTrainLeading[k]];
-          }
-          for (int k = 0; k < nTrailing; k++)
-          {
-            trailingNoise += mapRowSquare[iTrainTrailing[k]];
-          }
           trainNoise = (leadingNoise + trailingNoise) / nCells;
           alpha = ca_alpha(pfa, nCells);
         }
       }
       else
       {
-        double leadingNoise = 0.0;
-        double trailingNoise = 0.0;
         double leadingMean = 0.0;
         double trailingMean = 0.0;
-
-        for (int k = 0; k < nLeading; k++)
-        {
-          leadingNoise += mapRowSquare[iTrainLeading[k]];
-        }
-        for (int k = 0; k < nTrailing; k++)
-        {
-          trailingNoise += mapRowSquare[iTrainTrailing[k]];
-        }
 
         if (nLeading > 0)
         {
@@ -325,8 +300,6 @@ std::unique_ptr<Detection> CfarDetector1D::process(Map<std::complex<double>> *x)
         snr.push_back(mapRowSnr[j]);
       }
     }
-    mapRowSquare.clear();
-    mapRowSnr.clear();
   }
 
   // create detection
