@@ -1,5 +1,6 @@
 #include "Socket.h"
 #include <iostream>
+#include <algorithm>
 
 asio::io_context Socket::io_context;
 const uint32_t Socket::MTU = 1024;
@@ -22,8 +23,9 @@ void Socket::sendData(const std::string& data) {
     asio::error_code err;
 
     for (std::size_t i = 0; i < (data.size() + MTU - 1) / MTU; ++i) {
-        std::string subdata = data.substr(i * MTU, MTU);
-        socket.write_some(asio::buffer(subdata, subdata.size()), err);
+        const std::size_t offset = i * MTU;
+        const std::size_t len = std::min<std::size_t>(MTU, data.size() - offset);
+        asio::write(socket, asio::buffer(data.data() + offset, len), err);
 
         if (err) {
             std::cerr << "Error sending data: " << err.message() << std::endl;

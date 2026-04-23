@@ -172,9 +172,15 @@ void Track::remove(uint64_t index)
 
 std::string Track::to_json(uint64_t timestamp)
 {
+  return to_json(timestamp, 1, false);
+}
+
+std::string Track::to_json(uint64_t timestamp, uint32_t fs, bool delayInKm)
+{
   rapidjson::Document document;
   document.SetObject();
   rapidjson::Document::AllocatorType &allocator = document.GetAllocator();
+  const double delayScaleKm = (fs > 0) ? (Constants::c / (double)fs / 1000.0) : 0.0;
 
   // store track data
   rapidjson::Value dataArray(rapidjson::kArrayType);
@@ -189,7 +195,7 @@ std::string Track::to_json(uint64_t timestamp)
         state.at(i).at(state.at(i).size()-1).c_str(), 
         document.GetAllocator()).Move(), document.GetAllocator());
       object1.AddMember("delay", 
-        current.at(i).get_delay().at(0),
+        delayInKm ? current.at(i).get_delay().at(0) * delayScaleKm : current.at(i).get_delay().at(0),
         document.GetAllocator());
       object1.AddMember("doppler", 
         current.at(i).get_doppler().at(0), 
@@ -203,7 +209,8 @@ std::string Track::to_json(uint64_t timestamp)
       rapidjson::Value associatedState(rapidjson::kArrayType);
       for (size_t j = 0; j < associated.at(i).size(); j++)
       {
-        associatedDelay.PushBack(associated.at(i).at(j).get_delay().at(0), 
+        const double associatedDelayValue = associated.at(i).at(j).get_delay().at(0);
+        associatedDelay.PushBack(delayInKm ? associatedDelayValue * delayScaleKm : associatedDelayValue,
           document.GetAllocator());
         associatedDoppler.PushBack(associated.at(i).at(j).get_doppler().at(0), 
           document.GetAllocator());

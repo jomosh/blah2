@@ -115,9 +115,16 @@ uint32_t Map<T>::doppler_hz_to_bin(double dopplerHz)
 template <class T>
 std::string Map<T>::to_json(uint64_t timestamp)
 {
+  return to_json(timestamp, 1, false);
+}
+
+template <class T>
+std::string Map<T>::to_json(uint64_t timestamp, uint32_t fs, bool delayInKm)
+{
   rapidjson::Document document;
   document.SetObject();
   rapidjson::Document::AllocatorType &allocator = document.GetAllocator();
+  const double delayScaleKm = (fs > 0) ? (Constants::c / (double)fs / 1000.0) : 0.0;
 
   // store data array
   rapidjson::Value array(rapidjson::kArrayType);
@@ -135,7 +142,14 @@ std::string Map<T>::to_json(uint64_t timestamp)
   rapidjson::Value arrayDelay(rapidjson::kArrayType);
   for (size_t i = 0; i < delay.size(); i++)
   {
-    arrayDelay.PushBack(delay[i], allocator);
+    if (delayInKm)
+    {
+      arrayDelay.PushBack(delay[i] * delayScaleKm, allocator);
+    }
+    else
+    {
+      arrayDelay.PushBack(delay[i], allocator);
+    }
   }
 
   // store Doppler array

@@ -98,6 +98,13 @@ public:
   /// @return JSON string.
   std::string to_json(uint64_t timestamp);
 
+  /// @brief Generate JSON of the map and metadata.
+  /// @param timestamp Current time (POSIX ms).
+  /// @param fs Sampling frequency (Hz).
+  /// @param delayInKm Convert delay bins to km if true.
+  /// @return JSON string.
+  std::string to_json(uint64_t timestamp, uint32_t fs, bool delayInKm);
+
   /// @brief Update JSON to convert delay bins to km.
   /// @param json Input JSON string with delay field.
   /// @param fs Sampling frequency (Hz).

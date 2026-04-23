@@ -35,6 +35,7 @@
 #include <atomic>
 #include <memory>
 #include <iostream>
+#include <mutex>
 
 Capture *CAPTURE_POINTER = NULL;
 std::unique_ptr<Socket> socket_map;
@@ -230,6 +231,35 @@ int main(int argc, char **argv)
   tree["location"]["tx"]["longitude"] >> txLongitude;
   tree["location"]["tx"]["altitude"] >> txAltitude;
 
+  // keep latest ADS-B payload ready outside CPI-critical loop
+  std::mutex adsbMutex;
+  std::string cachedAdsbJson = "{}";
+  if (isAdsb && !adsbHost.empty())
+  {
+    std::thread([&]() {
+      httplib::Client cli(("http://" + adsbHost).c_str());
+      while (true)
+      {
+        std::ostringstream query;
+        query << "/api/dd?rx=" << rxLatitude << "," << rxLongitude << "," << rxAltitude;
+        query << "&tx=" << txLatitude << "," << txLongitude << "," << txAltitude;
+        query << "&fc=" << (fc / 1000000.0);
+        query << "&server=" << "http://" << tar1090;
+
+        if (auto res = cli.Get(query.str().c_str()))
+        {
+          if (res->status == 200 && !res->body.empty())
+          {
+            std::lock_guard<std::mutex> lock(adsbMutex);
+            cachedAdsbJson = res->body;
+          }
+        }
+
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+      }
+    }).detach();
+  }
+
   // set up process spectrum analyser
   double spectrumBandwidth = 2000;
   SpectrumAnalyser *spectrumAnalyser = new SpectrumAnalyser(nSamples, spectrumBandwidth);
@@ -334,24 +364,25 @@ int main(int argc, char **argv)
           // output IqData meta data
           jsonIqData = x->to_json(time[0]/1000);
           socket_iqdata->sendData(jsonIqData);
+          timing_helper(timing_name, timing_time, time, "output_iqdata");
 
           // output map data
-          mapJson = map->to_json(time[0]/1000);
-          mapJson = map->delay_bin_to_km(mapJson, fs);
+          mapJson = map->to_json(time[0]/1000, fs, true);
           if (saveMap)
           {
             map->save(mapJson, saveMapPath);
           }
           socket_map->sendData(mapJson);
+          timing_helper(timing_name, timing_time, time, "output_map");
 
           // output detection data
           if (isDetection)
           {
-            detectionJson = detection->to_json(time[0]/1000);
-            detectionJson = detection->delay_bin_to_km(detectionJson, fs);
+            detectionJson = detection->to_json(time[0]/1000, fs, true);
             socket_detection->sendData(detectionJson);
+            timing_helper(timing_name, timing_time, time, "output_detection");
           }
-          if (saveDetection)
+          if (isDetection && saveDetection)
           {
             detection->save(detectionJson, saveDetectionPath);
           }
@@ -359,30 +390,20 @@ int main(int argc, char **argv)
           // output tracker data
           if (isTracker)
           {
-            jsonTracker = track->to_json(time[0]/1000);
-            jsonTracker = track->delay_bin_to_km(jsonTracker, fs);
+            jsonTracker = track->to_json(time[0]/1000, fs, true);
             socket_track->sendData(jsonTracker);
+            timing_helper(timing_name, timing_time, time, "output_tracker");
           }
 
-          // output ADS-B truth from external source through the C++ pipeline
+          // output latest ADS-B truth cached by a background thread
           std::string jsonAdsb = "{}";
-          if (isAdsb && !adsbHost.empty())
+          if (isAdsb)
           {
-            httplib::Client cli(("http://" + adsbHost).c_str());
-            std::ostringstream query;
-            query << "/api/dd?rx=" << rxLatitude << "," << rxLongitude << "," << rxAltitude;
-            query << "&tx=" << txLatitude << "," << txLongitude << "," << txAltitude;
-            query << "&fc=" << (fc / 1000000.0);
-            query << "&server=" << "http://" << tar1090;
-            if (auto res = cli.Get(query.str().c_str()))
-            {
-              if (res->status == 200 && !res->body.empty())
-              {
-                jsonAdsb = res->body;
-              }
-            }
+            std::lock_guard<std::mutex> lock(adsbMutex);
+            jsonAdsb = cachedAdsbJson;
           }
           socket_adsb->sendData(jsonAdsb);
+          timing_helper(timing_name, timing_time, time, "output_adsb");
 
           // output radar data timer
           timing_helper(timing_name, timing_time, time, "output_radar_data");
