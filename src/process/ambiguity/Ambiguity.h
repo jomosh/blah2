@@ -104,6 +104,7 @@ private:
   std::vector<Complex> dataZi;
   std::vector<Complex> dataCorr;
   std::vector<Complex> dataDoppler;
+  std::vector<Complex> dopplerPhase;
   /// @}
 
   /// @brief Number of samples to perform FFT per pulse.
