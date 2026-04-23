@@ -169,7 +169,7 @@ std::string Map<T>::to_json(uint64_t timestamp, uint32_t fs, bool delayInKm)
   document.AddMember("doppler", arrayDoppler, allocator);
   document.AddMember(rapidjson::Value("data", document.GetAllocator()).Move(), array, document.GetAllocator());
 
-  rapidjson::StringBuffer strbuf;
+  strbuf.Clear();
   rapidjson::Writer<rapidjson::StringBuffer> writer(strbuf);
   writer.SetMaxDecimalPlaces(2);
   document.Accept(writer);
@@ -191,7 +191,7 @@ std::string Map<T>::delay_bin_to_km(std::string json, uint32_t fs)
     document["delay"].PushBack(1.0*delay[i]*(Constants::c/(double)fs)/1000, allocator);
   }
 
-  rapidjson::StringBuffer strbuf;
+  strbuf.Clear();
   rapidjson::Writer<rapidjson::StringBuffer> writer(strbuf);
   writer.SetMaxDecimalPlaces(2);
   document.Accept(writer);

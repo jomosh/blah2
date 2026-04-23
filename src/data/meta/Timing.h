@@ -9,6 +9,7 @@
 #include <stdint.h>
 #include <vector>
 #include <string>
+#include "rapidjson/stringbuffer.h"
 
 class Timing
 {
@@ -30,6 +31,9 @@ private:
 
   /// @brief Names of time differences.
   std::vector<std::string> name;
+
+  /// @brief Reusable JSON serialization buffer (capacity persists across CPIs).
+  mutable rapidjson::StringBuffer strbuf;
 
 public:
   /// @brief Constructor.

@@ -9,6 +9,7 @@
 #include <stdint.h>
 #include <vector>
 #include <complex>
+#include "rapidjson/stringbuffer.h"
 
 class Detection
 {
@@ -21,6 +22,9 @@ private:
 
   /// @brief Detections in SNR.
   std::vector<double> snr;
+
+  /// @brief Reusable JSON serialization buffer (capacity persists across CPIs).
+  mutable rapidjson::StringBuffer strbuf;
 
 public:
   /// @brief Constructor.
@@ -37,19 +41,19 @@ public:
 
   /// @brief Get detections in delay.
   /// @return Detections in delay (bins).
-  std::vector<double> get_delay();
+  const std::vector<double> &get_delay() const;
 
   /// @brief Get detections in Doppler.
   /// @return Detections in Doppler (Hz).
-  std::vector<double> get_doppler();
+  const std::vector<double> &get_doppler() const;
 
   /// @brief Detections in SNR.
   /// @return Detections in SNR.
-  std::vector<double> get_snr();
+  const std::vector<double> &get_snr() const;
 
   /// @brief Get number of detections.
   /// @return Number of detections
-  size_t get_nDetections();
+  size_t get_nDetections() const;
 
   /// @brief Generate JSON of the detections and metadata.
   /// @param timestamp Current time (POSIX ms).

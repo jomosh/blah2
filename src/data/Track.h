@@ -16,6 +16,7 @@
 #define TRACK_H
 
 #include "data/Detection.h"
+#include "rapidjson/stringbuffer.h"
 
 #include <stdint.h>
 #include <vector>
@@ -46,6 +47,9 @@ private:
 
   /// @brief Next valid track index.
   uint64_t iNext;
+
+  /// @brief Reusable JSON serialization buffer (capacity persists across CPIs).
+  mutable rapidjson::StringBuffer strbuf;
 
   /// @brief Maximum integer index to wrap around.
   static const uint64_t MAX_INDEX;
@@ -105,27 +109,27 @@ public:
   /// @brief Get number of tracks with specified state.
   /// @param state State to check.
   /// @return Number of tracks with specified state.
-  uint64_t get_nState(std::string state);
+  uint64_t get_nState(std::string state) const;
 
   /// @brief Get number of total tracks.
   /// @return Number of total tracks.
-  uint64_t get_n();
+  uint64_t get_n() const;
 
   /// @brief Get current track position for track index.
   /// @return Current detection.
-  Detection get_current(uint64_t index);
+  const Detection &get_current(uint64_t index) const;
 
   /// @brief Get current acceleration for track index.
   /// @return Current acceleration (Hz/s).
-  double get_acceleration(uint64_t index);
+  double get_acceleration(uint64_t index) const;
 
   /// @brief Get current state for track index.
   /// @return Current state.
-  std::string get_state(uint64_t index);
+  std::string get_state(uint64_t index) const;
 
   /// @brief Get number of updates track has been tentative/coasting.
   /// @return Number of updates track has been tentative/coasting.
-  uint64_t get_nInactive(uint64_t index);
+  uint64_t get_nInactive(uint64_t index) const;
 
   /// @brief Update an associated detection.
   /// @param index Index of track to change.

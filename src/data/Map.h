@@ -13,6 +13,7 @@
 #include <vector>
 #include <deque>
 #include <complex>
+#include "rapidjson/stringbuffer.h"
 
 template <typename T>
 
@@ -27,6 +28,9 @@ private:
 
   /// @brief Cached map data in dB normalized by noise power.
   std::vector<std::vector<double>> dataDb;
+
+  /// @brief Reusable JSON serialization buffer (capacity persists across CPIs).
+  mutable rapidjson::StringBuffer strbuf;
 
 public:
   /// @brief Map data to store.
