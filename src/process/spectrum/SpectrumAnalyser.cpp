@@ -1,7 +1,6 @@
 #include "SpectrumAnalyser.h"
 #include <complex>
 #include <iostream>
-#include <deque>
 #include <vector>
 #include <math.h>
 
@@ -45,10 +44,9 @@ void SpectrumAnalyser::process(IqData *x)
 {  
   // load data and FFT
   uint32_t i;
-  const std::deque<std::complex<double>> &data = x->get_data_ref();
   for (i = 0; i < nfft; i++)
   {
-    dataX[i] = data[i];
+    dataX[i] = x->at(i);
   }
   fftw_execute(fftX);
 

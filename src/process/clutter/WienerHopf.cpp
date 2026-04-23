@@ -58,14 +58,12 @@ WienerHopf::~WienerHopf()
 bool WienerHopf::process(IqData *x, IqData *y)
 {
   uint32_t i, j;
-  xData = x->get_data();
-  yData = y->get_data();
 
-  // change deque to std::complex
+  // load data from ring-buffers
   for (i = 0; i < nSamples; i++)
   {
-    dataX[i] = xData[(((i - delayMin) % nSamples) + nSamples) % nSamples];
-    dataY[i] = yData[i];
+    dataX[i] = x->at((((i - delayMin) % nSamples) + nSamples) % nSamples);
+    dataY[i] = y->at(i);
   }
 
   // pre-compute FFT of signals

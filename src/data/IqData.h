@@ -22,8 +22,14 @@ private:
   /// @brief True if should not push to buffer (mutex).
   std::mutex mutex_lock;
 
-  /// @brief Pointer to IQ data.
-  std::deque<std::complex<double>> *data;
+  /// @brief Ring-buffer storage for IQ data.
+  std::vector<std::complex<double>> data;
+
+  /// @brief Index of oldest sample in ring-buffer.
+  uint32_t head;
+
+  /// @brief Number of valid samples currently in buffer.
+  uint32_t length;
 
   /// @brief Minimum value.
   double min;
@@ -66,9 +72,10 @@ public:
   /// @return IQ data.
   std::deque<std::complex<double>> get_data();
 
-  /// @brief Getter for data as const reference.
-  /// @return IQ data.
-  const std::deque<std::complex<double>> &get_data_ref() const;
+  /// @brief Get sample by index relative to oldest sample.
+  /// @param index Zero-based index from oldest sample.
+  /// @return Sample at index.
+  std::complex<double> at(uint32_t index) const;
 
   /// @brief Push a sample to the queue.
   /// @param sample A single sample.
