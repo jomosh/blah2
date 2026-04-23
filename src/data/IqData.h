@@ -66,6 +66,10 @@ public:
   /// @return IQ data.
   std::deque<std::complex<double>> get_data();
 
+  /// @brief Getter for data as const reference.
+  /// @return IQ data.
+  const std::deque<std::complex<double>> &get_data_ref() const;
+
   /// @brief Push a sample to the queue.
   /// @param sample A single sample.
   /// @return Void.
@@ -86,12 +90,12 @@ public:
   /// @brief Update the time differences and names.
   /// @param spectrum Spectrum vector.
   /// @return Void.
-  void update_spectrum(std::vector<std::complex<double>> spectrum);
+  void update_spectrum(const std::vector<std::complex<double>> &spectrum);
 
   /// @brief Update the time differences and names.
   /// @param frequency Frequency vector.
   /// @return Void.
-  void update_frequency(std::vector<double> frequency);
+  void update_frequency(const std::vector<double> &frequency);
 
   /// @brief Generate JSON of the signal and metadata.
   /// @param timestamp Current time (POSIX ms).

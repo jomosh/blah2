@@ -39,6 +39,11 @@ std::deque<std::complex<double>> IqData::get_data()
   return *data;
 }
 
+const std::deque<std::complex<double>> &IqData::get_data_ref() const
+{
+  return *data;
+}
+
 void IqData::push_back(std::complex<double> sample)
 {
   if (data->size() < n)
@@ -80,12 +85,12 @@ void IqData::clear()
   }
 }
 
-void IqData::update_spectrum(std::vector<std::complex<double>> _spectrum)
+void IqData::update_spectrum(const std::vector<std::complex<double>> &_spectrum)
 {
   spectrum = _spectrum;
 }
 
-void IqData::update_frequency(std::vector<double> _frequency)
+void IqData::update_frequency(const std::vector<double> &_frequency)
 {
   frequency = _frequency;
 }

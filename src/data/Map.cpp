@@ -17,6 +17,7 @@ Map<T>::Map(uint32_t _nRows, uint32_t _nCols)
   nCols = _nCols;
   std::vector<std::vector<T>> tmp(nRows, std::vector<T>(nCols, {1}));
   data = tmp;
+  dataDb = std::vector<std::vector<double>>(nRows, std::vector<double>(nCols, 0.0));
 }
 
 template <class T>
@@ -133,7 +134,7 @@ std::string Map<T>::to_json(uint64_t timestamp, uint32_t fs, bool delayInKm)
     rapidjson::Value subarray(rapidjson::kArrayType);
     for (size_t j = 0; j < data[i].size(); j++)
     {
-      subarray.PushBack(10 * std::log10(std::abs(data[i][j])) - noisePower, document.GetAllocator());
+      subarray.PushBack(dataDb[i][j], document.GetAllocator());
     }
     array.PushBack(subarray, document.GetAllocator());
   }
@@ -201,7 +202,7 @@ std::string Map<T>::delay_bin_to_km(std::string json, uint32_t fs)
 template <class T>
 void Map<T>::set_metrics()
 {
-  // get map noise level
+  // get map noise level and cache dB values for output
   double value;
   double noisePower = 0;
   double maxPower = 0;
@@ -210,11 +211,21 @@ void Map<T>::set_metrics()
     for (uint32_t j = 0; j < nCols; j++)
     {
       value = 10 * std::log10(std::abs(data[i][j]));
+      dataDb[i][j] = value;
       noisePower = noisePower + value;
       maxPower = (maxPower < value) ? value : maxPower;
     }
   }
   noisePower = noisePower / (nRows * nCols);
+
+  for (uint32_t i = 0; i < nRows; i++)
+  {
+    for (uint32_t j = 0; j < nCols; j++)
+    {
+      dataDb[i][j] -= noisePower;
+    }
+  }
+
   this->noisePower = noisePower;
   this->maxPower = maxPower - noisePower;
 }

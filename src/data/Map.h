@@ -25,6 +25,9 @@ private:
   /// @brief Number of columns.
   uint32_t nCols;
 
+  /// @brief Cached map data in dB normalized by noise power.
+  std::vector<std::vector<double>> dataDb;
+
 public:
   /// @brief Map data to store.
   std::vector<std::vector<T>> data;

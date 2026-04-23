@@ -32,30 +32,25 @@ void SpectrumAnalyser::process(IqData *x)
 {  
   // load data and FFT
   uint32_t i;
-  std::deque<std::complex<double>> data = x->get_data();
+  const std::deque<std::complex<double>> &data = x->get_data_ref();
   for (i = 0; i < nfft; i++)
   {
     dataX[i] = data[i];
   }
   fftw_execute(fftX);
 
-  // fftshift
-  std::vector<std::complex<double>> fftshift;
-  for (i = 0; i < nfft; i++)
-  {
-    fftshift.push_back(dataX[(i + int(nfft / 2) + 1) % nfft]);
-  }
-  
-  // decimate
+  // fftshift + decimate in one pass
   std::vector<std::complex<double>> spectrum;
+  spectrum.reserve(nSpectrum);
   for (i = 0; i < nfft; i+=decimation)
   {
-    spectrum.push_back(fftshift[i]);
+    spectrum.push_back(dataX[(i + int(nfft / 2) + 1) % nfft]);
   }
   x->update_spectrum(spectrum);
 
   // update frequency
   std::vector<double> frequency;
+  frequency.reserve(nSpectrum);
   double offset = 0;
   if (decimation % 2 == 0)
   {
