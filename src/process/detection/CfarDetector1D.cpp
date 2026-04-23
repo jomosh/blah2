@@ -6,6 +6,7 @@
 #include <cmath>
 #include <unordered_map>
 #include <algorithm>
+#include <limits>
 
 namespace
 {
@@ -192,7 +193,14 @@ std::unique_ptr<Detection> CfarDetector1D::process(Map<std::complex<double>> *x)
     for (int j = 0; j < nDelayBins; j++)
     {
       mapRowSquare[j] = std::norm(x->data[i][j]);
-      mapRowSnr[j] = (double)10 * std::log10(std::abs(x->data[i][j])) - x->noisePower;
+      if (mapRowSquare[j] > 0.0)
+      {
+        mapRowSnr[j] = (double)5 * std::log10(mapRowSquare[j]) - x->noisePower;
+      }
+      else
+      {
+        mapRowSnr[j] = -std::numeric_limits<double>::infinity();
+      }
       prefixEnergy[j + 1] = prefixEnergy[j] + mapRowSquare[j];
     }
 

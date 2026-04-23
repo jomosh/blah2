@@ -21,6 +21,19 @@ SpectrumAnalyser::SpectrumAnalyser(uint32_t _n, double _bandwidth)
   dataX = new std::complex<double>[nfft];
   fftX = fftw_plan_dft_1d(nfft, reinterpret_cast<fftw_complex *>(dataX),
                            reinterpret_cast<fftw_complex *>(dataX), FFTW_FORWARD, FFTW_ESTIMATE);
+
+  // preallocate reusable output buffers
+  spectrumBuffer.resize(nSpectrum);
+  frequencyBins.reserve(nSpectrum);
+  double offset = 0;
+  if (decimation % 2 == 0)
+  {
+    offset = bandwidth/2;
+  }
+  for (int i = -((int)nSpectrum)/2; i < ((int)nSpectrum)/2; i++)
+  {
+    frequencyBins.push_back(((i*bandwidth)+offset+204640000)/1000);
+  }
 }
 
 SpectrumAnalyser::~SpectrumAnalyser()
@@ -40,27 +53,12 @@ void SpectrumAnalyser::process(IqData *x)
   fftw_execute(fftX);
 
   // fftshift + decimate in one pass
-  std::vector<std::complex<double>> spectrum;
-  spectrum.reserve(nSpectrum);
-  for (i = 0; i < nfft; i+=decimation)
+  for (i = 0; i < nSpectrum; i++)
   {
-    spectrum.push_back(dataX[(i + int(nfft / 2) + 1) % nfft]);
+    spectrumBuffer[i] = dataX[(i * decimation + int(nfft / 2) + 1) % nfft];
   }
-  x->update_spectrum(spectrum);
-
-  // update frequency
-  std::vector<double> frequency;
-  frequency.reserve(nSpectrum);
-  double offset = 0;
-  if (decimation % 2 == 0)
-  {
-    offset = bandwidth/2;
-  }
-  for (i = -nSpectrum/2; i < nSpectrum/2; i++)
-  {
-    frequency.push_back(((i*bandwidth)+offset+204640000)/1000);
-  }
-  x->update_frequency(frequency);
+  x->update_spectrum(spectrumBuffer);
+  x->update_frequency(frequencyBins);
 
   return;
 }

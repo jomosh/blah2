@@ -12,6 +12,7 @@
 #include "data/IqData.h"
 #include <stdint.h>
 #include <fftw3.h>
+#include <vector>
 
 class SpectrumAnalyser
 {
@@ -39,6 +40,12 @@ private:
 
   /// @brief Resolution of spectrum (Hz).
   double resolution;
+
+  /// @brief Reusable spectrum output buffer.
+  std::vector<std::complex<double>> spectrumBuffer;
+
+  /// @brief Cached frequency bins (kHz).
+  std::vector<double> frequencyBins;
 
 public:
   /// @brief Constructor.
