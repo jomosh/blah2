@@ -31,4 +31,11 @@ void Socket::sendData(const std::string& data) {
             std::cerr << "Error sending data: " << err.message() << std::endl;
         }
     }
+
+    if (!err) {
+        asio::write(socket, asio::buffer("\n", 1), err);
+        if (err) {
+            std::cerr << "Error sending frame delimiter: " << err.message() << std::endl;
+        }
+    }
 }

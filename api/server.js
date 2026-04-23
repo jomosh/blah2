@@ -44,13 +44,6 @@ var adsb = '{}';
 var timestamp = '';
 var timing = '';
 var iqdata = '';
-var data_map = '';
-var data_detection = '';
-var data_tracker = '';
-var data_adsb = '';
-var data_timestamp = '';
-var data_timing = '';
-var data_iqdata = '';
 var capture = false;
 
 // api server
@@ -141,114 +134,58 @@ app.listen(PORT, HOST, () => {
   console.log(`Running on http://${HOST}:${PORT}`);
 });
 
-// tcp listener map
-const server_map = net.createServer((socket)=>{
-    socket.on("data",(msg)=>{
-        data_map = data_map + msg.toString();
-        if (data_map.slice(-1) === "}")
-        {
-          map = data_map;
-          data_map = '';
+function createFramedTcpServer(port, onFrame) {
+  const server = net.createServer((socket) => {
+    let pending = '';
+
+    socket.on('data', (msg) => {
+      pending += msg.toString();
+      const frames = pending.split('\n');
+      pending = frames.pop();
+
+      for (let i = 0; i < frames.length; i++) {
+        if (frames[i].length > 0) {
+          onFrame(frames[i]);
         }
+      }
     });
-    socket.on("close",()=>{
-        console.log("Connection closed.");
-    })
-});
-server_map.listen(config.network.ports.map);
 
-// tcp listener detection
-const server_detection = net.createServer((socket)=>{
-  socket.on("data",(msg)=>{
-      data_detection = data_detection + msg.toString();
-      if (data_detection.slice(-1) === "}")
-      {
-        detection = data_detection;
-        data_detection = '';
-      }
+    socket.on('close', () => {
+      console.log('Connection closed.');
+    });
   });
-  socket.on("close",()=>{
-      console.log("Connection closed.");
-  })
-});
-server_detection.listen(config.network.ports.detection);
 
-// tcp listener tracker
-const server_tracker = net.createServer((socket)=>{
-  socket.on("data",(msg)=>{
-      data_tracker = data_tracker + msg.toString();
-      if (data_tracker.slice(-1) === "}")
-      {
-        track = data_tracker;
-        data_tracker = '';
-      }
-  });
-  socket.on("close",()=>{
-      console.log("Connection closed.");
-  })
-});
-server_tracker.listen(config.network.ports.track);
+  server.listen(port);
+  return server;
+}
 
-// tcp listener adsb
-const server_adsb = net.createServer((socket)=>{
-  socket.on("data",(msg)=>{
-      data_adsb = data_adsb + msg.toString();
-      if (data_adsb.slice(-1) === "}")
-      {
-        adsb = data_adsb;
-        data_adsb = '';
-      }
-  });
-  socket.on("close",()=>{
-      console.log("Connection closed.");
-  })
+createFramedTcpServer(config.network.ports.map, (frame) => {
+  map = frame;
 });
-server_adsb.listen(config.network.ports.adsb);
 
-// tcp listener timestamp
-const server_timestamp = net.createServer((socket)=>{
-  socket.on("data",(msg)=>{
-    data_timestamp = data_timestamp + msg.toString();
-    timestamp = data_timestamp;
-    data_timestamp = '';
-  });
-  socket.on("close",()=>{
-      console.log("Connection closed.");
-  })
+createFramedTcpServer(config.network.ports.detection, (frame) => {
+  detection = frame;
 });
-server_timestamp.listen(config.network.ports.timestamp);
 
-// tcp listener timing
-const server_timing = net.createServer((socket)=>{
-  socket.on("data",(msg)=>{
-    data_timing = data_timing + msg.toString();
-    if (data_timing.slice(-1) === "}")
-    {
-      timing = data_timing;
-      data_timing = '';
-    }
-  });
-  socket.on("close",()=>{
-      console.log("Connection closed.");
-  })
+createFramedTcpServer(config.network.ports.track, (frame) => {
+  track = frame;
 });
-server_timing.listen(config.network.ports.timing);
 
-// tcp listener iqdata metadata
-const server_iqdata = net.createServer((socket)=>{
-  socket.on("data",(msg)=>{
-    data_iqdata = data_iqdata + msg.toString();
-    if (data_iqdata.slice(-1) === "}")
-    {
-      iqdata = data_iqdata;
-      data_iqdata = '';
-    }
-  });
-  socket.on("close",()=>{
-      console.log("Connection closed.");
-  })
+createFramedTcpServer(config.network.ports.adsb, (frame) => {
+  adsb = frame;
 });
-server_iqdata.listen(config.network.ports.iqdata);
+
+createFramedTcpServer(config.network.ports.timestamp, (frame) => {
+  timestamp = frame;
+});
+
+createFramedTcpServer(config.network.ports.timing, (frame) => {
+  timing = frame;
+});
+
+createFramedTcpServer(config.network.ports.iqdata, (frame) => {
+  iqdata = frame;
+});
 
 process.on('SIGTERM', () => {
   console.log('SIGTERM signal received.');
