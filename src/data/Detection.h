@@ -9,7 +9,6 @@
 #include <stdint.h>
 #include <vector>
 #include <complex>
-#include "rapidjson/stringbuffer.h"
 
 class Detection
 {
@@ -22,9 +21,6 @@ private:
 
   /// @brief Detections in SNR.
   std::vector<double> snr;
-
-  /// @brief Reusable JSON serialization buffer (capacity persists across CPIs).
-  mutable rapidjson::StringBuffer strbuf;
 
 public:
   /// @brief Constructor.

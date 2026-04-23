@@ -235,7 +235,7 @@ std::string Track::to_json(uint64_t timestamp, uint32_t fs, bool delayInKm)
   document.AddMember("nCoasting", get_nState(STATE_COASTING), allocator);
   document.AddMember("data", dataArray, document.GetAllocator());
   
-  strbuf.Clear();
+  thread_local static rapidjson::StringBuffer strbuf; strbuf.Clear();
   rapidjson::Writer<rapidjson::StringBuffer> writer(strbuf);
   writer.SetMaxDecimalPlaces(2);
   document.Accept(writer);
@@ -278,7 +278,7 @@ std::string Track::delay_bin_to_km(std::string json, uint32_t fs)
     }
   }
 
-  strbuf.Clear();
+  thread_local static rapidjson::StringBuffer strbuf; strbuf.Clear();
   rapidjson::Writer<rapidjson::StringBuffer> writer(strbuf);
   writer.SetMaxDecimalPlaces(2);
   document.Accept(writer);

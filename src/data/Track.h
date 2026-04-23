@@ -16,7 +16,6 @@
 #define TRACK_H
 
 #include "data/Detection.h"
-#include "rapidjson/stringbuffer.h"
 
 #include <stdint.h>
 #include <vector>
@@ -47,9 +46,6 @@ private:
 
   /// @brief Next valid track index.
   uint64_t iNext;
-
-  /// @brief Reusable JSON serialization buffer (capacity persists across CPIs).
-  mutable rapidjson::StringBuffer strbuf;
 
   /// @brief Maximum integer index to wrap around.
   static const uint64_t MAX_INDEX;

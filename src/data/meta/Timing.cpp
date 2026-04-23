@@ -40,7 +40,7 @@ std::string Timing::to_json()
     document.AddMember(name_value, time[i], allocator);
   }
 
-  strbuf.Clear();
+  thread_local static rapidjson::StringBuffer strbuf; strbuf.Clear();
   rapidjson::Writer<rapidjson::StringBuffer> writer(strbuf);
   writer.SetMaxDecimalPlaces(2);
   document.Accept(writer);
