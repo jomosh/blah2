@@ -12,6 +12,7 @@
 #include <vector>
 #include <complex>
 #include <mutex>
+#include <condition_variable>
 
 class IqData
 {
@@ -21,6 +22,9 @@ private:
 
   /// @brief True if should not push to buffer (mutex).
   std::mutex mutex_lock;
+
+  /// @brief Notifies when new data may be available.
+  std::condition_variable data_ready;
 
   /// @brief Ring-buffer storage for IQ data.
   std::vector<std::complex<double>> data;
@@ -67,6 +71,11 @@ public:
   /// @brief Unlocker for mutex.
   /// @return Void.
   void unlock();
+
+  /// @brief Wait until at least minLength samples are available.
+  /// @param minLength Minimum required samples in buffer.
+  /// @return Void.
+  void wait_for_min_length(uint32_t minLength);
 
   /// @brief Getter for data.
   /// @return IQ data.

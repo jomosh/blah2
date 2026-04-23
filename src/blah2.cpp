@@ -311,6 +311,9 @@ int main(int argc, char **argv)
   std::thread t2([&]{
       while (true)
       {
+        buffer1->wait_for_min_length(nSamples + 1);
+        buffer2->wait_for_min_length(nSamples + 1);
+
         buffer1->lock();
         buffer2->lock();
         if ((buffer1->get_length() > nSamples) && (buffer2->get_length() > nSamples))
@@ -432,8 +435,6 @@ int main(int argc, char **argv)
         {
           buffer1->unlock();
           buffer2->unlock();
-          // short delay to prevent tight looping
-          std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
       }
     });

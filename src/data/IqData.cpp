@@ -35,6 +35,13 @@ void IqData::lock()
 void IqData::unlock()
 {
   mutex_lock.unlock();
+  data_ready.notify_all();
+}
+
+void IqData::wait_for_min_length(uint32_t minLength)
+{
+  std::unique_lock<std::mutex> lock(mutex_lock);
+  data_ready.wait(lock, [&] { return length >= minLength; });
 }
 
 std::deque<std::complex<double>> IqData::get_data()
