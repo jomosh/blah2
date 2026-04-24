@@ -73,7 +73,7 @@ void Tracker::update(Detection *detection, uint64_t current)
   for (uint64_t i = 0; i < track.get_n(); i++)
   {
     // predict next position
-    const Detection &detectionCurrent = track.get_current(i);
+    Detection detectionCurrent = track.get_current(i);
     acc = track.get_acceleration(i);
     Detection prediction = predict(detectionCurrent, acc, T);
     delayPredict = prediction.get_delay().front();
