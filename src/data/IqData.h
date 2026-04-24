@@ -86,6 +86,11 @@ public:
   /// @return Sample at index.
   std::complex<double> at(uint32_t index) const;
 
+  /// @brief Get sample by index without bounds checking.
+  /// @param index Zero-based index from oldest sample.
+  /// @return Sample at index.
+  std::complex<double> at_unchecked(uint32_t index) const;
+
   /// @brief Push a sample to the queue.
   /// @param sample A single sample.
   /// @return Void.

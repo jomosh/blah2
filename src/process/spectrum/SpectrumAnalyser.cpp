@@ -43,11 +43,18 @@ SpectrumAnalyser::~SpectrumAnalyser()
 
 void SpectrumAnalyser::process(IqData *x)
 {  
+  if (x->get_length() < nfft)
+  {
+    std::cerr << "SpectrumAnalyser requires at least " << nfft
+      << " samples, got " << x->get_length() << std::endl;
+    return;
+  }
+
   // load data and FFT
   uint32_t i;
   for (i = 0; i < nfft; i++)
   {
-    dataX[i] = x->at(i);
+    dataX[i] = x->at_unchecked(i);
   }
   fftw_execute(fftX);
 

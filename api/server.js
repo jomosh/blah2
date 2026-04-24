@@ -162,6 +162,17 @@ function createFramedTcpServer(port, onFrame) {
     socket.on('close', () => {
       console.log('Connection closed.');
     });
+
+    socket.on('error', (err) => {
+      console.error(`Socket error on port ${port}:`, err.message);
+      if (!socket.destroyed) {
+        socket.destroy();
+      }
+    });
+  });
+
+  server.on('error', (err) => {
+    console.error(`TCP server error on port ${port}:`, err.message);
   });
 
   server.listen(port);

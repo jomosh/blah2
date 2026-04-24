@@ -40,6 +40,11 @@ void IqData::unlock()
 
 void IqData::wait_for_min_length(uint32_t minLength)
 {
+  if (minLength > n)
+  {
+    throw std::invalid_argument("IqData::wait_for_min_length minLength exceeds buffer capacity");
+  }
+
   std::unique_lock<std::mutex> lock(mutex_lock);
   data_ready.wait(lock, [&] { return length >= minLength; });
 }
@@ -60,6 +65,11 @@ std::complex<double> IqData::at(uint32_t index) const
   {
     throw std::out_of_range("IqData::at index out of range");
   }
+  return data[(head + index) % n];
+}
+
+std::complex<double> IqData::at_unchecked(uint32_t index) const
+{
   return data[(head + index) % n];
 }
 

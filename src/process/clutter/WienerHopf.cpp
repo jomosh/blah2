@@ -59,11 +59,19 @@ bool WienerHopf::process(IqData *x, IqData *y)
 {
   uint32_t i, j;
 
+  if (x->get_length() < nSamples || y->get_length() < nSamples)
+  {
+    std::cerr << "WienerHopf requires at least " << nSamples
+      << " samples in both inputs, got " << x->get_length()
+      << " and " << y->get_length() << std::endl;
+    return false;
+  }
+
   // load data from ring-buffers
   for (i = 0; i < nSamples; i++)
   {
-    dataX[i] = x->at((((i - delayMin) % nSamples) + nSamples) % nSamples);
-    dataY[i] = y->at(i);
+    dataX[i] = x->at_unchecked((((i - delayMin) % nSamples) + nSamples) % nSamples);
+    dataY[i] = y->at_unchecked(i);
   }
 
   // pre-compute FFT of signals

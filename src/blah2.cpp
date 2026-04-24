@@ -135,8 +135,17 @@ int main(int argc, char **argv)
   double tCpi, tBuffer;
   tree["process"]["data"]["cpi"] >> tCpi;
   tree["process"]["data"]["buffer"] >> tBuffer;
-  IqData *buffer1 = new IqData((int) (tCpi*tBuffer*fs));
-  IqData *buffer2 = new IqData((int) (tCpi*tBuffer*fs));
+  uint32_t nSamples = fs * tCpi;
+  uint32_t bufferSamples = tCpi * tBuffer * fs;
+  if (bufferSamples < nSamples)
+  {
+    std::cerr << "Invalid process.data.buffer config: buffer must hold at least one CPI"
+      << " (required " << nSamples << " samples, got " << bufferSamples << ")" << "\n";
+    return -1;
+  }
+
+  IqData *buffer1 = new IqData(bufferSamples);
+  IqData *buffer2 = new IqData(bufferSamples);
 
   // run capture
   std::thread t1([&]{capture->process(buffer1, buffer2, 
@@ -144,7 +153,6 @@ int main(int argc, char **argv)
   });
 
   // set up process CPI
-  uint32_t nSamples = fs * tCpi;
   IqData *x = new IqData(nSamples);
   IqData *y = new IqData(nSamples);
   Map<std::complex<double>> *map;
