@@ -151,12 +151,12 @@ public:
   /// @return Void.
   void remove(uint64_t index);
 
-  /// @brief Generate JSON of the map and metadata.
+  /// @brief Generate JSON of the track data and metadata.
   /// @param timestamp Current time (POSIX ms).
   /// @return JSON string.
   std::string to_json(uint64_t timestamp);
 
-  /// @brief Generate JSON of the map and metadata.
+  /// @brief Generate JSON of the track data and metadata.
   /// @param timestamp Current time (POSIX ms).
   /// @param fs Sampling frequency (Hz).
   /// @param delayInKm Convert delay bins to km if true.

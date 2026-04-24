@@ -182,6 +182,8 @@ TEST_CASE("Process_NonZero_Doppler_Centering", "[process]")
 {
     auto round_hamming = GENERATE(true, false);
 
+  constexpr double pi = 3.14159265358979323846;
+
     int32_t delayMin{0};
     int32_t delayMax{0};
     int32_t dopplerMin{0};
@@ -198,7 +200,7 @@ TEST_CASE("Process_NonZero_Doppler_Centering", "[process]")
 
     for (uint32_t i = 0; i < nSamples; i++)
     {
-      const double phase = 2.0 * M_PI * ambiguity.get_doppler_middle() * i / fs;
+      const double phase = 2.0 * pi * ambiguity.get_doppler_middle() * i / fs;
       x.push_back({1.0, 0.0});
       y.push_back(std::polar(1.0, phase));
     }

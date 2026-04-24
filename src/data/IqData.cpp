@@ -80,7 +80,7 @@ void IqData::push_back(std::complex<double> sample)
 std::complex<double> IqData::pop_front()
 {
   if (length == 0) {
-    throw std::runtime_error("Attempting to pop from an empty deque");
+    throw std::runtime_error("Attempting to pop from an empty IqData ring buffer");
   }
   std::complex<double> sample = data[head];
   head = (head + 1) % n;
