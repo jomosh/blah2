@@ -21,6 +21,7 @@ Socket::~Socket()
 
 void Socket::sendData(const std::string& data) {
     asio::error_code err;
+    bool hadError = false;
 
     for (std::size_t i = 0; i < (data.size() + MTU - 1) / MTU; ++i) {
         const std::size_t offset = i * MTU;
@@ -29,10 +30,12 @@ void Socket::sendData(const std::string& data) {
 
         if (err) {
             std::cerr << "Error sending data: " << err.message() << std::endl;
+            hadError = true;
+            break;
         }
     }
 
-    if (!err) {
+    if (!hadError) {
         asio::write(socket, asio::buffer("\n", 1), err);
         if (err) {
             std::cerr << "Error sending frame delimiter: " << err.message() << std::endl;

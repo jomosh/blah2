@@ -71,14 +71,14 @@ Ambiguity::Ambiguity(int32_t _delayMin, int32_t _delayMax,
   dataYi.resize(nfft);
   dataZi.resize(nfft);
   dataDoppler.resize(nfft);
-  dopplerPhase.resize(nCorr);
+  dopplerPhase.resize(static_cast<size_t>(nCorr) * nDopplerBins);
 
   if (dopplerMiddle != 0)
   {
     const double phaseStep = 2.0 * M_PI * dopplerMiddle / fs;
     const std::complex<double> phaseInc = std::polar(1.0, phaseStep);
     std::complex<double> phasor = {1.0, 0.0};
-    for (uint16_t k = 0; k < nCorr; k++)
+    for (size_t k = 0; k < dopplerPhase.size(); k++)
     {
       dopplerPhase[k] = phasor;
       phasor *= phaseInc;
@@ -86,7 +86,7 @@ Ambiguity::Ambiguity(int32_t _delayMin, int32_t _delayMax,
   }
   else
   {
-    for (uint16_t k = 0; k < nCorr; k++)
+    for (size_t k = 0; k < dopplerPhase.size(); k++)
     {
       dopplerPhase[k] = {1.0, 0.0};
     }
@@ -119,7 +119,8 @@ Map<std::complex<double>> *Ambiguity::process(IqData *x, IqData *y)
   {
     for (uint16_t j = 0; j < nCorr; j++)
     {
-      dataXi[j] = x->pop_front() * dopplerPhase[j];
+      const size_t phaseIndex = static_cast<size_t>(i) * nCorr + j;
+      dataXi[j] = x->pop_front() * dopplerPhase[phaseIndex];
       dataYi[j] = y->pop_front();
     }
 

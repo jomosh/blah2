@@ -23,15 +23,16 @@ SpectrumAnalyser::SpectrumAnalyser(uint32_t _n, double _bandwidth)
 
   // preallocate reusable output buffers
   spectrumBuffer.resize(nSpectrum);
-  frequencyBins.reserve(nSpectrum);
+  frequencyBins.resize(nSpectrum);
   double offset = 0;
   if (decimation % 2 == 0)
   {
     offset = bandwidth/2;
   }
-  for (int i = -((int)nSpectrum)/2; i < ((int)nSpectrum)/2; i++)
+  for (uint32_t i = 0; i < nSpectrum; i++)
   {
-    frequencyBins.push_back(((i*bandwidth)+offset+204640000)/1000);
+    const int bin = static_cast<int>(i) - static_cast<int>(nSpectrum) / 2;
+    frequencyBins[i] = ((bin * bandwidth) + offset + 204640000) / 1000;
   }
 }
 

@@ -134,12 +134,21 @@ app.listen(PORT, HOST, () => {
   console.log(`Running on http://${HOST}:${PORT}`);
 });
 
+const MAX_PENDING_BYTES = 8 * 1024 * 1024;
+
 function createFramedTcpServer(port, onFrame) {
   const server = net.createServer((socket) => {
     let pending = '';
 
     socket.on('data', (msg) => {
       pending += msg.toString();
+      if (pending.length > MAX_PENDING_BYTES) {
+        console.error(`Closing connection on port ${port}: frame exceeded ${MAX_PENDING_BYTES} bytes without delimiter.`);
+        pending = '';
+        socket.destroy();
+        return;
+      }
+
       const frames = pending.split('\n');
       pending = frames.pop();
 

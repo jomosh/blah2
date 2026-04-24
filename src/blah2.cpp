@@ -311,12 +311,12 @@ int main(int argc, char **argv)
   std::thread t2([&]{
       while (true)
       {
-        buffer1->wait_for_min_length(nSamples + 1);
-        buffer2->wait_for_min_length(nSamples + 1);
+        buffer1->wait_for_min_length(nSamples);
+        buffer2->wait_for_min_length(nSamples);
 
         buffer1->lock();
         buffer2->lock();
-        if ((buffer1->get_length() > nSamples) && (buffer2->get_length() > nSamples))
+        if ((buffer1->get_length() >= nSamples) && (buffer2->get_length() >= nSamples))
         {
           time.push_back(current_time_us());
           // extract data from buffer

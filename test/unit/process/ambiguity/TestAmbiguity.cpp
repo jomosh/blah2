@@ -176,3 +176,48 @@ TEST_CASE("Process_File", "[process]")
     CHECK_THAT(map->maxPower, Catch::Matchers::WithinAbs(30.2816, 0.001));
     CHECK_THAT(map->noisePower, Catch::Matchers::WithinAbs(76.918, 0.001));
 }
+
+/// @brief Test non-zero Doppler centering applies continuously across the CPI.
+TEST_CASE("Process_NonZero_Doppler_Centering", "[process]")
+{
+    auto round_hamming = GENERATE(true, false);
+
+    int32_t delayMin{0};
+    int32_t delayMax{0};
+    int32_t dopplerMin{0};
+    int32_t dopplerMax{4};
+
+    uint32_t fs{1000};
+    uint32_t nSamples{1000};
+
+    Ambiguity ambiguity(delayMin, delayMax, dopplerMin,
+      dopplerMax, fs, nSamples, round_hamming);
+
+    IqData x{nSamples};
+    IqData y{nSamples};
+
+    for (uint32_t i = 0; i < nSamples; i++)
+    {
+      const double phase = 2.0 * M_PI * ambiguity.get_doppler_middle() * i / fs;
+      x.push_back({1.0, 0.0});
+      y.push_back(std::polar(1.0, phase));
+    }
+
+    auto map{ambiguity.process(&x, &y)};
+    REQUIRE(map->doppler.size() == ambiguity.get_n_doppler_bins());
+
+    size_t peakIndex = 0;
+    double peakPower = 0.0;
+    for (size_t i = 0; i < map->doppler.size(); i++)
+    {
+      const double power = std::norm(map->data[i][0]);
+      if (power > peakPower)
+      {
+        peakPower = power;
+        peakIndex = i;
+      }
+    }
+
+    CHECK(peakIndex == map->doppler.size() / 2);
+    CHECK_THAT(map->doppler[peakIndex], Catch::Matchers::WithinAbs(ambiguity.get_doppler_middle(), 1e-9));
+}
