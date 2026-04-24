@@ -108,7 +108,7 @@ void Kraken::callback(unsigned char *buf, uint32_t len, void *ctx)
         buffer_blah2->push_back({iqi, iqq});
     }
 
-    buffer_blah2->unlock();
+    buffer_blah2->unlock_and_notify();
 }
 
 void Kraken::replay(IqData *buffer1, IqData *buffer2, std::string _file, bool _loop)

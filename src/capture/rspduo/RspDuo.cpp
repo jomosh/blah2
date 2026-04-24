@@ -173,8 +173,8 @@ void RspDuo::replay(IqData *_buffer1, IqData *_buffer2, std::string _file, bool 
       buffer1->push_back({(double)i1, (double)q1});
       buffer2->push_back({(double)i2, (double)q2});
     }
-    buffer1->unlock();
-    buffer2->unlock();
+    buffer1->unlock_and_notify();
+    buffer2->unlock_and_notify();
   }
 }
 
@@ -516,8 +516,8 @@ unsigned int reset, void *cbContext)
     buffer1->push_back({(double)buffer_16_ar[i], (double)buffer_16_ar[i+1]});
     buffer2->push_back({(double)buffer_16_ar[i+2], (double)buffer_16_ar[i+3]});
   }
-  buffer1->unlock();
-  buffer2->unlock();
+  buffer1->unlock_and_notify();
+  buffer2->unlock_and_notify();
 
   // write data to file
   if (*capture_fg)

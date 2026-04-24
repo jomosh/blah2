@@ -35,6 +35,11 @@ void IqData::lock()
 void IqData::unlock()
 {
   mutex_lock.unlock();
+}
+
+void IqData::unlock_and_notify()
+{
+  mutex_lock.unlock();
   data_ready.notify_all();
 }
 

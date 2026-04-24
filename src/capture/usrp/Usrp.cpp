@@ -89,8 +89,8 @@ void Usrp::process(IqData *buffer1, IqData *buffer2)
         buffer1->push_back({(double)buff_ptrs[0][i].real(), (double)buff_ptrs[0][i].imag()});
         buffer2->push_back({(double)buff_ptrs[1][i].real(), (double)buff_ptrs[1][i].imag()});
       }
-      buffer1->unlock();
-      buffer2->unlock();
+      buffer1->unlock_and_notify();
+      buffer2->unlock_and_notify();
 
       // save IQ data to file
       if (*saveIq)

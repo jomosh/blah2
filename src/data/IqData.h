@@ -72,6 +72,10 @@ public:
   /// @return Void.
   void unlock();
 
+  /// @brief Unlock mutex and notify waiters that data may be available.
+  /// @return Void.
+  void unlock_and_notify();
+
   /// @brief Wait until at least minLength samples are available.
   /// @param minLength Minimum required samples in buffer.
   /// @return Void.
