@@ -104,16 +104,11 @@ private:
   std::vector<Complex> dataZi;
   std::vector<Complex> dataCorr;
   std::vector<Complex> dataDoppler;
+  std::vector<Complex> dopplerPhase;
   /// @}
 
   /// @brief Number of samples to perform FFT per pulse.
   uint32_t nfft;
-
-  /// @brief Vector storage for ambiguity processing
-  /// @{
-  std::vector<Complex> corr;
-  std::vector<Complex> delayProfile;
-  /// @}
 
   /// @brief Map to store result.
   std::unique_ptr<Map<Complex>> map;

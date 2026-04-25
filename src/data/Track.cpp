@@ -55,7 +55,7 @@ void Track::set_nInactive(uint64_t index, uint64_t n)
   nInactive.at(index) = n;
 }
 
-uint64_t Track::get_nState(std::string _state)
+uint64_t Track::get_nState(std::string _state) const
 {
   uint64_t n = 0;
   for (size_t i = 0; i < id.size(); i++)
@@ -68,27 +68,27 @@ uint64_t Track::get_nState(std::string _state)
   return n;
 }
 
-uint64_t Track::get_n()
+uint64_t Track::get_n() const
 {
   return id.size();
 }
 
-Detection Track::get_current(uint64_t index)
+const Detection &Track::get_current(uint64_t index) const
 {
   return current.at(index);
 }
 
-double Track::get_acceleration(uint64_t index)
+double Track::get_acceleration(uint64_t index) const
 {
   return acceleration.at(index);
 }
 
-std::string Track::get_state(uint64_t index)
+std::string Track::get_state(uint64_t index) const
 {
   return state.at(index).at(state.at(index).size()-1);
 }
 
-uint64_t Track::get_nInactive(uint64_t index)
+uint64_t Track::get_nInactive(uint64_t index) const
 {
   return nInactive.at(index);
 }
@@ -172,9 +172,15 @@ void Track::remove(uint64_t index)
 
 std::string Track::to_json(uint64_t timestamp)
 {
+  return to_json(timestamp, 1, false);
+}
+
+std::string Track::to_json(uint64_t timestamp, uint32_t fs, bool delayInKm)
+{
   rapidjson::Document document;
   document.SetObject();
   rapidjson::Document::AllocatorType &allocator = document.GetAllocator();
+  const double delayScaleKm = (fs > 0) ? (Constants::c / (double)fs / 1000.0) : 0.0;
 
   // store track data
   rapidjson::Value dataArray(rapidjson::kArrayType);
@@ -189,7 +195,7 @@ std::string Track::to_json(uint64_t timestamp)
         state.at(i).at(state.at(i).size()-1).c_str(), 
         document.GetAllocator()).Move(), document.GetAllocator());
       object1.AddMember("delay", 
-        current.at(i).get_delay().at(0),
+        delayInKm ? current.at(i).get_delay().at(0) * delayScaleKm : current.at(i).get_delay().at(0),
         document.GetAllocator());
       object1.AddMember("doppler", 
         current.at(i).get_doppler().at(0), 
@@ -203,7 +209,8 @@ std::string Track::to_json(uint64_t timestamp)
       rapidjson::Value associatedState(rapidjson::kArrayType);
       for (size_t j = 0; j < associated.at(i).size(); j++)
       {
-        associatedDelay.PushBack(associated.at(i).at(j).get_delay().at(0), 
+        const double associatedDelayValue = associated.at(i).at(j).get_delay().at(0);
+        associatedDelay.PushBack(delayInKm ? associatedDelayValue * delayScaleKm : associatedDelayValue,
           document.GetAllocator());
         associatedDoppler.PushBack(associated.at(i).at(j).get_doppler().at(0), 
           document.GetAllocator());
@@ -228,7 +235,7 @@ std::string Track::to_json(uint64_t timestamp)
   document.AddMember("nCoasting", get_nState(STATE_COASTING), allocator);
   document.AddMember("data", dataArray, document.GetAllocator());
   
-  rapidjson::StringBuffer strbuf;
+  thread_local static rapidjson::StringBuffer strbuf; strbuf.Clear();
   rapidjson::Writer<rapidjson::StringBuffer> writer(strbuf);
   writer.SetMaxDecimalPlaces(2);
   document.Accept(writer);
@@ -271,7 +278,7 @@ std::string Track::delay_bin_to_km(std::string json, uint32_t fs)
     }
   }
 
-  rapidjson::StringBuffer strbuf;
+  thread_local static rapidjson::StringBuffer strbuf; strbuf.Clear();
   rapidjson::Writer<rapidjson::StringBuffer> writer(strbuf);
   writer.SetMaxDecimalPlaces(2);
   document.Accept(writer);

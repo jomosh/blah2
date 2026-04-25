@@ -12,6 +12,7 @@
 #include <vector>
 #include <complex>
 #include <mutex>
+#include <condition_variable>
 
 class IqData
 {
@@ -22,8 +23,17 @@ private:
   /// @brief True if should not push to buffer (mutex).
   std::mutex mutex_lock;
 
-  /// @brief Pointer to IQ data.
-  std::deque<std::complex<double>> *data;
+  /// @brief Notifies when new data may be available.
+  std::condition_variable data_ready;
+
+  /// @brief Ring-buffer storage for IQ data.
+  std::vector<std::complex<double>> data;
+
+  /// @brief Index of oldest sample in ring-buffer.
+  uint32_t head;
+
+  /// @brief Number of valid samples currently in buffer.
+  uint32_t length;
 
   /// @brief Minimum value.
   double min;
@@ -62,9 +72,28 @@ public:
   /// @return Void.
   void unlock();
 
+  /// @brief Unlock mutex and notify waiters that data may be available.
+  /// @return Void.
+  void unlock_and_notify();
+
+  /// @brief Wait until at least minLength samples are available.
+  /// @param minLength Minimum required samples in buffer.
+  /// @return Void.
+  void wait_for_min_length(uint32_t minLength);
+
   /// @brief Getter for data.
   /// @return IQ data.
   std::deque<std::complex<double>> get_data();
+
+  /// @brief Get sample by index relative to oldest sample.
+  /// @param index Zero-based index from oldest sample.
+  /// @return Sample at index.
+  std::complex<double> at(uint32_t index) const;
+
+  /// @brief Get sample by index without bounds checking.
+  /// @param index Zero-based index from oldest sample.
+  /// @return Sample at index.
+  std::complex<double> at_unchecked(uint32_t index) const;
 
   /// @brief Push a sample to the queue.
   /// @param sample A single sample.
@@ -86,12 +115,12 @@ public:
   /// @brief Update the time differences and names.
   /// @param spectrum Spectrum vector.
   /// @return Void.
-  void update_spectrum(std::vector<std::complex<double>> spectrum);
+  void update_spectrum(const std::vector<std::complex<double>> &spectrum);
 
   /// @brief Update the time differences and names.
   /// @param frequency Frequency vector.
   /// @return Void.
-  void update_frequency(std::vector<double> frequency);
+  void update_frequency(const std::vector<double> &frequency);
 
   /// @brief Generate JSON of the signal and metadata.
   /// @param timestamp Current time (POSIX ms).

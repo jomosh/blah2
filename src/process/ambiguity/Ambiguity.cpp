@@ -6,6 +6,7 @@
 #include <numeric>
 #include <math.h>
 #include <chrono>
+#include <cmath>
 
 // constructor
 Ambiguity::Ambiguity(int32_t _delayMin, int32_t _delayMax, 
@@ -70,6 +71,27 @@ Ambiguity::Ambiguity(int32_t _delayMin, int32_t _delayMax,
   dataYi.resize(nfft);
   dataZi.resize(nfft);
   dataDoppler.resize(nfft);
+  dopplerPhase.resize(static_cast<size_t>(nCorr) * nDopplerBins);
+
+  if (dopplerMiddle != 0)
+  {
+    const double phaseStep = 2.0 * M_PI * dopplerMiddle / fs;
+    const std::complex<double> phaseInc = std::polar(1.0, phaseStep);
+    std::complex<double> phasor = {1.0, 0.0};
+    for (size_t k = 0; k < dopplerPhase.size(); k++)
+    {
+      dopplerPhase[k] = phasor;
+      phasor *= phaseInc;
+    }
+  }
+  else
+  {
+    for (size_t k = 0; k < dopplerPhase.size(); k++)
+    {
+      dopplerPhase[k] = {1.0, 0.0};
+    }
+  }
+
   fftXi = fftw_plan_dft_1d(nfft, reinterpret_cast<fftw_complex *>(dataXi.data()),
                            reinterpret_cast<fftw_complex *>(dataXi.data()), FFTW_FORWARD, FFTW_ESTIMATE);
   fftYi = fftw_plan_dft_1d(nfft, reinterpret_cast<fftw_complex *>(dataYi.data()),
@@ -91,23 +113,14 @@ Ambiguity::~Ambiguity()
 
 Map<std::complex<double>> *Ambiguity::process(IqData *x, IqData *y)
 {
-  // shift reference if not 0 centered
-  if (dopplerMiddle != 0)
-  {
-    std::complex<double> j = {0, 1};
-    for (uint32_t i = 0; i < x->get_length(); i++)
-    {
-      x->push_back(x->pop_front() * std::exp(1.0 * j * 2.0 * M_PI * dopplerMiddle * ((double)i / fs)));
-    }
-  }
-
   // range processing
   nSamples = nDopplerBins * nCorr;
   for (uint16_t i = 0; i < nDopplerBins; i++)
   {
     for (uint16_t j = 0; j < nCorr; j++)
     {
-      dataXi[j] = x->pop_front();
+      const size_t phaseIndex = static_cast<size_t>(i) * nCorr + j;
+      dataXi[j] = x->pop_front() * dopplerPhase[phaseIndex];
       dataYi[j] = y->pop_front();
     }
 
@@ -138,34 +151,28 @@ Map<std::complex<double>> *Ambiguity::process(IqData *x, IqData *y)
       dataCorr[j + nDelayBins] = dataZi[j];
     }
 
-    // cast from std::complex to std::vector
-    corr.clear();
+    // write current correlation slice directly to map row
     for (uint16_t j = 0; j < nDelayBins; j++)
     {
-      corr.push_back(dataCorr[nDelayBins + delayMin + j - 1 + 1]);
+      map->data[i][j] = dataCorr[nDelayBins + delayMin + j - 1 + 1];
     }
-
-    map->set_row(i, corr);
   }
 
   // doppler processing
   for (uint16_t i = 0; i < nDelayBins; i++)
   {
-    delayProfile = map->get_col(i);
     for (uint16_t j = 0; j < nDopplerBins; j++)
     {
-      dataDoppler[j] = {delayProfile[j].real(), delayProfile[j].imag()};
+      dataDoppler[j] = map->data[j][i];
     }
 
     fftw_execute(fftDoppler);
 
-    corr.clear();
+    // write fftshifted Doppler response directly to map column
     for (uint16_t j = 0; j < nDopplerBins; j++)
     {
-      corr.push_back(dataDoppler[(j + int(nDopplerBins / 2) + 1) % nDopplerBins]);
+      map->data[j][i] = dataDoppler[(j + int(nDopplerBins / 2) + 1) % nDopplerBins];
     }
-
-    map->set_col(i, corr);
   }
 
   return map.get();

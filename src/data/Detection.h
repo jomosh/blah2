@@ -37,24 +37,31 @@ public:
 
   /// @brief Get detections in delay.
   /// @return Detections in delay (bins).
-  std::vector<double> get_delay();
+  const std::vector<double> &get_delay() const;
 
   /// @brief Get detections in Doppler.
   /// @return Detections in Doppler (Hz).
-  std::vector<double> get_doppler();
+  const std::vector<double> &get_doppler() const;
 
   /// @brief Detections in SNR.
   /// @return Detections in SNR.
-  std::vector<double> get_snr();
+  const std::vector<double> &get_snr() const;
 
   /// @brief Get number of detections.
   /// @return Number of detections
-  size_t get_nDetections();
+  size_t get_nDetections() const;
 
   /// @brief Generate JSON of the detections and metadata.
   /// @param timestamp Current time (POSIX ms).
   /// @return JSON string.
   std::string to_json(uint64_t timestamp);
+
+  /// @brief Generate JSON of the detections and metadata.
+  /// @param timestamp Current time (POSIX ms).
+  /// @param fs Sampling frequency (Hz).
+  /// @param delayInKm Convert delay bins to km if true.
+  /// @return JSON string.
+  std::string to_json(uint64_t timestamp, uint32_t fs, bool delayInKm);
 
   /// @brief Update JSON to convert delay bins to km.
   /// @param json Input JSON string with delay field.

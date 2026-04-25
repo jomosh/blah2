@@ -127,7 +127,7 @@ int HackRf::rx_callback(hackrf_transfer* transfer)
     buffer_blah2->push_back({iqi, iqq});
   }
 
-  buffer_blah2->unlock();
+  buffer_blah2->unlock_and_notify();
 
   return 0;
 }

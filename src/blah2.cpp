@@ -35,6 +35,9 @@
 #include <atomic>
 #include <memory>
 #include <iostream>
+#include <mutex>
+#include <limits>
+#include <cmath>
 
 Capture *CAPTURE_POINTER = NULL;
 std::unique_ptr<Socket> socket_map;
@@ -134,8 +137,35 @@ int main(int argc, char **argv)
   double tCpi, tBuffer;
   tree["process"]["data"]["cpi"] >> tCpi;
   tree["process"]["data"]["buffer"] >> tBuffer;
-  IqData *buffer1 = new IqData((int) (tCpi*tBuffer*fs));
-  IqData *buffer2 = new IqData((int) (tCpi*tBuffer*fs));
+  if (fs == 0 || !std::isfinite(tCpi) || tCpi <= 0.0 ||
+    !std::isfinite(tBuffer) || tBuffer <= 0.0)
+  {
+    std::cerr << "Invalid process.data config: fs, cpi and buffer must be positive finite values" << "\n";
+    return -1;
+  }
+
+  const double samplesPerCpi = static_cast<double>(fs) * tCpi;
+  const double samplesPerBuffer = samplesPerCpi * tBuffer;
+  if (samplesPerCpi < 1.0 || samplesPerBuffer < 1.0 ||
+    samplesPerCpi > std::numeric_limits<uint32_t>::max() ||
+    samplesPerBuffer > std::numeric_limits<uint32_t>::max())
+  {
+    std::cerr << "Invalid process.data config: derived sample counts must be between 1 and "
+      << std::numeric_limits<uint32_t>::max() << "\n";
+    return -1;
+  }
+
+  uint32_t nSamples = static_cast<uint32_t>(samplesPerCpi);
+  uint32_t bufferSamples = static_cast<uint32_t>(samplesPerBuffer);
+  if (bufferSamples < nSamples)
+  {
+    std::cerr << "Invalid process.data.buffer config: buffer must hold at least one CPI"
+      << " (required " << nSamples << " samples, got " << bufferSamples << ")" << "\n";
+    return -1;
+  }
+
+  IqData *buffer1 = new IqData(bufferSamples);
+  IqData *buffer2 = new IqData(bufferSamples);
 
   // run capture
   std::thread t1([&]{capture->process(buffer1, buffer2, 
@@ -143,7 +173,6 @@ int main(int argc, char **argv)
   });
 
   // set up process CPI
-  uint32_t nSamples = fs * tCpi;
   IqData *x = new IqData(nSamples);
   IqData *y = new IqData(nSamples);
   Map<std::complex<double>> *map;
@@ -230,6 +259,35 @@ int main(int argc, char **argv)
   tree["location"]["tx"]["longitude"] >> txLongitude;
   tree["location"]["tx"]["altitude"] >> txAltitude;
 
+  // keep latest ADS-B payload ready outside CPI-critical loop
+  std::mutex adsbMutex;
+  std::string cachedAdsbJson = "{}";
+  if (isAdsb && !adsbHost.empty())
+  {
+    std::thread([&]() {
+      httplib::Client cli(("http://" + adsbHost).c_str());
+      while (true)
+      {
+        std::ostringstream query;
+        query << "/api/dd?rx=" << rxLatitude << "," << rxLongitude << "," << rxAltitude;
+        query << "&tx=" << txLatitude << "," << txLongitude << "," << txAltitude;
+        query << "&fc=" << (fc / 1000000.0);
+        query << "&server=" << "http://" << tar1090;
+
+        if (auto res = cli.Get(query.str().c_str()))
+        {
+          if (res->status == 200 && !res->body.empty())
+          {
+            std::lock_guard<std::mutex> lock(adsbMutex);
+            cachedAdsbJson = res->body;
+          }
+        }
+
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+      }
+    }).detach();
+  }
+
   // set up process spectrum analyser
   double spectrumBandwidth = 2000;
   SpectrumAnalyser *spectrumAnalyser = new SpectrumAnalyser(nSamples, spectrumBandwidth);
@@ -281,9 +339,12 @@ int main(int argc, char **argv)
   std::thread t2([&]{
       while (true)
       {
+        buffer1->wait_for_min_length(nSamples);
+        buffer2->wait_for_min_length(nSamples);
+
         buffer1->lock();
         buffer2->lock();
-        if ((buffer1->get_length() > nSamples) && (buffer2->get_length() > nSamples))
+        if ((buffer1->get_length() >= nSamples) && (buffer2->get_length() >= nSamples))
         {
           time.push_back(current_time_us());
           // extract data from buffer
@@ -334,24 +395,25 @@ int main(int argc, char **argv)
           // output IqData meta data
           jsonIqData = x->to_json(time[0]/1000);
           socket_iqdata->sendData(jsonIqData);
+          timing_helper(timing_name, timing_time, time, "output_iqdata");
 
           // output map data
-          mapJson = map->to_json(time[0]/1000);
-          mapJson = map->delay_bin_to_km(mapJson, fs);
+          mapJson = map->to_json(time[0]/1000, fs, true);
           if (saveMap)
           {
             map->save(mapJson, saveMapPath);
           }
           socket_map->sendData(mapJson);
+          timing_helper(timing_name, timing_time, time, "output_map");
 
           // output detection data
           if (isDetection)
           {
-            detectionJson = detection->to_json(time[0]/1000);
-            detectionJson = detection->delay_bin_to_km(detectionJson, fs);
+            detectionJson = detection->to_json(time[0]/1000, fs, true);
             socket_detection->sendData(detectionJson);
+            timing_helper(timing_name, timing_time, time, "output_detection");
           }
-          if (saveDetection)
+          if (isDetection && saveDetection)
           {
             detection->save(detectionJson, saveDetectionPath);
           }
@@ -359,30 +421,20 @@ int main(int argc, char **argv)
           // output tracker data
           if (isTracker)
           {
-            jsonTracker = track->to_json(time[0]/1000);
-            jsonTracker = track->delay_bin_to_km(jsonTracker, fs);
+            jsonTracker = track->to_json(time[0]/1000, fs, true);
             socket_track->sendData(jsonTracker);
+            timing_helper(timing_name, timing_time, time, "output_tracker");
           }
 
-          // output ADS-B truth from external source through the C++ pipeline
+          // output latest ADS-B truth cached by a background thread
           std::string jsonAdsb = "{}";
-          if (isAdsb && !adsbHost.empty())
+          if (isAdsb)
           {
-            httplib::Client cli(("http://" + adsbHost).c_str());
-            std::ostringstream query;
-            query << "/api/dd?rx=" << rxLatitude << "," << rxLongitude << "," << rxAltitude;
-            query << "&tx=" << txLatitude << "," << txLongitude << "," << txAltitude;
-            query << "&fc=" << (fc / 1000000.0);
-            query << "&server=" << "http://" << tar1090;
-            if (auto res = cli.Get(query.str().c_str()))
-            {
-              if (res->status == 200 && !res->body.empty())
-              {
-                jsonAdsb = res->body;
-              }
-            }
+            std::lock_guard<std::mutex> lock(adsbMutex);
+            jsonAdsb = cachedAdsbJson;
           }
           socket_adsb->sendData(jsonAdsb);
+          timing_helper(timing_name, timing_time, time, "output_adsb");
 
           // output radar data timer
           timing_helper(timing_name, timing_time, time, "output_radar_data");
@@ -411,8 +463,6 @@ int main(int argc, char **argv)
         {
           buffer1->unlock();
           buffer2->unlock();
-          // short delay to prevent tight looping
-          std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
       }
     });

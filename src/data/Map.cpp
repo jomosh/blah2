@@ -17,6 +17,7 @@ Map<T>::Map(uint32_t _nRows, uint32_t _nCols)
   nCols = _nCols;
   std::vector<std::vector<T>> tmp(nRows, std::vector<T>(nCols, {1}));
   data = tmp;
+  dataDb = std::vector<std::vector<double>>(nRows, std::vector<double>(nCols, 0.0));
 }
 
 template <class T>
@@ -115,9 +116,16 @@ uint32_t Map<T>::doppler_hz_to_bin(double dopplerHz)
 template <class T>
 std::string Map<T>::to_json(uint64_t timestamp)
 {
+  return to_json(timestamp, 1, false);
+}
+
+template <class T>
+std::string Map<T>::to_json(uint64_t timestamp, uint32_t fs, bool delayInKm)
+{
   rapidjson::Document document;
   document.SetObject();
   rapidjson::Document::AllocatorType &allocator = document.GetAllocator();
+  const double delayScaleKm = (fs > 0) ? (Constants::c / (double)fs / 1000.0) : 0.0;
 
   // store data array
   rapidjson::Value array(rapidjson::kArrayType);
@@ -126,7 +134,7 @@ std::string Map<T>::to_json(uint64_t timestamp)
     rapidjson::Value subarray(rapidjson::kArrayType);
     for (size_t j = 0; j < data[i].size(); j++)
     {
-      subarray.PushBack(10 * std::log10(std::abs(data[i][j])) - noisePower, document.GetAllocator());
+      subarray.PushBack(dataDb[i][j], document.GetAllocator());
     }
     array.PushBack(subarray, document.GetAllocator());
   }
@@ -135,7 +143,14 @@ std::string Map<T>::to_json(uint64_t timestamp)
   rapidjson::Value arrayDelay(rapidjson::kArrayType);
   for (size_t i = 0; i < delay.size(); i++)
   {
-    arrayDelay.PushBack(delay[i], allocator);
+    if (delayInKm)
+    {
+      arrayDelay.PushBack(delay[i] * delayScaleKm, allocator);
+    }
+    else
+    {
+      arrayDelay.PushBack(delay[i], allocator);
+    }
   }
 
   // store Doppler array
@@ -154,7 +169,7 @@ std::string Map<T>::to_json(uint64_t timestamp)
   document.AddMember("doppler", arrayDoppler, allocator);
   document.AddMember(rapidjson::Value("data", document.GetAllocator()).Move(), array, document.GetAllocator());
 
-  rapidjson::StringBuffer strbuf;
+  thread_local static rapidjson::StringBuffer strbuf; strbuf.Clear();
   rapidjson::Writer<rapidjson::StringBuffer> writer(strbuf);
   writer.SetMaxDecimalPlaces(2);
   document.Accept(writer);
@@ -176,7 +191,7 @@ std::string Map<T>::delay_bin_to_km(std::string json, uint32_t fs)
     document["delay"].PushBack(1.0*delay[i]*(Constants::c/(double)fs)/1000, allocator);
   }
 
-  rapidjson::StringBuffer strbuf;
+  thread_local static rapidjson::StringBuffer strbuf; strbuf.Clear();
   rapidjson::Writer<rapidjson::StringBuffer> writer(strbuf);
   writer.SetMaxDecimalPlaces(2);
   document.Accept(writer);
@@ -187,7 +202,7 @@ std::string Map<T>::delay_bin_to_km(std::string json, uint32_t fs)
 template <class T>
 void Map<T>::set_metrics()
 {
-  // get map noise level
+  // get map noise level and cache dB values for output
   double value;
   double noisePower = 0;
   double maxPower = 0;
@@ -196,11 +211,21 @@ void Map<T>::set_metrics()
     for (uint32_t j = 0; j < nCols; j++)
     {
       value = 10 * std::log10(std::abs(data[i][j]));
+      dataDb[i][j] = value;
       noisePower = noisePower + value;
       maxPower = (maxPower < value) ? value : maxPower;
     }
   }
   noisePower = noisePower / (nRows * nCols);
+
+  for (uint32_t i = 0; i < nRows; i++)
+  {
+    for (uint32_t j = 0; j < nCols; j++)
+    {
+      dataDb[i][j] -= noisePower;
+    }
+  }
+
   this->noisePower = noisePower;
   this->maxPower = maxPower - noisePower;
 }

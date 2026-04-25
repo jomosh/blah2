@@ -24,37 +24,50 @@ Detection::Detection(double _delay, double _doppler, double _snr)
   snr.push_back(_snr);
 }
 
-std::vector<double> Detection::get_delay()
+const std::vector<double> &Detection::get_delay() const
 {
   return delay;
 }
 
-std::vector<double> Detection::get_doppler()
+const std::vector<double> &Detection::get_doppler() const
 {
   return doppler;
 }
 
-std::vector<double> Detection::get_snr()
+const std::vector<double> &Detection::get_snr() const
 {
   return snr;
 }
 
-size_t Detection::get_nDetections()
+size_t Detection::get_nDetections() const
 {
   return delay.size();
 }
 
 std::string Detection::to_json(uint64_t timestamp)
 {
+  return to_json(timestamp, 1, false);
+}
+
+std::string Detection::to_json(uint64_t timestamp, uint32_t fs, bool delayInKm)
+{
   rapidjson::Document document;
   document.SetObject();
   rapidjson::Document::AllocatorType &allocator = document.GetAllocator();
+  const double delayScaleKm = (fs > 0) ? (Constants::c / (double)fs / 1000.0) : 0.0;
 
   // store delay array
   rapidjson::Value arrayDelay(rapidjson::kArrayType);
   for (size_t i = 0; i < get_nDetections(); i++)
   {
-    arrayDelay.PushBack(delay[i], allocator);
+    if (delayInKm)
+    {
+      arrayDelay.PushBack(delay[i] * delayScaleKm, allocator);
+    }
+    else
+    {
+      arrayDelay.PushBack(delay[i], allocator);
+    }
   }
 
   // store Doppler array
@@ -76,7 +89,7 @@ std::string Detection::to_json(uint64_t timestamp)
   document.AddMember("doppler", arrayDoppler, allocator);
   document.AddMember("snr", arraySnr, allocator);
   
-  rapidjson::StringBuffer strbuf;
+  thread_local static rapidjson::StringBuffer strbuf; strbuf.Clear();
   rapidjson::Writer<rapidjson::StringBuffer> writer(strbuf);
   writer.SetMaxDecimalPlaces(2);
   document.Accept(writer);
@@ -97,7 +110,7 @@ std::string Detection::delay_bin_to_km(std::string json, uint32_t fs)
     document["delay"].PushBack(1.0*delay[i]*(Constants::c/(double)fs)/1000, allocator);
   }
 
-  rapidjson::StringBuffer strbuf;
+  thread_local static rapidjson::StringBuffer strbuf; strbuf.Clear();
   rapidjson::Writer<rapidjson::StringBuffer> writer(strbuf);
   writer.SetMaxDecimalPlaces(2);
   document.Accept(writer);

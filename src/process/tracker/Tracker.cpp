@@ -51,9 +51,10 @@ std::unique_ptr<Track> Tracker::process(Detection *detection, uint64_t currentTi
 
 void Tracker::update(Detection *detection, uint64_t current)
 {
-  std::vector<double> delay = detection->get_delay();
-  std::vector<double> doppler = detection->get_doppler();
-  std::vector<double> snr = detection->get_snr();
+  const std::vector<double> &delay = detection->get_delay();
+  const std::vector<double> &doppler = detection->get_doppler();
+  const std::vector<double> &snr = detection->get_snr();
+  const size_t nDetections = detection->get_nDetections();
 
   // init
   double delayPredict = 0.0;
@@ -80,7 +81,7 @@ void Tracker::update(Detection *detection, uint64_t current)
     bool associatedThisCycle = false;
     
     // loop over detections to associate
-    for (size_t j = 0; j < detection->get_nDetections(); j++)
+    for (size_t j = 0; j < nDetections; j++)
     {
       if (doNotInitiate[j])
       {
@@ -140,7 +141,7 @@ void Tracker::update(Detection *detection, uint64_t current)
   }
 }
 
-Detection Tracker::predict(Detection current, double acc, double T)
+Detection Tracker::predict(const Detection &current, double acc, double T)
 {
   double delayTrack = current.get_delay().front();
   double dopplerTrack = current.get_doppler().front();
@@ -153,13 +154,14 @@ Detection Tracker::predict(Detection current, double acc, double T)
 
 void Tracker::initiate(Detection *detection)
 {  
-  std::vector<double> delay = detection->get_delay();
-  std::vector<double> doppler = detection->get_doppler();
-  std::vector<double> snr = detection->get_snr();
+  const std::vector<double> &delay = detection->get_delay();
+  const std::vector<double> &doppler = detection->get_doppler();
+  const std::vector<double> &snr = detection->get_snr();
+  const size_t nDetections = detection->get_nDetections();
   uint64_t index;
 
   // loop over new detections
-  for (size_t i = 0; i < detection->get_nDetections(); i++)
+  for (size_t i = 0; i < nDetections; i++)
   {
     // skip if detection used in update
     if (doNotInitiate.at(i))

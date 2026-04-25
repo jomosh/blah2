@@ -1,6 +1,7 @@
 #include "IqData.h"
 #include <iostream>
 #include <cstdlib>
+#include <stdexcept>
 
 #include "rapidjson/document.h"
 #include "rapidjson/writer.h"
@@ -11,7 +12,9 @@
 IqData::IqData(uint32_t _n)
 {
   n = _n;
-  data = new std::deque<std::complex<double>>;
+  data.resize(n, {0.0, 0.0});
+  head = 0;
+  length = 0;
 }
 
 uint32_t IqData::get_n()
@@ -21,7 +24,7 @@ uint32_t IqData::get_n()
 
 uint32_t IqData::get_length()
 {
-  return data->size();
+  return length;
 }
 
 void IqData::lock()
@@ -34,58 +37,92 @@ void IqData::unlock()
   mutex_lock.unlock();
 }
 
+void IqData::unlock_and_notify()
+{
+  mutex_lock.unlock();
+  data_ready.notify_all();
+}
+
+void IqData::wait_for_min_length(uint32_t minLength)
+{
+  if (minLength > n)
+  {
+    throw std::invalid_argument("IqData::wait_for_min_length minLength exceeds buffer capacity");
+  }
+
+  std::unique_lock<std::mutex> lock(mutex_lock);
+  data_ready.wait(lock, [&] { return length >= minLength; });
+}
+
 std::deque<std::complex<double>> IqData::get_data()
 {
-  return *data;
+  std::deque<std::complex<double>> out;
+  for (uint32_t i = 0; i < length; i++)
+  {
+    out.push_back(data[(head + i) % n]);
+  }
+  return out;
+}
+
+std::complex<double> IqData::at(uint32_t index) const
+{
+  if (index >= length)
+  {
+    throw std::out_of_range("IqData::at index out of range");
+  }
+  return data[(head + index) % n];
+}
+
+std::complex<double> IqData::at_unchecked(uint32_t index) const
+{
+  return data[(head + index) % n];
 }
 
 void IqData::push_back(std::complex<double> sample)
 {
-  if (data->size() < n)
+  if (length < n)
   {
-    data->push_back(sample);
+    data[(head + length) % n] = sample;
+    length++;
   }
   else
   {
-    data->pop_front();
-    data->push_back(sample);
+    data[head] = sample;
+    head = (head + 1) % n;
   }
 }
 
 std::complex<double> IqData::pop_front()
 {
-  if (data->empty()) {
-    throw std::runtime_error("Attempting to pop from an empty deque");
+  if (length == 0) {
+    throw std::runtime_error("Attempting to pop from an empty IqData ring buffer");
   }
-  std::complex<double> sample = data->front();
-  data->pop_front();
+  std::complex<double> sample = data[head];
+  head = (head + 1) % n;
+  length--;
   return sample;
 }
 void IqData::print()
 {
-  int n = data->size();
-  std::cout << data->size() << std::endl;
-  for (int i = 0; i < n; i++)
+  std::cout << length << std::endl;
+  for (uint32_t i = 0; i < length; i++)
   {
-    std::cout << data->front() << std::endl;
-    data->pop_front();
+    std::cout << data[(head + i) % n] << std::endl;
   }
 }
 
 void IqData::clear()
 {
-  while (!data->empty())
-  {
-    data->pop_front();
-  }
+  head = 0;
+  length = 0;
 }
 
-void IqData::update_spectrum(std::vector<std::complex<double>> _spectrum)
+void IqData::update_spectrum(const std::vector<std::complex<double>> &_spectrum)
 {
   spectrum = _spectrum;
 }
 
-void IqData::update_frequency(std::vector<double> _frequency)
+void IqData::update_frequency(const std::vector<double> &_frequency)
 {
   frequency = _frequency;
 }

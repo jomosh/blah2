@@ -25,6 +25,9 @@ private:
   /// @brief Number of columns.
   uint32_t nCols;
 
+  /// @brief Cached map data in dB normalized by noise power.
+  std::vector<std::vector<double>> dataDb;
+
 public:
   /// @brief Map data to store.
   std::vector<std::vector<T>> data;
@@ -97,6 +100,13 @@ public:
   /// @brief Generate JSON of the map and metadata.
   /// @return JSON string.
   std::string to_json(uint64_t timestamp);
+
+  /// @brief Generate JSON of the map and metadata.
+  /// @param timestamp Current time (POSIX ms).
+  /// @param fs Sampling frequency (Hz).
+  /// @param delayInKm Convert delay bins to km if true.
+  /// @return JSON string.
+  std::string to_json(uint64_t timestamp, uint32_t fs, bool delayInKm);
 
   /// @brief Update JSON to convert delay bins to km.
   /// @param json Input JSON string with delay field.

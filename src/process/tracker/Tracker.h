@@ -87,7 +87,7 @@ public:
   /// @param acc Acceleration hypothesis of track.
   /// @param T Time elapsed from previous CPI.
   /// @return Predicted position of track.
-  Detection predict(Detection current, double acc, double T);
+  Detection predict(const Detection &current, double acc, double T);
 
   /// @brief Initiate new tentative tracks from detections.
   /// @param detection Detection data for last CPI.

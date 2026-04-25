@@ -106,6 +106,16 @@ target_link_libraries(testTracker PRIVATE
 set_target_properties(testTracker PROPERTIES 
   RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_TEST_UNIT_DIR}")
 
+add_executable(testIqData
+  test/unit/data/TestIqData.cpp
+  src/data/IqData.cpp
+)
+target_link_libraries(testIqData PRIVATE
+  Catch2::Catch2WithMain
+)
+set_target_properties(testIqData PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_TEST_UNIT_DIR}")
+
 add_executable(testHammingNumber
   test/unit/process/meta/TestHammingNumber.cpp
   src/process/meta/HammingNumber.cpp
@@ -143,6 +153,7 @@ set_target_properties(testDetectionPhaseB PROPERTIES
 
 # TODO: Unsure if will be using CTest.
 add_test(NAME testAmbiguity COMMAND testAmbiguity)
+add_test(NAME testIqData COMMAND testIqData)
 add_test(NAME testTracker COMMAND testTracker)
 add_test(NAME testDetectionPhaseA COMMAND testDetectionPhaseA)
 add_test(NAME testDetectionPhaseB COMMAND testDetectionPhaseB)

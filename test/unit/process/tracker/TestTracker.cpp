@@ -82,3 +82,29 @@ TEST_CASE("Test predict", "[predict]")
   CHECK_THAT(prediction.get_doppler().front(), 
     Catch::Matchers::WithinAbs(prediction_truth.get_doppler().front(), 0.01));
 }
+
+/// @brief Test update keeps previous Doppler for acceleration calculation.
+TEST_CASE("Process update preserves previous Doppler for acceleration", "[process]")
+{
+  uint32_t m = 1;
+  uint32_t n = 1;
+  uint32_t nDelete = 5;
+  double cpi = 1;
+  double maxAccInit = 0;
+  double fs = 2000000;
+  double rangeRes = (double)Constants::c/fs;
+  double fc = 204640000;
+  double lambda = (double)Constants::c/fc;
+  Tracker tracker = Tracker(m, n, nDelete,
+    cpi, maxAccInit, rangeRes, lambda);
+
+  Detection first(10, 10, 20);
+  auto trackAfterFirst = tracker.process(&first, 0);
+  REQUIRE(trackAfterFirst->get_n() == 1);
+  CHECK_THAT(trackAfterFirst->get_acceleration(0), Catch::Matchers::WithinAbs(0.0, 0.001));
+
+  Detection second(10, 12, 20);
+  auto trackAfterSecond = tracker.process(&second, 1000);
+  REQUIRE(trackAfterSecond->get_n() == 1);
+  CHECK_THAT(trackAfterSecond->get_acceleration(0), Catch::Matchers::WithinAbs(2.0, 0.001));
+}
