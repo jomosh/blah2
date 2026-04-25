@@ -36,6 +36,8 @@
 #include <memory>
 #include <iostream>
 #include <mutex>
+#include <limits>
+#include <cmath>
 
 Capture *CAPTURE_POINTER = NULL;
 std::unique_ptr<Socket> socket_map;
@@ -135,8 +137,26 @@ int main(int argc, char **argv)
   double tCpi, tBuffer;
   tree["process"]["data"]["cpi"] >> tCpi;
   tree["process"]["data"]["buffer"] >> tBuffer;
-  uint32_t nSamples = fs * tCpi;
-  uint32_t bufferSamples = tCpi * tBuffer * fs;
+  if (fs == 0 || !std::isfinite(tCpi) || tCpi <= 0.0 ||
+    !std::isfinite(tBuffer) || tBuffer <= 0.0)
+  {
+    std::cerr << "Invalid process.data config: fs, cpi and buffer must be positive finite values" << "\n";
+    return -1;
+  }
+
+  const double samplesPerCpi = static_cast<double>(fs) * tCpi;
+  const double samplesPerBuffer = samplesPerCpi * tBuffer;
+  if (samplesPerCpi < 1.0 || samplesPerBuffer < 1.0 ||
+    samplesPerCpi > std::numeric_limits<uint32_t>::max() ||
+    samplesPerBuffer > std::numeric_limits<uint32_t>::max())
+  {
+    std::cerr << "Invalid process.data config: derived sample counts must be between 1 and "
+      << std::numeric_limits<uint32_t>::max() << "\n";
+    return -1;
+  }
+
+  uint32_t nSamples = static_cast<uint32_t>(samplesPerCpi);
+  uint32_t bufferSamples = static_cast<uint32_t>(samplesPerBuffer);
   if (bufferSamples < nSamples)
   {
     std::cerr << "Invalid process.data.buffer config: buffer must hold at least one CPI"
