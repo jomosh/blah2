@@ -66,6 +66,11 @@ void Capture::process(IqData *buffer1, IqData *buffer2, c4::yml::NodeRef config,
     {
       device->start();
       device->process(buffer1, buffer2);
+
+      // Live HackRF/Kraken capture starts async callbacks and returns here,
+      // so keep the capture-status thread alive for the runtime lifetime.
+      t1.join();
+      return;
     }
     else
     {
