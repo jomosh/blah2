@@ -3,6 +3,7 @@
 #include "usrp/Usrp.h"
 #include "hackrf/HackRf.h"
 #include "kraken/Kraken.h"
+#include <chrono>
 #include <iostream>
 #include <thread>
 #include <atomic>
@@ -32,12 +33,17 @@ void Capture::process(IqData *buffer1, IqData *buffer2, c4::yml::NodeRef config,
 
   // capture status thread
   std::atomic<bool> pollCaptureStatus{true};
-  std::thread t1([&]{
+  std::thread captureStatusThread([&]{
     while (pollCaptureStatus.load())
     {
       httplib::Client cli("http://" + ip_capture + ":" 
         + std::to_string(port_capture));
       httplib::Result res = cli.Get("/capture");
+      if (!res)
+      {
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+        continue;
+      }
 
       const bool captureRequested = res->body == "true";
 
@@ -56,7 +62,7 @@ void Capture::process(IqData *buffer1, IqData *buffer2, c4::yml::NodeRef config,
           device->close_file();
         }
       }
-      sleep(1);
+      std::this_thread::sleep_for(std::chrono::seconds(1));
     }
   });
 
@@ -67,9 +73,9 @@ void Capture::process(IqData *buffer1, IqData *buffer2, c4::yml::NodeRef config,
       device->start();
       device->process(buffer1, buffer2);
 
-      // Live HackRF/Kraken capture starts async callbacks and returns here,
-      // so keep the capture-status thread alive for the runtime lifetime.
-      t1.join();
+      // Async capture devices return after arming callbacks, so keep polling
+      // capture state for the runtime lifetime.
+      captureStatusThread.join();
       return;
     }
     else
@@ -80,13 +86,13 @@ void Capture::process(IqData *buffer1, IqData *buffer2, c4::yml::NodeRef config,
   catch (const std::exception &exception)
   {
     pollCaptureStatus.store(false);
-    t1.join();
+    captureStatusThread.join();
     throw std::runtime_error("Capture " + type + " failed: "
       + exception.what());
   }
 
   pollCaptureStatus.store(false);
-  t1.join();
+  captureStatusThread.join();
 }
 
 std::unique_ptr<Source> Capture::factory_source(const std::string& type, c4::yml::NodeRef config)
