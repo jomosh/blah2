@@ -5,6 +5,8 @@
 #include "kraken/Kraken.h"
 #include <iostream>
 #include <thread>
+#include <atomic>
+#include <stdexcept>
 #include <httplib.h>
 
 // constants
@@ -29,8 +31,9 @@ void Capture::process(IqData *buffer1, IqData *buffer2, c4::yml::NodeRef config,
   device = factory_source(type, config);
 
   // capture status thread
+  std::atomic<bool> pollCaptureStatus{true};
   std::thread t1([&]{
-    while (true)
+    while (pollCaptureStatus.load())
     {
       httplib::Client cli("http://" + ip_capture + ":" 
         + std::to_string(port_capture));
@@ -53,15 +56,27 @@ void Capture::process(IqData *buffer1, IqData *buffer2, c4::yml::NodeRef config,
     }
   });
 
-  if (!replay)
+  try
   {
-    device->start();
-    device->process(buffer1, buffer2);
+    if (!replay)
+    {
+      device->start();
+      device->process(buffer1, buffer2);
+    }
+    else
+    {
+      device->replay(buffer1, buffer2, file, loop);
+    }
   }
-  else
+  catch (const std::exception &exception)
   {
-    device->replay(buffer1, buffer2, file, loop);
+    pollCaptureStatus.store(false);
+    t1.join();
+    throw std::runtime_error("Capture " + type + " failed: "
+      + exception.what());
   }
+
+  pollCaptureStatus.store(false);
   t1.join();
 }
 

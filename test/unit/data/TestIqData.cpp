@@ -4,6 +4,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <atomic>
 #include <thread>
 #include <chrono>
 #include <stdexcept>
@@ -25,19 +26,39 @@ TEST_CASE("Wait_For_Max_Length_Blocks_Until_Buffer_Has_Space", "[iqdata]")
   iqData.push_back({2.0, 0.0});
   iqData.unlock_and_notify();
 
-  bool waiterReleased = false;
+  std::atomic<bool> waiterStarted{false};
+  std::atomic<bool> waiterReleased{false};
   std::thread waiter([&]() {
+    waiterStarted.store(true, std::memory_order_release);
     iqData.wait_for_max_length(1);
-    waiterReleased = true;
+    waiterReleased.store(true, std::memory_order_release);
   });
 
-  std::this_thread::sleep_for(std::chrono::milliseconds(20));
-  CHECK(waiterReleased == false);
+  const auto waitForState = [](const std::atomic<bool> &state,
+    std::chrono::milliseconds timeout) {
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (!state.load(std::memory_order_acquire)
+      && std::chrono::steady_clock::now() < deadline)
+    {
+      std::this_thread::yield();
+    }
+    return state.load(std::memory_order_acquire);
+  };
+
+  const bool waiterStartedInTime = waitForState(waiterStarted,
+    std::chrono::milliseconds(200));
+  const bool waiterReleasedWhileFull = waiterReleased.load(
+    std::memory_order_acquire);
 
   iqData.lock();
   (void)iqData.pop_front();
   iqData.unlock_and_notify();
 
+  const bool waiterReleasedInTime = waitForState(waiterReleased,
+    std::chrono::milliseconds(200));
   waiter.join();
-  CHECK(waiterReleased == true);
+
+  CHECK(waiterStartedInTime == true);
+  CHECK(waiterReleasedWhileFull == false);
+  CHECK(waiterReleasedInTime == true);
 }

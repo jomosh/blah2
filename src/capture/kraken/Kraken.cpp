@@ -124,26 +124,7 @@ void Kraken::callback(unsigned char *buf, uint32_t len, void *ctx)
 void Kraken::append_save_samples(size_t channelIndex, const int8_t *samples,
     size_t nComplexSamples)
 {
-    if (channelIndex > 1 || samples == nullptr)
-    {
-        return;
-    }
-
-    std::lock_guard<std::mutex> lock(pendingSaveMutex);
-    if (!*saveIq)
-    {
-        clear_pending_save_samples_locked();
-        return;
-    }
-
-    std::deque<std::complex<float>> &pending = pendingSaveSamples[channelIndex];
-    for (size_t i = 0; i < nComplexSamples; i++)
-    {
-        pending.push_back({static_cast<float>(samples[2 * i]),
-            static_cast<float>(samples[2 * i + 1])});
-    }
-
-    flush_paired_save_samples_locked();
+    append_blah2_paired_iq_samples(channelIndex, samples, nComplexSamples);
 }
 
 void Kraken::flush_paired_save_samples_locked()

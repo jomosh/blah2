@@ -26,8 +26,10 @@
 #include <getopt.h>
 #include <string>
 #include <vector>
+#include <cstdlib>
 #include <fstream>
 #include <sstream>
+#include <exception>
 #include <thread>
 #include <chrono>
 #include <sys/time.h>
@@ -168,8 +170,17 @@ int main(int argc, char **argv)
   IqData *buffer2 = new IqData(bufferSamples);
 
   // run capture
-  std::thread t1([&]{capture->process(buffer1, buffer2, 
-    tree["capture"]["device"], ip_capture, port_capture);
+  std::thread t1([&]{
+    try
+    {
+      capture->process(buffer1, buffer2,
+        tree["capture"]["device"], ip_capture, port_capture);
+    }
+    catch (const std::exception &exception)
+    {
+      std::cerr << "Capture process failed: " << exception.what() << "\n";
+      std::exit(EXIT_FAILURE);
+    }
   });
 
   // set up process CPI

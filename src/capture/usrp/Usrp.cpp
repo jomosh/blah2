@@ -2,14 +2,15 @@
 
 #include <string.h>
 #include <iostream>
+#include <limits>
 #include <vector>
 #include <complex>
 #include <uhd/usrp/multi_usrp.hpp>
 
 // constructor
-Usrp::Usrp(std::string _type, uint32_t _fc, uint32_t _fs, 
-  std::string _path, bool *_saveIq, std::string _address, 
-  std::string _subdev, std::vector<std::string> _antenna, 
+Usrp::Usrp(std::string _type, uint32_t _fc, uint32_t _fs,
+  std::string _path, bool *_saveIq, std::string _address,
+  std::string _subdev, std::vector<std::string> _antenna,
   std::vector<double> _gain)
     : Source(_type, _fc, _fs, _path, _saveIq)
 {
@@ -30,7 +31,7 @@ void Usrp::stop()
 void Usrp::process(IqData *buffer1, IqData *buffer2)
 {
     // create a USRP object
-    uhd::usrp::multi_usrp::sptr usrp = 
+    uhd::usrp::multi_usrp::sptr usrp =
       uhd::usrp::multi_usrp::make(address);
 
     usrp->set_rx_subdev_spec(uhd::usrp::subdev_spec_t(subdev), 0);
@@ -95,7 +96,8 @@ void Usrp::process(IqData *buffer1, IqData *buffer2)
       // save IQ data to file
       if (*saveIq)
       {
-        write_blah2_iq_samples(buff_ptrs[0], buff_ptrs[1], nReceived);
+        constexpr double kUsrpIqScale = static_cast<double>(std::numeric_limits<int16_t>::max());
+        write_blah2_iq_samples(buff_ptrs[0], buff_ptrs[1], nReceived, kUsrpIqScale);
       }
     }
 }
