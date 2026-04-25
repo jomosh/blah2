@@ -127,38 +127,6 @@ void Kraken::append_save_samples(size_t channelIndex, const int8_t *samples,
     append_blah2_paired_iq_samples(channelIndex, samples, nComplexSamples);
 }
 
-void Kraken::flush_paired_save_samples_locked()
-{
-    if (!saveIqFile.is_open())
-    {
-        return;
-    }
-
-    const size_t nPaired = std::min(pendingSaveSamples[0].size(), pendingSaveSamples[1].size());
-    if (nPaired == 0)
-    {
-        return;
-    }
-
-    std::vector<std::complex<float>> reference(nPaired);
-    std::vector<std::complex<float>> surveillance(nPaired);
-    for (size_t i = 0; i < nPaired; i++)
-    {
-        reference[i] = pendingSaveSamples[0].front();
-        pendingSaveSamples[0].pop_front();
-        surveillance[i] = pendingSaveSamples[1].front();
-        pendingSaveSamples[1].pop_front();
-    }
-
-    write_blah2_iq_samples(reference.data(), surveillance.data(), nPaired);
-}
-
-void Kraken::clear_pending_save_samples_locked()
-{
-    pendingSaveSamples[0].clear();
-    pendingSaveSamples[1].clear();
-}
-
 void Kraken::replay(IqData *buffer1, IqData *buffer2, std::string _file, bool _loop)
 {
     replay_blah2_iq_file(buffer1, buffer2, _file, _loop);
