@@ -161,7 +161,7 @@ public:
   /// @param path Path to save IQ data.
   /// @return The object.
   RspDuo(std::string type, uint32_t fc, uint32_t fs, 
-    std::string path, bool *saveIq, int agcSetPoint, 
+    std::string path, std::atomic<bool> *saveIq, int agcSetPoint, 
     int bandwidthNumber, int gainReductionA, int gainReductionB, 
     int lnaState, bool dabNotch, bool rfNotch);
 

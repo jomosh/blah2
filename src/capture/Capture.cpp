@@ -4,6 +4,7 @@
 #include "hackrf/HackRf.h"
 #include "kraken/Kraken.h"
 #include <chrono>
+#include <exception>
 #include <iostream>
 #include <thread>
 #include <atomic>
@@ -21,7 +22,7 @@ Capture::Capture(std::string _type, uint32_t _fs, uint32_t _fc, std::string _pat
   fc = _fc;
   path = _path;
   replay = false;
-  saveIq = false;
+  saveIq.store(false);
 }
 
 void Capture::process(IqData *buffer1, IqData *buffer2, c4::yml::NodeRef config, 
@@ -33,38 +34,61 @@ void Capture::process(IqData *buffer1, IqData *buffer2, c4::yml::NodeRef config,
 
   // capture status thread
   std::atomic<bool> pollCaptureStatus{true};
+  std::exception_ptr captureStatusError;
   std::thread captureStatusThread([&]{
-    while (pollCaptureStatus.load())
+    try
     {
-      httplib::Client cli("http://" + ip_capture + ":" 
-        + std::to_string(port_capture));
-      httplib::Result res = cli.Get("/capture");
-      if (!res)
+      while (pollCaptureStatus.load())
       {
+        httplib::Client cli("http://" + ip_capture + ":" 
+          + std::to_string(port_capture));
+        httplib::Result res = cli.Get("/capture");
+        if (!res)
+        {
+          std::this_thread::sleep_for(std::chrono::seconds(1));
+          continue;
+        }
+
+        const bool captureRequested = res->body == "true";
+
+        // if capture status changed
+        if (captureRequested != saveIq.load())
+        {
+          if (captureRequested)
+          {
+            // Open the file before exposing saveIq=true to live callbacks.
+            device->open_file();
+            saveIq.store(true);
+          }
+          else
+          {
+            saveIq.store(false);
+            device->close_file();
+          }
+        }
         std::this_thread::sleep_for(std::chrono::seconds(1));
-        continue;
       }
-
-      const bool captureRequested = res->body == "true";
-
-      // if capture status changed
-      if (captureRequested != saveIq)
-      {
-        if (captureRequested)
-        {
-          // Open the file before exposing saveIq=true to live callbacks.
-          device->open_file();
-          saveIq = true;
-        }
-        else
-        {
-          saveIq = false;
-          device->close_file();
-        }
-      }
-      std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
+    catch (...)
+    {
+      captureStatusError = std::current_exception();
+      pollCaptureStatus.store(false);
     }
   });
+
+  const auto join_capture_status_thread = [&]() {
+    if (captureStatusThread.joinable())
+    {
+      captureStatusThread.join();
+    }
+  };
+
+  const auto rethrow_capture_status_error = [&]() {
+    if (captureStatusError != nullptr)
+    {
+      std::rethrow_exception(captureStatusError);
+    }
+  };
 
   try
   {
@@ -75,24 +99,26 @@ void Capture::process(IqData *buffer1, IqData *buffer2, c4::yml::NodeRef config,
 
       // Async capture devices return after arming callbacks, so keep polling
       // capture state for the runtime lifetime.
-      captureStatusThread.join();
+      join_capture_status_thread();
+      rethrow_capture_status_error();
       return;
     }
     else
     {
       device->replay(buffer1, buffer2, file, loop);
     }
+
+    pollCaptureStatus.store(false);
+    join_capture_status_thread();
+    rethrow_capture_status_error();
   }
   catch (const std::exception &exception)
   {
     pollCaptureStatus.store(false);
-    captureStatusThread.join();
+    join_capture_status_thread();
     throw std::runtime_error("Capture " + type + " failed: "
       + exception.what());
   }
-
-  pollCaptureStatus.store(false);
-  captureStatusThread.join();
 }
 
 std::unique_ptr<Source> Capture::factory_source(const std::string& type, c4::yml::NodeRef config)

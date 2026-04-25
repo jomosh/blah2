@@ -6,7 +6,7 @@
 
 // constructor
 HackRf::HackRf(std::string _type, uint32_t _fc, uint32_t _fs, 
-  std::string _path, bool *_saveIq, std::vector<std::string> _serial,
+  std::string _path, std::atomic<bool> *_saveIq, std::vector<std::string> _serial,
   std::vector<uint32_t> _gainLna, std::vector<uint32_t> _gainVga, 
   std::vector<bool> _ampEnable)
     : Source(_type, _fc, _fs, _path, _saveIq)

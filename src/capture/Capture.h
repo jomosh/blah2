@@ -8,6 +8,7 @@
 
 #include <string>
 #include <vector>
+#include <atomic>
 #include <memory>
 #include <ryml/ryml.hpp>
 #include <ryml/ryml_std.hpp> // optional header, provided for std:: interop
@@ -26,7 +27,7 @@ private:
   std::string type;
 
   /// @brief True if IQ data to be saved.
-  bool saveIq;
+  std::atomic<bool> saveIq;
 
   /// @brief True if file replay is enabled.
   bool replay;

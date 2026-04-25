@@ -36,14 +36,14 @@ short max_a_nr = 0;
 short max_b_nr = 0;
 bool run_fg = true;
 bool stats_fg = true;
-bool *capture_fg;
+std::atomic<bool> *capture_fg;
 std::ofstream* saveIqFileLocal;
 IqData *buffer1;
 IqData *buffer2;
 
 // constructor
 RspDuo::RspDuo(std::string _type, uint32_t _fc, 
-  uint32_t _fs, std::string _path, bool *_saveIq,
+  uint32_t _fs, std::string _path, std::atomic<bool> *_saveIq,
   int _agcSetPoint, int _bandwidthNumber, 
   int _gainReductionA, int _gainReductionB, 
   int _lnaState,
@@ -494,7 +494,7 @@ unsigned int reset, void *cbContext)
   buffer2->unlock_and_notify();
 
   // write data to file
-  if (*capture_fg)
+  if (capture_fg != nullptr && capture_fg->load())
   {
     saveIqFileLocal->write(reinterpret_cast<char*>(buffer_16_ar), 
       sizeof(short) * numSamples * 4);

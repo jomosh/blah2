@@ -55,11 +55,12 @@ public:
 class TestSourceDevice : public Source
 {
 private:
-  bool saveIqEnabled = true;
+  std::atomic<bool> saveIqEnabled{true};
 
 public:
-  explicit TestSourceDevice(const std::string &type = "Test")
-    : Source(type, 1, 1, "", &saveIqEnabled)
+  explicit TestSourceDevice(const std::string &type = "Test",
+    const std::string &path = "")
+    : Source(type, 1, 1, path, &saveIqEnabled)
   {
   }
 
@@ -144,6 +145,15 @@ TEST_CASE("Replay_Blah2IqFileThrowsOnOpenFailure", "[capture][source][replay]")
 
   CHECK_THROWS_AS(device.replay(&reference, &surveillance,
     tempFile.path().string(), false), std::runtime_error);
+}
+
+TEST_CASE("Open_FileThrowsOnCreateFailure", "[capture][source][save]")
+{
+  const std::string missingDirectoryPath =
+    make_unique_test_path("blah2-test-missing-open").string() + "/";
+  TestSourceDevice device("HackRF", missingDirectoryPath);
+
+  CHECK_THROWS_AS(device.open_file(), std::runtime_error);
 }
 
 TEST_CASE("Write_Blah2IqSamplesUsesCanonicalInterleaving", "[capture][source][save]")

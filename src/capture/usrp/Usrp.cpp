@@ -9,7 +9,7 @@
 
 // constructor
 Usrp::Usrp(std::string _type, uint32_t _fc, uint32_t _fs,
-  std::string _path, bool *_saveIq, std::string _address,
+  std::string _path, std::atomic<bool> *_saveIq, std::string _address,
   std::string _subdev, std::vector<std::string> _antenna,
   std::vector<double> _gain)
     : Source(_type, _fc, _fs, _path, _saveIq)
@@ -94,7 +94,7 @@ void Usrp::process(IqData *buffer1, IqData *buffer2)
       buffer2->unlock_and_notify();
 
       // save IQ data to file
-      if (*saveIq)
+      if (saveIq != nullptr && saveIq->load())
       {
         constexpr double kUsrpIqScale = static_cast<double>(std::numeric_limits<int16_t>::max());
         write_blah2_iq_samples(buff_ptrs[0], buff_ptrs[1], nReceived, kUsrpIqScale);

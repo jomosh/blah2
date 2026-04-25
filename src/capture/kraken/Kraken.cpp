@@ -7,7 +7,7 @@
 
 // constructor
 Kraken::Kraken(std::string _type, uint32_t _fc, uint32_t _fs, 
-  std::string _path, bool *_saveIq, std::vector<double> _gain)
+    std::string _path, std::atomic<bool> *_saveIq, std::vector<double> _gain)
     : Source(_type, _fc, _fs, _path, _saveIq)
 {
     // convert gain to tenths of dB

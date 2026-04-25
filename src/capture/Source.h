@@ -36,7 +36,7 @@ protected:
   std::string path;
 
   /// @brief True if IQ data to be saved.
-  bool *saveIq;
+  std::atomic<bool> *saveIq;
 
   /// @brief File stream to save IQ data.
   std::ofstream saveIqFile;
@@ -139,7 +139,7 @@ public:
   /// @param path Absolute path to IQ save location.
   /// @return The object.
   Source(std::string type, uint32_t fc, uint32_t fs,
-    std::string path, bool *saveIq);
+    std::string path, std::atomic<bool> *saveIq);
 
   /// @brief Implement the capture process.
   /// @param buffer1 Buffer for reference samples.

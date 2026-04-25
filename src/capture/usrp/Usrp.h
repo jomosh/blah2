@@ -45,7 +45,7 @@ public:
   /// @param path Path to save IQ data.
   /// @return The object.
   Usrp(std::string type, uint32_t fc, uint32_t fs, std::string path, 
-    bool *saveIq, std::string address, std::string subdev, 
+    std::atomic<bool> *saveIq, std::string address, std::string subdev, 
     std::vector<std::string> antenna, std::vector<double> gain);
 
   /// @brief Implement capture function on USRP.

@@ -15,7 +15,7 @@ Source::Source()
 
 // constructor
 Source::Source(std::string _type, uint32_t _fc, uint32_t _fs,
-    std::string _path, bool *_saveIq)
+  std::string _path, std::atomic<bool> *_saveIq)
 {
   type = _type;
   fc = _fc;
@@ -89,7 +89,7 @@ void Source::append_blah2_paired_iq_samples(size_t channelIndex, const int8_t *s
   }
 
   std::lock_guard<std::mutex> lock(pendingSaveMutex);
-  if (saveIq == nullptr || !*saveIq)
+  if (saveIq == nullptr || !saveIq->load())
   {
     clear_blah2_paired_iq_samples_locked();
     return;
@@ -172,8 +172,7 @@ std::string Source::open_file()
 
     if (!saveIqFile.is_open())
     {
-      std::cerr << "Error: Can not open file: " << file << std::endl;
-      exit(1);
+      throw std::runtime_error("Can not open file: " + file);
     }
   }
 

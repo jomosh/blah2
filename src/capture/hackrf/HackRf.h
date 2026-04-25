@@ -72,7 +72,7 @@ public:
   /// @param path Path to save IQ data.
   /// @return The object.
   HackRf(std::string type, uint32_t fc, uint32_t fs, std::string path, 
-    bool *saveIq, std::vector<std::string> serial, 
+    std::atomic<bool> *saveIq, std::vector<std::string> serial, 
     std::vector<uint32_t> gainLna, std::vector<uint32_t> gainVga, 
     std::vector<bool> ampEnable);
 
