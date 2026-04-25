@@ -149,33 +149,7 @@ void RspDuo::process(IqData *_buffer1, IqData *_buffer2)
 
 void RspDuo::replay(IqData *_buffer1, IqData *_buffer2, std::string _file, bool _loop)
 {
-  buffer1 = _buffer1;
-  buffer2 = _buffer2;
-
-  short i1, q1, i2, q2;
-  int rv;
-  file_replay = fopen(_file.c_str(), "rb");
-
-  while (true)
-  {
-    rv = fread(&i1, 1, sizeof(short), file_replay);
-    if (rv != sizeof(short)) break; 
-    rv = fread(&q1, 1, sizeof(short), file_replay);
-    if (rv != sizeof(short)) break; 
-    rv = fread(&i2, 1, sizeof(short), file_replay);
-    if (rv != sizeof(short)) break; 
-    rv = fread(&q2, 1, sizeof(short), file_replay);
-    if (rv != sizeof(short)) break; 
-    buffer1->lock();
-    buffer2->lock();
-    if (buffer1->get_length() < buffer1->get_n())
-    {
-      buffer1->push_back({(double)i1, (double)q1});
-      buffer2->push_back({(double)i2, (double)q2});
-    }
-    buffer1->unlock_and_notify();
-    buffer2->unlock_and_notify();
-  }
+  replay_blah2_iq_file(_buffer1, _buffer2, _file, _loop);
 }
 
 void RspDuo::validate() {

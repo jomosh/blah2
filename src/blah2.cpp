@@ -353,8 +353,8 @@ int main(int argc, char **argv)
             x->push_back(buffer1->pop_front());
             y->push_back(buffer2->pop_front());      
           }
-          buffer1->unlock();
-          buffer2->unlock();
+          buffer1->unlock_and_notify();
+          buffer2->unlock_and_notify();
           timing_helper(timing_name, timing_time, time, "extract_buffer");
           
           // spectrum

@@ -86,8 +86,14 @@ void Kraken::stop()
 void Kraken::process(IqData *buffer1, IqData *buffer2)
 {
     std::vector<std::thread> threads;
-    threads.emplace_back(rtlsdr_read_async, devs[0], callback, buffer1, 0, 16 * 16384);
-    threads.emplace_back(rtlsdr_read_async, devs[1], callback, buffer2, 0, 16 * 16384);
+    callbackContexts[0].device = this;
+    callbackContexts[0].buffer = buffer1;
+    callbackContexts[0].channelIndex = 0;
+    callbackContexts[1].device = this;
+    callbackContexts[1].buffer = buffer2;
+    callbackContexts[1].channelIndex = 1;
+    threads.emplace_back(rtlsdr_read_async, devs[0], callback, &callbackContexts[0], 0, 16 * 16384);
+    threads.emplace_back(rtlsdr_read_async, devs[1], callback, &callbackContexts[1], 0, 16 * 16384);
     // join threads
     for (auto& thread : threads) {
         thread.join();
@@ -96,8 +102,9 @@ void Kraken::process(IqData *buffer1, IqData *buffer2)
 
 void Kraken::callback(unsigned char *buf, uint32_t len, void *ctx) 
 {
-    IqData* buffer_blah2 = (IqData*)ctx;
-    int8_t* buffer_kraken = (int8_t*)buf;
+    CallbackContext *context = static_cast<CallbackContext *>(ctx);
+    IqData *buffer_blah2 = context->buffer;
+    int8_t *buffer_kraken = reinterpret_cast<int8_t *>(buf);
 
     buffer_blah2->lock();
 
@@ -109,11 +116,71 @@ void Kraken::callback(unsigned char *buf, uint32_t len, void *ctx)
     }
 
     buffer_blah2->unlock_and_notify();
+
+        context->device->append_save_samples(context->channelIndex, buffer_kraken,
+            static_cast<size_t>(len / 2));
+}
+
+void Kraken::append_save_samples(size_t channelIndex, const int8_t *samples,
+    size_t nComplexSamples)
+{
+    if (channelIndex > 1 || samples == nullptr)
+    {
+        return;
+    }
+
+    std::lock_guard<std::mutex> lock(pendingSaveMutex);
+    if (!*saveIq)
+    {
+        clear_pending_save_samples_locked();
+        return;
+    }
+
+    std::deque<std::complex<float>> &pending = pendingSaveSamples[channelIndex];
+    for (size_t i = 0; i < nComplexSamples; i++)
+    {
+        pending.push_back({static_cast<float>(samples[2 * i]),
+            static_cast<float>(samples[2 * i + 1])});
+    }
+
+    flush_paired_save_samples_locked();
+}
+
+void Kraken::flush_paired_save_samples_locked()
+{
+    if (!saveIqFile.is_open())
+    {
+        return;
+    }
+
+    const size_t nPaired = std::min(pendingSaveSamples[0].size(), pendingSaveSamples[1].size());
+    if (nPaired == 0)
+    {
+        return;
+    }
+
+    std::vector<std::complex<float>> reference(nPaired);
+    std::vector<std::complex<float>> surveillance(nPaired);
+    for (size_t i = 0; i < nPaired; i++)
+    {
+        reference[i] = pendingSaveSamples[0].front();
+        pendingSaveSamples[0].pop_front();
+        surveillance[i] = pendingSaveSamples[1].front();
+        pendingSaveSamples[1].pop_front();
+    }
+
+    write_blah2_iq_samples(reference.data(), surveillance.data(), nPaired);
+}
+
+void Kraken::clear_pending_save_samples_locked()
+{
+    pendingSaveSamples[0].clear();
+    pendingSaveSamples[1].clear();
 }
 
 void Kraken::replay(IqData *buffer1, IqData *buffer2, std::string _file, bool _loop)
 {
-    // todo
+    replay_blah2_iq_file(buffer1, buffer2, _file, _loop);
 }
 
 void Kraken::check_status(int status, std::string message)

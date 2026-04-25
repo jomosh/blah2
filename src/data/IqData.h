@@ -81,6 +81,11 @@ public:
   /// @return Void.
   void wait_for_min_length(uint32_t minLength);
 
+  /// @brief Wait until the buffer length is at most maxLength.
+  /// @param maxLength Maximum allowed samples in buffer.
+  /// @return Void.
+  void wait_for_max_length(uint32_t maxLength);
+
   /// @brief Getter for data.
   /// @return IQ data.
   std::deque<std::complex<double>> get_data();

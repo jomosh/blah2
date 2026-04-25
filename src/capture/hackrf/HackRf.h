@@ -3,14 +3,16 @@
 /// @brief A class to capture data on the HackRF.
 /// @author sdn-ninja
 /// @author 30hours
-/// @todo Replay functionality.
-
 #ifndef HACKRF_H
 #define HACKRF_H
 
 #include "capture/Source.h"
 #include "data/IqData.h"
 
+#include <complex>
+#include <cstddef>
+#include <deque>
+#include <mutex>
 #include <stdint.h>
 #include <string>
 #include <vector>
@@ -33,10 +35,42 @@ private:
   /// @brief Enable extra amplifier U13 on receive.
   std::vector<bool> ampEnable;
 
+  /// @brief Callback context for each HackRF receive stream.
+  struct CallbackContext
+  {
+    HackRf *device;
+    IqData *buffer;
+    size_t channelIndex;
+  };
+
+  /// @brief Context data passed into each HackRF callback.
+  CallbackContext callbackContexts[2];
+
+  /// @brief Pending channel-aligned save samples waiting to be paired.
+  std::deque<std::complex<float>> pendingSaveSamples[2];
+
+  /// @brief Protects access to pending paired save samples.
+  std::mutex pendingSaveMutex;
+
   /// @brief Check status of HackRF API returns.
   /// @param status Return code of API call.
   /// @param message Message if API call error.
   void check_status(uint8_t status, std::string message);
+
+  /// @brief Append callback samples into the paired IQ save queues.
+  /// @param channelIndex Zero-based channel index.
+  /// @param samples Pointer to interleaved IQ byte samples.
+  /// @param nComplexSamples Number of IQ samples in this callback.
+  void append_save_samples(size_t channelIndex, const int8_t *samples,
+    size_t nComplexSamples);
+
+  /// @brief Flush paired callback samples into the canonical Blah2 IQ file.
+  /// @return Void.
+  void flush_paired_save_samples_locked();
+
+  /// @brief Clear any unpaired callback save samples.
+  /// @return Void.
+  void clear_pending_save_samples_locked();
 
 protected:
   /// @brief Array of pointers to HackRF devices.

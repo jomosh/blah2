@@ -6,6 +6,7 @@
 #include <ctime>
 #include <sstream>
 #include <iomanip>
+#include <limits>
 
 Source::Source()
 {
@@ -20,6 +21,63 @@ Source::Source(std::string _type, uint32_t _fc, uint32_t _fs,
   fs = _fs;
   path = _path;
   saveIq = _saveIq;
+}
+
+int16_t Source::clamp_blah2_iq_component(double value)
+{
+  if (!std::isfinite(value))
+  {
+    return 0;
+  }
+  if (value > static_cast<double>(std::numeric_limits<int16_t>::max()))
+  {
+    return std::numeric_limits<int16_t>::max();
+  }
+  if (value < static_cast<double>(std::numeric_limits<int16_t>::min()))
+  {
+    return std::numeric_limits<int16_t>::min();
+  }
+  return static_cast<int16_t>(std::lround(value));
+}
+
+void Source::replay_blah2_iq_file(IqData *buffer1, IqData *buffer2,
+  const std::string &file, bool loop)
+{
+  std::ifstream replay(file, std::ios::binary);
+  if (!replay.is_open())
+  {
+    std::cerr << "Error: Can not open replay file: " << file << std::endl;
+    exit(1);
+  }
+
+  int16_t samples[4] = {0, 0, 0, 0};
+  while (true)
+  {
+    if (!replay.read(reinterpret_cast<char *>(samples), sizeof(samples)))
+    {
+      if (!loop)
+      {
+        break;
+      }
+
+      replay.clear();
+      replay.seekg(0, std::ios::beg);
+      if (!replay.read(reinterpret_cast<char *>(samples), sizeof(samples)))
+      {
+        break;
+      }
+    }
+
+    buffer1->wait_for_max_length(buffer1->get_n() - 1);
+    buffer2->wait_for_max_length(buffer2->get_n() - 1);
+
+    buffer1->lock();
+    buffer2->lock();
+    buffer1->push_back({static_cast<double>(samples[0]), static_cast<double>(samples[1])});
+    buffer2->push_back({static_cast<double>(samples[2]), static_cast<double>(samples[3])});
+    buffer1->unlock_and_notify();
+    buffer2->unlock_and_notify();
+  }
 }
 
 std::string Source::open_file()
@@ -52,7 +110,7 @@ std::string Source::open_file()
 
 void Source::close_file()
 {
-  if (!saveIqFile.is_open())
+  if (saveIqFile.is_open())
   {
     saveIqFile.close();
   }

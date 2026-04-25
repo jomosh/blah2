@@ -8,7 +8,11 @@
 
 #include <string>
 #include <stdint.h>
+#include <cmath>
+#include <complex>
+#include <cstddef>
 #include <fstream>
+#include <vector>
 #include <atomic>
 #include "data/IqData.h"
 
@@ -33,6 +37,53 @@ protected:
 
   /// @brief File stream to save IQ data.
   std::ofstream saveIqFile;
+
+  /// @brief Clamp a numeric IQ component into the canonical Blah2 int16 file range.
+  /// @param value Numeric sample component.
+  /// @return Saturated int16 sample component.
+  static int16_t clamp_blah2_iq_component(double value);
+
+  /// @brief Replay a canonical Blah2 two-channel IQ file.
+  /// @param buffer1 Pointer to reference buffer.
+  /// @param buffer2 Pointer to surveillance buffer.
+  /// @param file Path to file to replay data from.
+  /// @param loop True if samples should loop at EOF.
+  /// @return Void.
+  void replay_blah2_iq_file(IqData *buffer1, IqData *buffer2,
+    const std::string &file, bool loop);
+
+  /// @brief Write canonical Blah2 IQ samples to disk.
+  /// @details Samples are stored as interleaved int16 tuples [refI, refQ, survI, survQ].
+  /// @param reference Pointer to reference-channel samples.
+  /// @param surveillance Pointer to surveillance-channel samples.
+  /// @param nSamples Number of channel-paired samples to write.
+  /// @return Void.
+  template <typename T>
+  void write_blah2_iq_samples(const std::complex<T> *reference,
+    const std::complex<T> *surveillance, size_t nSamples)
+  {
+    if (!saveIqFile.is_open() || reference == nullptr || surveillance == nullptr || nSamples == 0)
+    {
+      return;
+    }
+
+    std::vector<int16_t> interleaved;
+    interleaved.reserve(nSamples * 4);
+    for (size_t i = 0; i < nSamples; i++)
+    {
+      interleaved.push_back(clamp_blah2_iq_component(reference[i].real()));
+      interleaved.push_back(clamp_blah2_iq_component(reference[i].imag()));
+      interleaved.push_back(clamp_blah2_iq_component(surveillance[i].real()));
+      interleaved.push_back(clamp_blah2_iq_component(surveillance[i].imag()));
+    }
+
+    saveIqFile.write(reinterpret_cast<const char *>(interleaved.data()),
+      static_cast<std::streamsize>(interleaved.size() * sizeof(int16_t)));
+    if (!saveIqFile)
+    {
+      std::cerr << "Error: failed to write Blah2 IQ samples" << std::endl;
+    }
+  }
 
 public:
 
@@ -61,7 +112,7 @@ public:
   /// @return Void.
   virtual void stop() = 0;
 
-  /// @brief Implement replay function on RSPduo.
+  /// @brief Replay a Blah2 two-channel IQ file.
   /// @param buffer1 Pointer to reference buffer.
   /// @param buffer2 Pointer to surveillance buffer.
   /// @param file Path to file to replay data from.
@@ -72,7 +123,8 @@ public:
 
   /// @brief Open a new file to record IQ.
   /// @details First creates a new file from current timestamp.
-  /// Files are of format <path>.<type>.iq.
+  /// Files are of format <path><timestamp>.<type>.iq using Blah2's canonical
+  /// interleaved two-channel int16 sample layout.
   /// @return String of full path to file.
   std::string open_file();
 

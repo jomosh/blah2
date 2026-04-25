@@ -95,17 +95,12 @@ void Usrp::process(IqData *buffer1, IqData *buffer2)
       // save IQ data to file
       if (*saveIq)
       {
-        for (const auto& bufferPtr : buff_ptrs) 
-        {
-        // Write the buffer data to the file
-          saveIqFile.write(reinterpret_cast<const char*>(
-            bufferPtr), samps_per_buff * sizeof(std::complex<float>));
-        }
+        write_blah2_iq_samples(buff_ptrs[0], buff_ptrs[1], nReceived);
       }
     }
 }
 
 void Usrp::replay(IqData *buffer1, IqData *buffer2, std::string _file, bool _loop)
 {
-  return;
+  replay_blah2_iq_file(buffer1, buffer2, _file, _loop);
 }

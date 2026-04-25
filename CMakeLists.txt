@@ -151,9 +151,43 @@ target_link_libraries(testDetectionPhaseB PRIVATE
 set_target_properties(testDetectionPhaseB PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_TEST_UNIT_DIR}")
 
+add_executable(testSource
+  test/unit/capture/TestSource.cpp
+  src/capture/Source.cpp
+  src/data/IqData.cpp
+)
+target_link_libraries(testSource PRIVATE
+  Catch2::Catch2WithMain
+)
+set_target_properties(testSource PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_TEST_UNIT_DIR}")
+
+add_executable(testDetectionSweep
+  test/comparison/TestDetectionSweep.cpp
+  src/data/IqData.cpp
+  src/data/Map.cpp
+  src/data/Detection.cpp
+  src/process/ambiguity/Ambiguity.cpp
+  src/process/clutter/WienerHopf.cpp
+  src/process/detection/CfarDetector1D.cpp
+  src/process/detection/Centroid.cpp
+  src/process/detection/Interpolate.cpp
+  src/process/meta/HammingNumber.cpp
+)
+target_link_libraries(testDetectionSweep PRIVATE
+  Threads::Threads
+  ryml::ryml
+  armadillo
+  fftw3
+  fftw3_threads
+)
+set_target_properties(testDetectionSweep PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_TEST_COMPARISON_DIR}")
+
 # TODO: Unsure if will be using CTest.
 add_test(NAME testAmbiguity COMMAND testAmbiguity)
 add_test(NAME testIqData COMMAND testIqData)
 add_test(NAME testTracker COMMAND testTracker)
+add_test(NAME testSource COMMAND testSource)
 add_test(NAME testDetectionPhaseA COMMAND testDetectionPhaseA)
 add_test(NAME testDetectionPhaseB COMMAND testDetectionPhaseB)

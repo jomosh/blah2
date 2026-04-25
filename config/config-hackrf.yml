@@ -35,7 +35,7 @@ process:
     nTrain: 6
     minDelay: 5
     minDoppler: 15
-    cfarMode: "CA" # Available types: CA, CAGO
+    cfarMode: "CAGO" # Available types: CA, CAGO
     nCentroid: 6
   tracker:
     enable: true

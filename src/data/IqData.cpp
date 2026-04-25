@@ -54,6 +54,17 @@ void IqData::wait_for_min_length(uint32_t minLength)
   data_ready.wait(lock, [&] { return length >= minLength; });
 }
 
+void IqData::wait_for_max_length(uint32_t maxLength)
+{
+  if (maxLength > n)
+  {
+    throw std::invalid_argument("IqData::wait_for_max_length maxLength exceeds buffer capacity");
+  }
+
+  std::unique_lock<std::mutex> lock(mutex_lock);
+  data_ready.wait(lock, [&] { return length <= maxLength; });
+}
+
 std::deque<std::complex<double>> IqData::get_data()
 {
   std::deque<std::complex<double>> out;

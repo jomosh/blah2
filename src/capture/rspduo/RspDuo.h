@@ -183,7 +183,7 @@ public:
   /// @return Void.
   void stop();
 
-  /// @brief Implement replay function on RSPduo.
+  /// @brief Replay a Blah2 two-channel IQ file.
   /// @param buffer1 Pointer to reference buffer.
   /// @param buffer2 Pointer to surveillance buffer.
   /// @param file Path to file to replay data from.

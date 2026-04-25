@@ -14,10 +14,20 @@
   </style>
 </head>
 <body>
-  <div style="height: 100vh; width: 95vw" class="container-fluid">
-    <div style="height: 100vh; width: 95vw" class="row d-flex">
-      <div class="justify-content-center" id="data"></div>
+  <div style="height: 100vh; width: 95vw" class="container-fluid py-2">
+    <div class="d-flex flex-column h-100">
+      <div class="d-flex justify-content-end mb-2">
+        <div class="d-flex flex-wrap align-items-center gap-2 border rounded bg-white px-3 py-2 shadow-sm" data-iq-capture-control>
+          <span class="small text-uppercase text-muted">IQ Capture</span>
+          <span class="badge text-bg-secondary" data-iq-capture-status>Checking...</span>
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-iq-capture-toggle disabled>IQ Capture Unavailable</button>
+        </div>
+      </div>
+      <div class="flex-grow-1">
+        <div class="justify-content-center h-100 w-100" id="data"></div>
+      </div>
     </div>
+  </div>
 </body>
 <script>
   xTitle = "Bistatic Range (km)";
@@ -26,5 +36,6 @@
   yVariable = "doppler";
 </script>
 <script src="../../../js/common.js"></script>
+<script src="../../../control.js"></script>
 <script src="../../../js/plot_detection.js"></script>
 </html>
