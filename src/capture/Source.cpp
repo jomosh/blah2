@@ -117,6 +117,8 @@ void Source::append_blah2_paired_iq_samples(size_t channelIndex, const int8_t *s
 
 void Source::flush_blah2_paired_iq_samples_locked()
 {
+  // Callers already hold pendingSaveMutex, so close_file() cannot interleave
+  // between this open-state check and the eventual write path.
   {
     std::lock_guard<std::mutex> lock(saveIqFileMutex);
     if (!saveIqFile.is_open())
@@ -188,6 +190,7 @@ std::string Source::open_file()
 
 void Source::close_file()
 {
+  // Lock both mutexes together so pending sample flushes cannot race a close.
   std::scoped_lock<std::mutex, std::mutex> lock(pendingSaveMutex, saveIqFileMutex);
   clear_blah2_paired_iq_samples_locked();
   if (saveIqFile.is_open())
