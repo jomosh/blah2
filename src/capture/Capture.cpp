@@ -39,16 +39,20 @@ void Capture::process(IqData *buffer1, IqData *buffer2, c4::yml::NodeRef config,
         + std::to_string(port_capture));
       httplib::Result res = cli.Get("/capture");
 
+      const bool captureRequested = res->body == "true";
+
       // if capture status changed
-      if ((res->body == "true") != saveIq)
+      if (captureRequested != saveIq)
       {
-        saveIq = res->body == "true";
-        if (saveIq)
+        if (captureRequested)
         {
+          // Open the file before exposing saveIq=true to live callbacks.
           device->open_file();
+          saveIq = true;
         }
         else
         {
+          saveIq = false;
           device->close_file();
         }
       }
