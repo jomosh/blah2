@@ -89,6 +89,30 @@ sudo docker exec -it blah2 /blah2/bin/test/comparison/testDetectionSweep \
 
 With `--adsb-file`, the sweep summary adds truth-aware columns for matched Blah2 detection points, false-positive detection points, missed ADS-B truth points, and the corresponding per-detection-point rates for each sweep case.
 
+### Interpreting the sweep summary
+
+When `--adsb-file` is supplied, `testDetectionSweep` scores each Blah2 detection point independently against at most one ADS-B truth point from the nearest snapshot within `--adsb-max-age-ms`. This score is per detection point, not per CPI and not per aircraft track.
+
+- `Rank`: Sort order of the sweep cases. With ADS-B truth, cases are ranked by higher `MatchPctPt`, then lower `FPRatePt`, then higher `MatchPts`. Without ADS-B truth, ranking falls back to `HitRate`, `MeanPeakSnr`, and `Mean/CPI`.
+- `Mode`: CFAR mode used for that sweep case.
+- `Pfa`: CFAR probability of false alarm used for that sweep case. The table prints 3 decimal places, so values such as `1e-5` and `1e-4` will appear as `0.000`.
+- `MinDoppHz`: Minimum Doppler threshold in Hz.
+- `MinDelay`: Minimum delay-bin threshold applied by the detector.
+- `HitRate`: Fraction of analysed CPIs that produced at least one detection. This is not truth accuracy.
+- `TotalDetect`: Total number of detection points produced across all analysed CPIs.
+- `Mean/CPI`: Average number of detection points per analysed CPI.
+- `MeanPeakSnr`: Average peak SNR among CPIs that produced at least one detection.
+- `TruthCPI`: Number of analysed CPIs that had a nearby ADS-B snapshot within the configured max-age window. A single ADS-B snapshot can be reused by more than one CPI if it is the nearest valid snapshot.
+- `MatchPts`: Number of Blah2 detection points that matched an ADS-B truth point inside the configured delay and Doppler windows.
+- `FalsePts`: Number of Blah2 detection points that did not match any ADS-B truth point.
+- `MissedPts`: Number of ADS-B truth points that were not matched by any Blah2 detection point.
+- `MatchPctPt`: `MatchPts / (MatchPts + FalsePts)`. This is effectively point-level precision.
+- `FPRatePt`: `FalsePts / (MatchPts + FalsePts)`, which is equal to `1 - MatchPctPt`.
+
+`testDetectionSweep` does not currently print recall directly. If needed, estimate truth-side recall for a sweep case as `MatchPts / (MatchPts + MissedPts)`.
+
+In practice, a high `HitRate` with a very low `MatchPctPt` means the detector is firing often, but most of those detections do not align with ADS-B truth under the current match windows.
+
 If you already have a saved IQ file, you can run the same comparison command directly against that file.
 
 - *TODO:* Run all test cases.
