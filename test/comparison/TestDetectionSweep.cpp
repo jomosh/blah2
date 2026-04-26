@@ -701,7 +701,6 @@ void validate_runtime_config(const RuntimeConfig &config)
   {
     throw std::runtime_error("Invalid capture/process config: fs and CPI must be positive finite values");
   }
-  config.delayBinWidthKm = Constants::c / static_cast<double>(config.fs) / 1000.0;
   if (config.nSamples == 0)
   {
     throw std::runtime_error("Derived CPI sample count is zero");
@@ -772,6 +771,7 @@ RuntimeConfig load_runtime_config(const CliOptions &options)
     throw std::runtime_error("Invalid derived CPI sample count");
   }
   config.nSamples = static_cast<uint32_t>(samplesPerCpi);
+  config.delayBinWidthKm = Constants::c / static_cast<double>(config.fs) / 1000.0;
 
   validate_runtime_config(config);
   return config;
