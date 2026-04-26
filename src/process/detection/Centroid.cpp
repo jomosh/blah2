@@ -1,6 +1,8 @@
 #include "Centroid.h"
+#include "NearestAxisIndex.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <limits>
 #include <string>
@@ -19,50 +21,6 @@ std::string normalize_centroid_mode(std::string modeString)
       return static_cast<char>(std::tolower(value));
     });
   return modeString;
-}
-
-size_t nearest_delay_index(const std::deque<int> &delayBins, double delay)
-{
-  if (delayBins.empty())
-  {
-    return 0;
-  }
-
-  size_t bestIndex = 0;
-  double bestDistance = std::abs(delay - static_cast<double>(delayBins[0]));
-  for (size_t index = 1; index < delayBins.size(); index++)
-  {
-    const double candidateDistance = std::abs(delay - static_cast<double>(delayBins[index]));
-    if (candidateDistance < bestDistance)
-    {
-      bestDistance = candidateDistance;
-      bestIndex = index;
-    }
-  }
-
-  return bestIndex;
-}
-
-size_t nearest_doppler_index(const std::deque<double> &dopplerBins, double doppler)
-{
-  if (dopplerBins.empty())
-  {
-    return 0;
-  }
-
-  size_t bestIndex = 0;
-  double bestDistance = std::abs(doppler - dopplerBins[0]);
-  for (size_t index = 1; index < dopplerBins.size(); index++)
-  {
-    const double candidateDistance = std::abs(doppler - dopplerBins[index]);
-    if (candidateDistance < bestDistance)
-    {
-      bestDistance = candidateDistance;
-      bestIndex = index;
-    }
-  }
-
-  return bestIndex;
 }
 
 double linear_weight_from_snr(double snr)
@@ -86,8 +44,8 @@ double detection_weight(const Map<std::complex<double>> *map,
   if (map != nullptr && !map->delay.empty() && !map->doppler.empty() &&
     !map->data.empty())
   {
-    const size_t delayIndex = nearest_delay_index(map->delay, delay);
-    const size_t dopplerIndex = nearest_doppler_index(map->doppler, doppler);
+    const size_t delayIndex = detection_utility::nearest_axis_index(map->delay, delay);
+    const size_t dopplerIndex = detection_utility::nearest_axis_index(map->doppler, doppler);
     const double weight = std::norm(map->data[dopplerIndex][delayIndex]);
     if (std::isfinite(weight) && weight > 0.0)
     {
@@ -158,16 +116,12 @@ std::unique_ptr<Detection> Centroid::process(Detection *x, Map<std::complex<doub
 
   if (mode == CentroidMode::LocalPeak)
   {
-    uint16_t delayMin, delayMax;
-    double dopplerMin, dopplerMax;
+    const double delayWindow = static_cast<double>(nDelay);
+    const double dopplerWindow = static_cast<double>(nDoppler) * resolutionDoppler;
     bool isCentroid;
 
     for (size_t i = 0; i < snr.size(); i++)
     {
-      delayMin = (int)(delay[i]) - nDelay;
-      delayMax = (int)(delay[i]) + nDelay;
-      dopplerMin = doppler[i] - (nDoppler * resolutionDoppler);
-      dopplerMax = doppler[i] + (nDoppler * resolutionDoppler);
       isCentroid = true;
 
       for (size_t j = 0; j < snr.size(); j++)
@@ -176,8 +130,8 @@ std::unique_ptr<Detection> Centroid::process(Detection *x, Map<std::complex<doub
         {
           continue;
         }
-        if (delay[j] > delayMin && delay[j] < delayMax &&
-          doppler[j] > dopplerMin && doppler[j] < dopplerMax)
+        if (std::abs(delay[j] - delay[i]) <= delayWindow &&
+          std::abs(doppler[j] - doppler[i]) <= dopplerWindow)
         {
           if (snr[i] < snr[j])
           {

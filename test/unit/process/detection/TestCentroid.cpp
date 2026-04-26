@@ -20,6 +20,19 @@ TEST_CASE("Local_Peak_Mode_Keeps_Highest_Snr_Detection", "[centroid]")
   CHECK(result->get_snr()[0] == 12.0);
 }
 
+TEST_CASE("Local_Peak_Mode_Handles_Low_Delay_Edge_Without_Wrapping", "[centroid]")
+{
+  Detection detections({0.0, 1.0}, {0.0, 0.0}, {4.0, 9.0});
+  Centroid centroid(1, 1, 1.0, CentroidMode::LocalPeak);
+
+  std::unique_ptr<Detection> result = centroid.process(&detections);
+
+  REQUIRE(result->get_nDetections() == 1);
+  CHECK(result->get_delay()[0] == 1.0);
+  CHECK(result->get_doppler()[0] == 0.0);
+  CHECK(result->get_snr()[0] == 9.0);
+}
+
 TEST_CASE("Cluster_Centroid_Mode_Averages_Cluster_With_Weighted_Centroid", "[centroid]")
 {
   Detection detections({10.0, 11.0, 30.0}, {0.0, 0.0, 40.0}, {10.0, 20.0, 5.0});

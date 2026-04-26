@@ -1,44 +1,11 @@
 #include "Interpolate.h"
+#include "NearestAxisIndex.h"
+
 #include <iostream>
 #include <vector>
 #include <cmath>
 #include <stdint.h>
 #include <algorithm>
-
-namespace
-{
-size_t nearest_delay_index(const std::deque<int> &delayBins, double delay)
-{
-  size_t bestIndex = 0;
-  double bestDistance = std::abs(delay - static_cast<double>(delayBins[0]));
-  for (size_t index = 1; index < delayBins.size(); index++)
-  {
-    const double candidateDistance = std::abs(delay - static_cast<double>(delayBins[index]));
-    if (candidateDistance < bestDistance)
-    {
-      bestDistance = candidateDistance;
-      bestIndex = index;
-    }
-  }
-  return bestIndex;
-}
-
-size_t nearest_doppler_index(const std::deque<double> &dopplerBins, double doppler)
-{
-  size_t bestIndex = 0;
-  double bestDistance = std::abs(doppler - dopplerBins[0]);
-  for (size_t index = 1; index < dopplerBins.size(); index++)
-  {
-    const double candidateDistance = std::abs(doppler - dopplerBins[index]);
-    if (candidateDistance < bestDistance)
-    {
-      bestDistance = candidateDistance;
-      bestIndex = index;
-    }
-  }
-  return bestIndex;
-}
-}
 
 // constructor
 Interpolate::Interpolate(bool _doDelay, bool _doDoppler)
@@ -74,8 +41,8 @@ std::unique_ptr<Detection> Interpolate::process(Detection *x, Map<std::complex<d
   // loop over every detection
   for (size_t i = 0; i < snr.size(); i++)
   {
-    const size_t delayIndex = nearest_delay_index(indexDelay, delay[i]);
-    const size_t dopplerIndex = nearest_doppler_index(indexDoppler, doppler[i]);
+    const size_t delayIndex = detection_utility::nearest_axis_index(indexDelay, delay[i]);
+    const size_t dopplerIndex = detection_utility::nearest_axis_index(indexDoppler, doppler[i]);
     const double centerDelay = static_cast<double>(indexDelay[delayIndex]);
     const double centerDoppler = indexDoppler[dopplerIndex];
     bool useDelayInterpolation = doDelay;
