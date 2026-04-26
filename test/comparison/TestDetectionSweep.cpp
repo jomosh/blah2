@@ -139,6 +139,12 @@ struct AdsbRunContext
   AdsbMatchConfig matchConfig;
 };
 
+struct LoadedAdsbSidecar
+{
+  std::optional<uint64_t> captureStartMs;
+  std::vector<AdsbSnapshot> snapshots;
+};
+
 struct SweepCase
 {
   double pfa;
@@ -543,7 +549,7 @@ void append_adsb_targets(const rapidjson::Value &target, const std::string &targ
   }
 }
 
-std::vector<AdsbSnapshot> load_adsb_snapshots(const std::string &path)
+LoadedAdsbSidecar load_adsb_sidecar(const std::string &path)
 {
   rapidjson::Document document;
   const std::string contents = read_text_file(path);
@@ -557,13 +563,24 @@ std::vector<AdsbSnapshot> load_adsb_snapshots(const std::string &path)
     throw std::runtime_error("ADS-B sidecar file must be a JSON array: '" + path + "'");
   }
 
-  std::vector<AdsbSnapshot> snapshots;
-  snapshots.reserve(document.Size());
+  LoadedAdsbSidecar sidecar;
+  sidecar.snapshots.reserve(document.Size());
   for (const rapidjson::Value &entry : document.GetArray())
   {
     if (!entry.IsObject())
     {
       throw std::runtime_error("ADS-B sidecar entries must be objects");
+    }
+
+    const auto captureStartMember = entry.FindMember("captureStartMs");
+    if (captureStartMember != entry.MemberEnd())
+    {
+      if (!captureStartMember->value.IsUint64())
+      {
+        throw std::runtime_error("ADS-B sidecar captureStartMs must be an unsigned integer");
+      }
+      sidecar.captureStartMs = captureStartMember->value.GetUint64();
+      continue;
     }
 
     const auto timestampMember = entry.FindMember("timestamp");
@@ -583,14 +600,14 @@ std::vector<AdsbSnapshot> load_adsb_snapshots(const std::string &path)
     {
       append_adsb_targets(target->value, target->name.GetString(), snapshot.targets);
     }
-    snapshots.push_back(std::move(snapshot));
+    sidecar.snapshots.push_back(std::move(snapshot));
   }
 
-  std::sort(snapshots.begin(), snapshots.end(), [](const AdsbSnapshot &left, const AdsbSnapshot &right) {
+  std::sort(sidecar.snapshots.begin(), sidecar.snapshots.end(), [](const AdsbSnapshot &left, const AdsbSnapshot &right) {
     return left.timestampMs < right.timestampMs;
   });
 
-  return snapshots;
+  return sidecar;
 }
 
 const AdsbSnapshot *find_adsb_snapshot(const std::vector<AdsbSnapshot> &snapshots,
@@ -631,6 +648,7 @@ const AdsbSnapshot *find_adsb_snapshot(const std::vector<AdsbSnapshot> &snapshot
   return &snapshots[bestIndex];
 }
 
+// Score each detection point independently against at most one ADS-B truth point.
 void record_adsb_match(const Detection &detection, const AdsbSnapshot &snapshot,
   double delayBinWidthKm, const AdsbMatchConfig &config, AdsbMatchSummary &summary)
 {
@@ -933,6 +951,7 @@ void print_summary(const RuntimeConfig &config, const std::vector<SweepCase> &sw
     std::cout << "ADS-B file       : " << adsbContext->file << "\n";
     std::cout << "ADS-B snapshots  : " << adsbContext->snapshotCount << "\n";
     std::cout << "Capture start ms : " << adsbContext->captureStartMs << "\n";
+    std::cout << "ADS-B scoring    : per detection point, not per CPI\n";
     std::cout << "ADS-B range win  : " << format_metric(adsbContext->matchConfig.delayWindowKm) << " km\n";
     std::cout << "ADS-B doppler win: " << format_metric(adsbContext->matchConfig.dopplerWindowHz) << " Hz\n";
     std::cout << "ADS-B max age ms : " << adsbContext->matchConfig.maxAgeMs << "\n\n";
@@ -953,11 +972,11 @@ void print_summary(const RuntimeConfig &config, const std::vector<SweepCase> &sw
   {
     std::cout
       << std::setw(12) << "TruthCPI"
-      << std::setw(12) << "MatchDet"
-      << std::setw(12) << "FalsePos"
-      << std::setw(12) << "MissedAdsb"
-      << std::setw(12) << "MatchPct"
-      << std::setw(12) << "FPRate";
+      << std::setw(12) << "MatchPts"
+      << std::setw(12) << "FalsePts"
+      << std::setw(12) << "MissedPts"
+      << std::setw(12) << "MatchPctPt"
+      << std::setw(12) << "FPRatePt";
   }
 
   std::cout
@@ -1007,7 +1026,7 @@ int main(int argc, char **argv)
 
     RuntimeConfig config = load_runtime_config(options);
     std::vector<SweepCase> sweepCases = build_sweep_cases(options, config);
-    std::vector<AdsbSnapshot> adsbSnapshots;
+    LoadedAdsbSidecar adsbSidecar;
     std::optional<AdsbRunContext> adsbContext;
     if (!options.adsbFile.empty())
     {
@@ -1019,6 +1038,11 @@ int main(int argc, char **argv)
       AdsbRunContext runContext;
       runContext.file = options.adsbFile;
       runContext.captureStartMs = options.captureStartMs;
+      adsbSidecar = load_adsb_sidecar(options.adsbFile);
+      if (runContext.captureStartMs == 0)
+      {
+        runContext.captureStartMs = adsbSidecar.captureStartMs.value_or(0);
+      }
       if (runContext.captureStartMs == 0)
       {
         runContext.captureStartMs = parse_capture_start_ms_from_replay_file(config.replayFile);
@@ -1035,12 +1059,11 @@ int main(int argc, char **argv)
           2000, static_cast<uint64_t>(std::llround(config.tCpi * 1000.0)));
       }
 
-      adsbSnapshots = load_adsb_snapshots(options.adsbFile);
-      if (adsbSnapshots.empty())
+      if (adsbSidecar.snapshots.empty())
       {
         throw std::runtime_error("ADS-B sidecar file did not contain any snapshots");
       }
-      runContext.snapshotCount = adsbSnapshots.size();
+      runContext.snapshotCount = adsbSidecar.snapshots.size();
       adsbContext = runContext;
     }
 
@@ -1094,7 +1117,7 @@ int main(int argc, char **argv)
         const uint64_t cpiOffsetMs = static_cast<uint64_t>(
           std::llround(static_cast<double>(rawCpis - 1) * config.tCpi * 1000.0));
         const uint64_t cpiTimestampMs = adsbContext->captureStartMs + cpiOffsetMs;
-        adsbSnapshot = find_adsb_snapshot(adsbSnapshots, cpiTimestampMs,
+        adsbSnapshot = find_adsb_snapshot(adsbSidecar.snapshots, cpiTimestampMs,
           adsbContext->matchConfig.maxAgeMs, adsbSnapshotCursor);
       }
 

@@ -30,10 +30,10 @@ bool Capture::is_saving_iq() const
   return saveIq.load();
 }
 
-std::string Capture::get_current_iq_save_file() const
+Capture::ActiveIqCapture Capture::get_active_iq_capture() const
 {
   std::lock_guard<std::mutex> lock(currentIqSaveFileMutex);
-  return currentIqSaveFile;
+  return {currentIqSaveFile, currentIqCaptureStartMs};
 }
 
 void Capture::process(IqData *buffer1, IqData *buffer2, c4::yml::NodeRef config, 
@@ -69,9 +69,12 @@ void Capture::process(IqData *buffer1, IqData *buffer2, c4::yml::NodeRef config,
           {
             // Open the file before exposing saveIq=true to live callbacks.
             const std::string iqSaveFile = device->open_file();
+            const uint64_t captureStartMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+              std::chrono::system_clock::now().time_since_epoch()).count();
             {
               std::lock_guard<std::mutex> lock(currentIqSaveFileMutex);
               currentIqSaveFile = iqSaveFile;
+              currentIqCaptureStartMs = captureStartMs;
             }
             saveIq.store(true);
           }
@@ -82,6 +85,7 @@ void Capture::process(IqData *buffer1, IqData *buffer2, c4::yml::NodeRef config,
             {
               std::lock_guard<std::mutex> lock(currentIqSaveFileMutex);
               currentIqSaveFile.clear();
+              currentIqCaptureStartMs = 0;
             }
           }
         }

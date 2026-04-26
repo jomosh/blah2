@@ -36,6 +36,9 @@ private:
   /// @brief Full path of the currently active IQ capture file.
   std::string currentIqSaveFile;
 
+  /// @brief POSIX ms when the current IQ capture window started.
+  uint64_t currentIqCaptureStartMs = 0;
+
   /// @brief True if file replay is enabled.
   bool replay;
 
@@ -46,6 +49,13 @@ private:
   std::string file;
 
 public:
+
+  /// @brief Active IQ capture window state.
+  struct ActiveIqCapture
+  {
+    std::string file;
+    uint64_t startMs = 0;
+  };
 
   /// @brief Sampling frequency (Hz).
   uint32_t fs;
@@ -90,9 +100,9 @@ public:
   /// @return True when the capture toggle is actively saving IQ samples.
   bool is_saving_iq() const;
 
-  /// @brief Get the current IQ capture file path.
-  /// @return Full path of the active IQ file, or empty when capture is idle.
-  std::string get_current_iq_save_file() const;
+  /// @brief Get the current IQ capture state.
+  /// @return Active IQ capture file path and the explicit capture start time.
+  ActiveIqCapture get_active_iq_capture() const;
 
 };
 

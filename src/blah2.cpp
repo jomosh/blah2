@@ -338,6 +338,7 @@ int main(int argc, char **argv)
     saveDetectionPath = savePath + ".detection";
   }
   std::string lastAdsbSavePath;
+  bool adsbCaptureMetadataWritten = false;
   bool warnedAdsbSaveFailure = false;
 
   // set up output timing
@@ -450,23 +451,50 @@ int main(int argc, char **argv)
             jsonAdsb = cachedAdsbJson;
           }
           const bool iqCaptureActive = CAPTURE_POINTER != nullptr && CAPTURE_POINTER->is_saving_iq();
-          const std::string iqSaveFile =
-            (CAPTURE_POINTER != nullptr) ? CAPTURE_POINTER->get_current_iq_save_file() : "";
-          const std::string adsbSavePath = adsb_sidecar_path_from_iq_file(iqSaveFile);
+          const Capture::ActiveIqCapture iqCapture =
+            (CAPTURE_POINTER != nullptr) ? CAPTURE_POINTER->get_active_iq_capture() : Capture::ActiveIqCapture{};
+          const std::string adsbSavePath = adsb_sidecar_path_from_iq_file(iqCapture.file);
           if (adsbSavePath != lastAdsbSavePath)
           {
             lastAdsbSavePath = adsbSavePath;
+            adsbCaptureMetadataWritten = false;
             warnedAdsbSaveFailure = false;
           }
           if (isAdsb && iqCaptureActive && !adsbSavePath.empty())
           {
-            // Keep the ADS-B sidecar aligned one-to-one with each IQ capture file.
-            std::ostringstream adsbSnapshot;
-            adsbSnapshot << "{\"timestamp\":" << time[0]/1000 << ",\"targets\":" << jsonAdsb << "}";
-            if (!append_json_array_entry(adsbSnapshot.str(), adsbSavePath) && !warnedAdsbSaveFailure)
+            bool sidecarReady = true;
+
+            // Persist capture-start metadata once so replay alignment does not
+            // depend on local-time filename parsing.
+            if (!adsbCaptureMetadataWritten)
             {
-              std::cerr << "Warning: Failed to save ADS-B snapshots to " << adsbSavePath << "\n";
-              warnedAdsbSaveFailure = true;
+              std::ostringstream adsbMetadata;
+              adsbMetadata << "{\"captureStartMs\":" << iqCapture.startMs << "}";
+              if (!append_json_array_entry(adsbMetadata.str(), adsbSavePath))
+              {
+                if (!warnedAdsbSaveFailure)
+                {
+                  std::cerr << "Warning: Failed to save ADS-B snapshots to " << adsbSavePath << "\n";
+                  warnedAdsbSaveFailure = true;
+                }
+                sidecarReady = false;
+              }
+              else
+              {
+                adsbCaptureMetadataWritten = true;
+              }
+            }
+
+            if (sidecarReady)
+            {
+              // Keep the ADS-B sidecar aligned one-to-one with each IQ capture file.
+              std::ostringstream adsbSnapshot;
+              adsbSnapshot << "{\"timestamp\":" << time[0]/1000 << ",\"targets\":" << jsonAdsb << "}";
+              if (!append_json_array_entry(adsbSnapshot.str(), adsbSavePath) && !warnedAdsbSaveFailure)
+              {
+                std::cerr << "Warning: Failed to save ADS-B snapshots to " << adsbSavePath << "\n";
+                warnedAdsbSaveFailure = true;
+              }
             }
           }
           socket_adsb->sendData(jsonAdsb);

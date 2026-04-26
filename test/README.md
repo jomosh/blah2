@@ -66,13 +66,13 @@ curl http://127.0.0.1:3000/capture/toggle
 
 blah2 writes a canonical two-channel interleaved IQ file under `save.path` with a timestamped name such as `/blah2/save/20260425-153000.rspduo.iq` or `/blah2/save/20260425-153000.hackrf.iq`.
 
-If `truth.adsb.enabled` is true, blah2 writes a matching ADS-B sidecar for each IQ capture file, for example `/blah2/save/20260425-153000.rspduo.adsb` or `/blah2/save/20260425-153000.hackrf.adsb`, but only while the Start IQ Capture toggle is active. Each entry stores a CPI timestamp and the ADS-B delay-Doppler targets seen during that capture window.
+If `truth.adsb.enabled` is true, blah2 writes a matching ADS-B sidecar for each IQ capture file, for example `/blah2/save/20260425-153000.rspduo.adsb` or `/blah2/save/20260425-153000.hackrf.adsb`, but only while the Start IQ Capture toggle is active. The sidecar stores the explicit capture start time once plus the CPI timestamped ADS-B delay-Doppler targets seen during that capture window.
 
 4. Replay that captured file in the detector sweep comparison.
 
 Do not change `capture.replay.state` to `true` for this step. That setting is used by the main `blah2` runtime when you want the full application to replay data instead of reading live hardware. `testDetectionSweep` only needs the replay file path, either from `--replay-file` or from `capture.replay.file` in the config.
 
-If you want to score replay detections against ADS-B truth, pass the saved `.adsb` sidecar as well. The comparison uses the replay capture start time inferred from the IQ file name, unless you override it with `--capture-start-ms`.
+If you want to score replay detections against ADS-B truth, pass the saved `.adsb` sidecar as well. `testDetectionSweep` prefers the explicit capture start time stored inside new sidecars, and only falls back to `--capture-start-ms` or IQ file-name inference for older sidecars.
 
 ```
 sudo docker exec -it blah2 /blah2/bin/test/comparison/testDetectionSweep \
@@ -87,7 +87,7 @@ sudo docker exec -it blah2 /blah2/bin/test/comparison/testDetectionSweep \
 	--adsb-doppler-window-hz 10
 ```
 
-With `--adsb-file`, the sweep summary adds truth-aware columns for matched Blah2 detections, false positives, missed ADS-B targets, and the match / false-positive rates for each sweep case.
+With `--adsb-file`, the sweep summary adds truth-aware columns for matched Blah2 detection points, false-positive detection points, missed ADS-B truth points, and the corresponding per-detection-point rates for each sweep case.
 
 If you already have a saved IQ file, you can run the same comparison command directly against that file.
 
