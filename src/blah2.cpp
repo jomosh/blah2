@@ -40,6 +40,7 @@
 #include <mutex>
 #include <limits>
 #include <cmath>
+#include <cstdio>
 
 Capture *CAPTURE_POINTER = NULL;
 std::unique_ptr<Socket> socket_map;
@@ -54,6 +55,8 @@ void signal_callback_handler(int signum);
 void getopt_print_help();
 std::string getopt_process(int argc, char **argv);
 std::string ryml_get_file(const char *filename);
+std::string adsb_sidecar_path_from_iq_file(const std::string &iqFile);
+bool append_json_array_entry(const std::string &json, const std::string &filename);
 uint64_t current_time_ms();
 uint64_t current_time_us();
 void timing_helper(std::vector<std::string>& timing_name, 
@@ -334,6 +337,8 @@ int main(int argc, char **argv)
   {
     saveDetectionPath = savePath + ".detection";
   }
+  std::string lastAdsbSavePath;
+  bool warnedAdsbSaveFailure = false;
 
   // set up output timing
   uint64_t tStart = current_time_ms();
@@ -443,6 +448,26 @@ int main(int argc, char **argv)
           {
             std::lock_guard<std::mutex> lock(adsbMutex);
             jsonAdsb = cachedAdsbJson;
+          }
+          const bool iqCaptureActive = CAPTURE_POINTER != nullptr && CAPTURE_POINTER->is_saving_iq();
+          const std::string iqSaveFile =
+            (CAPTURE_POINTER != nullptr) ? CAPTURE_POINTER->get_current_iq_save_file() : "";
+          const std::string adsbSavePath = adsb_sidecar_path_from_iq_file(iqSaveFile);
+          if (adsbSavePath != lastAdsbSavePath)
+          {
+            lastAdsbSavePath = adsbSavePath;
+            warnedAdsbSaveFailure = false;
+          }
+          if (isAdsb && iqCaptureActive && !adsbSavePath.empty())
+          {
+            // Keep the ADS-B sidecar aligned one-to-one with each IQ capture file.
+            std::ostringstream adsbSnapshot;
+            adsbSnapshot << "{\"timestamp\":" << time[0]/1000 << ",\"targets\":" << jsonAdsb << "}";
+            if (!append_json_array_entry(adsbSnapshot.str(), adsbSavePath) && !warnedAdsbSaveFailure)
+            {
+              std::cerr << "Warning: Failed to save ADS-B snapshots to " << adsbSavePath << "\n";
+              warnedAdsbSaveFailure = true;
+            }
           }
           socket_adsb->sendData(jsonAdsb);
           timing_helper(timing_name, timing_time, time, "output_adsb");
@@ -564,6 +589,77 @@ std::string ryml_get_file(const char *filename)
   std::ostringstream contents;
   contents << in.rdbuf();
   return contents.str();
+}
+
+std::string adsb_sidecar_path_from_iq_file(const std::string &iqFile)
+{
+  if (iqFile.empty())
+  {
+    return "";
+  }
+
+  const std::string extension = ".iq";
+  if (iqFile.size() >= extension.size() &&
+    iqFile.compare(iqFile.size() - extension.size(), extension.size(), extension) == 0)
+  {
+    return iqFile.substr(0, iqFile.size() - extension.size()) + ".adsb";
+  }
+
+  return iqFile + ".adsb";
+}
+
+bool append_json_array_entry(const std::string &json, const std::string &filename)
+{
+  if (FILE *file = std::fopen(filename.c_str(), "r"); file == nullptr)
+  {
+    file = std::fopen(filename.c_str(), "w");
+    if (file == nullptr)
+    {
+      return false;
+    }
+    std::fputs("[]", file);
+    std::fclose(file);
+  }
+  else
+  {
+    std::fclose(file);
+  }
+
+  if (FILE *file = std::fopen(filename.c_str(), "rb+"); file != nullptr)
+  {
+    std::fseek(file, 0, SEEK_SET);
+    if (std::getc(file) != '[')
+    {
+      std::fclose(file);
+      return false;
+    }
+
+    bool isEmpty = false;
+    if (std::getc(file) == ']')
+    {
+      isEmpty = true;
+    }
+
+    std::fseek(file, -1, SEEK_END);
+    if (std::getc(file) != ']')
+    {
+      std::fclose(file);
+      return false;
+    }
+
+    std::fseek(file, -1, SEEK_END);
+    if (!isEmpty)
+    {
+      std::fputc(',', file);
+    }
+
+    std::fwrite(json.c_str(), sizeof(char), json.length(), file);
+    std::fputc(']', file);
+    std::fclose(file);
+    return true;
+  }
+
+  return false;
 }
 
 uint64_t current_time_ms()

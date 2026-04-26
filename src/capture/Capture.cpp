@@ -25,6 +25,17 @@ Capture::Capture(std::string _type, uint32_t _fs, uint32_t _fc, std::string _pat
   saveIq.store(false);
 }
 
+bool Capture::is_saving_iq() const
+{
+  return saveIq.load();
+}
+
+std::string Capture::get_current_iq_save_file() const
+{
+  std::lock_guard<std::mutex> lock(currentIqSaveFileMutex);
+  return currentIqSaveFile;
+}
+
 void Capture::process(IqData *buffer1, IqData *buffer2, c4::yml::NodeRef config, 
   std::string ip_capture, uint16_t port_capture)
 {
@@ -57,13 +68,21 @@ void Capture::process(IqData *buffer1, IqData *buffer2, c4::yml::NodeRef config,
           if (captureRequested)
           {
             // Open the file before exposing saveIq=true to live callbacks.
-            device->open_file();
+            const std::string iqSaveFile = device->open_file();
+            {
+              std::lock_guard<std::mutex> lock(currentIqSaveFileMutex);
+              currentIqSaveFile = iqSaveFile;
+            }
             saveIq.store(true);
           }
           else
           {
             saveIq.store(false);
             device->close_file();
+            {
+              std::lock_guard<std::mutex> lock(currentIqSaveFileMutex);
+              currentIqSaveFile.clear();
+            }
           }
         }
         std::this_thread::sleep_for(std::chrono::seconds(1));

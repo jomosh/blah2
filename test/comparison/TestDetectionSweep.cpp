@@ -5,11 +5,14 @@
 #include "data/IqData.h"
 #include "data/Map.h"
 #include "data/Detection.h"
+#include "data/meta/Constants.h"
 #include "process/ambiguity/Ambiguity.h"
 #include "process/clutter/WienerHopf.h"
 #include "process/detection/Centroid.h"
 #include "process/detection/CfarDetector1D.h"
 #include "process/detection/Interpolate.h"
+
+#include <rapidjson/document.h>
 
 #include <ryml/ryml.hpp>
 #include <ryml/ryml_std.hpp>
@@ -24,9 +27,11 @@
 #include <limits>
 #include <memory>
 #include <numeric>
+#include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <ctime>
 #include <vector>
 
 namespace
@@ -40,6 +45,11 @@ struct CliOptions
   std::vector<int> minDelays;
   std::vector<CfarMode> modes;
   uint64_t maxCpis = 0;
+  std::string adsbFile;
+  double adsbDelayWindowKm = 1.0;
+  double adsbDopplerWindowHz = 10.0;
+  uint64_t adsbMaxAgeMs = 0;
+  uint64_t captureStartMs = 0;
 };
 
 struct RuntimeConfig
@@ -62,6 +72,71 @@ struct RuntimeConfig
   double minDoppler = 0.0;
   CfarMode cfarMode = CfarMode::CAGO;
   uint16_t nCentroid = 0;
+  double delayBinWidthKm = 0.0;
+};
+
+struct AdsbTarget
+{
+  double delayKm = 0.0;
+  double dopplerHz = 0.0;
+  std::string label;
+};
+
+struct AdsbSnapshot
+{
+  uint64_t timestampMs = 0;
+  std::vector<AdsbTarget> targets;
+};
+
+struct AdsbMatchConfig
+{
+  double delayWindowKm = 1.0;
+  double dopplerWindowHz = 10.0;
+  uint64_t maxAgeMs = 0;
+};
+
+struct AdsbMatchSummary
+{
+  uint64_t cpisWithTruth = 0;
+  uint64_t matchedDetections = 0;
+  uint64_t falsePositives = 0;
+  uint64_t missedTruthTargets = 0;
+
+  uint64_t scoredDetections() const
+  {
+    return matchedDetections + falsePositives;
+  }
+
+  uint64_t totalTruthTargets() const
+  {
+    return matchedDetections + missedTruthTargets;
+  }
+
+  double match_rate() const
+  {
+    if (scoredDetections() == 0)
+    {
+      return std::numeric_limits<double>::quiet_NaN();
+    }
+    return static_cast<double>(matchedDetections) / static_cast<double>(scoredDetections());
+  }
+
+  double false_positive_rate() const
+  {
+    if (scoredDetections() == 0)
+    {
+      return std::numeric_limits<double>::quiet_NaN();
+    }
+    return static_cast<double>(falsePositives) / static_cast<double>(scoredDetections());
+  }
+};
+
+struct AdsbRunContext
+{
+  std::string file;
+  uint64_t captureStartMs = 0;
+  size_t snapshotCount = 0;
+  AdsbMatchConfig matchConfig;
 };
 
 struct SweepCase
@@ -75,6 +150,7 @@ struct SweepCase
   uint64_t cpisWithDetections = 0;
   uint64_t totalDetections = 0;
   double peakSnrSum = 0.0;
+  AdsbMatchSummary adsb;
 
   SweepCase(double _pfa, int8_t nGuard, int8_t nTrain, int _minDelay,
     double _minDoppler, CfarMode _mode)
@@ -124,6 +200,16 @@ struct SweepCase
       return std::numeric_limits<double>::quiet_NaN();
     }
     return peakSnrSum / static_cast<double>(cpisWithDetections);
+  }
+
+  double adsb_match_rate() const
+  {
+    return adsb.match_rate();
+  }
+
+  double adsb_false_positive_rate() const
+  {
+    return adsb.false_positive_rate();
   }
 };
 
@@ -213,10 +299,17 @@ void print_help()
     << "  --min-delay <csv>          Comma-separated minimum delay thresholds in bins.\n"
     << "  --cfar-modes <csv>         Comma-separated modes from CA,CAGO.\n"
     << "  --max-cpis <n>             Limit replay processing to the first n CPIs.\n"
+    << "  --adsb-file <file.adsb>    Optional timestamped ADS-B sidecar file for truth scoring.\n"
+    << "  --adsb-delay-window-km <x> Match window in bistatic range km (default 1.0).\n"
+    << "  --adsb-doppler-window-hz <x> Match window in Doppler Hz (default 10.0).\n"
+    << "  --adsb-max-age-ms <n>      Max gap to nearest ADS-B snapshot before a CPI is unscored.\n"
+    << "  --capture-start-ms <n>     Capture start time in POSIX ms; inferred from replay file name if omitted.\n"
     << "  --help                     Show this help text.\n\n"
     << "Example:\n"
     << "  testDetectionSweep --config config/config.yml --replay-file /tmp/capture.iq \\\n"
-    << "    --pfa 1e-5,1e-4,1e-3 --min-doppler 5,10,15 --min-delay 0,5,10 --cfar-modes CAGO\n";
+    << "    --pfa 1e-5,1e-4,1e-3 --min-doppler 5,10,15 --min-delay 0,5,10 --cfar-modes CAGO\n"
+    << "  testDetectionSweep --config config/config.yml --replay-file /tmp/capture.iq \\\n"
+    << "    --adsb-file /tmp/capture.adsb --adsb-delay-window-km 1.0 --adsb-doppler-window-hz 10\n";
 }
 
 bool parse_arguments(int argc, char **argv, CliOptions &options, int &exitCode)
@@ -288,6 +381,31 @@ bool parse_arguments(int argc, char **argv, CliOptions &options, int &exitCode)
       options.maxCpis = static_cast<uint64_t>(std::stoull(require_value(argument)));
       continue;
     }
+    if (argument == "--adsb-file")
+    {
+      options.adsbFile = require_value(argument);
+      continue;
+    }
+    if (argument == "--adsb-delay-window-km")
+    {
+      options.adsbDelayWindowKm = std::stod(require_value(argument));
+      continue;
+    }
+    if (argument == "--adsb-doppler-window-hz")
+    {
+      options.adsbDopplerWindowHz = std::stod(require_value(argument));
+      continue;
+    }
+    if (argument == "--adsb-max-age-ms")
+    {
+      options.adsbMaxAgeMs = static_cast<uint64_t>(std::stoull(require_value(argument)));
+      continue;
+    }
+    if (argument == "--capture-start-ms")
+    {
+      options.captureStartMs = static_cast<uint64_t>(std::stoull(require_value(argument)));
+      continue;
+    }
 
     throw std::invalid_argument("Unknown argument '" + argument + "'");
   }
@@ -320,6 +438,259 @@ std::string read_text_file(const std::string &path)
   return buffer.str();
 }
 
+std::string get_basename(const std::string &path)
+{
+  const size_t separator = path.find_last_of("/\\");
+  if (separator == std::string::npos)
+  {
+    return path;
+  }
+  return path.substr(separator + 1);
+}
+
+uint64_t parse_capture_start_ms_from_replay_file(const std::string &replayFile)
+{
+  const std::string basename = get_basename(replayFile);
+  if (basename.size() < 15)
+  {
+    throw std::runtime_error("Unable to infer capture start timestamp from replay file '" + replayFile + "'");
+  }
+
+  std::tm timeInfo = {};
+  std::istringstream timestampStream(basename.substr(0, 15));
+  timestampStream >> std::get_time(&timeInfo, "%Y%m%d-%H%M%S");
+  if (timestampStream.fail())
+  {
+    throw std::runtime_error(
+      "Unable to infer capture start timestamp from replay file '" + replayFile +
+      "'. Pass --capture-start-ms explicitly.");
+  }
+
+  const std::time_t captureStart = std::mktime(&timeInfo);
+  if (captureStart < 0)
+  {
+    throw std::runtime_error(
+      "Unable to convert inferred replay timestamp for '" + replayFile + "'");
+  }
+
+  return static_cast<uint64_t>(captureStart) * 1000;
+}
+
+uint64_t absolute_diff_u64(uint64_t left, uint64_t right)
+{
+  return (left > right) ? (left - right) : (right - left);
+}
+
+std::vector<double> parse_adsb_axis_values(const rapidjson::Value &value, const std::string &fieldName)
+{
+  std::vector<double> values;
+  if (value.IsNumber())
+  {
+    values.push_back(value.GetDouble());
+    return values;
+  }
+
+  if (!value.IsArray())
+  {
+    throw std::runtime_error("ADS-B target field '" + fieldName + "' must be a number or array of numbers");
+  }
+
+  values.reserve(value.Size());
+  for (const rapidjson::Value &entry : value.GetArray())
+  {
+    if (!entry.IsNumber())
+    {
+      throw std::runtime_error("ADS-B target field '" + fieldName + "' contains a non-numeric value");
+    }
+    values.push_back(entry.GetDouble());
+  }
+  return values;
+}
+
+void append_adsb_targets(const rapidjson::Value &target, const std::string &targetId,
+  std::vector<AdsbTarget> &targets)
+{
+  if (!target.IsObject())
+  {
+    return;
+  }
+
+  const auto delayMember = target.FindMember("delay");
+  const auto dopplerMember = target.FindMember("doppler");
+  if (delayMember == target.MemberEnd() || dopplerMember == target.MemberEnd())
+  {
+    return;
+  }
+
+  std::vector<double> delays = parse_adsb_axis_values(delayMember->value, targetId + ".delay");
+  std::vector<double> dopplers = parse_adsb_axis_values(dopplerMember->value, targetId + ".doppler");
+  const size_t nPoints = std::min(delays.size(), dopplers.size());
+  if (nPoints == 0)
+  {
+    return;
+  }
+
+  std::string label = targetId;
+  const auto flightMember = target.FindMember("flight");
+  if (flightMember != target.MemberEnd() && flightMember->value.IsString())
+  {
+    label = flightMember->value.GetString();
+  }
+
+  for (size_t i = 0; i < nPoints; i++)
+  {
+    targets.push_back({delays[i], dopplers[i], label});
+  }
+}
+
+std::vector<AdsbSnapshot> load_adsb_snapshots(const std::string &path)
+{
+  rapidjson::Document document;
+  const std::string contents = read_text_file(path);
+  document.Parse(contents.c_str());
+  if (document.HasParseError())
+  {
+    throw std::runtime_error("Unable to parse ADS-B sidecar file '" + path + "'");
+  }
+  if (!document.IsArray())
+  {
+    throw std::runtime_error("ADS-B sidecar file must be a JSON array: '" + path + "'");
+  }
+
+  std::vector<AdsbSnapshot> snapshots;
+  snapshots.reserve(document.Size());
+  for (const rapidjson::Value &entry : document.GetArray())
+  {
+    if (!entry.IsObject())
+    {
+      throw std::runtime_error("ADS-B sidecar entries must be objects");
+    }
+
+    const auto timestampMember = entry.FindMember("timestamp");
+    const auto targetsMember = entry.FindMember("targets");
+    if (timestampMember == entry.MemberEnd() || !timestampMember->value.IsUint64())
+    {
+      throw std::runtime_error("ADS-B sidecar entries must contain an unsigned integer timestamp");
+    }
+    if (targetsMember == entry.MemberEnd() || !targetsMember->value.IsObject())
+    {
+      throw std::runtime_error("ADS-B sidecar entries must contain a targets object");
+    }
+
+    AdsbSnapshot snapshot;
+    snapshot.timestampMs = timestampMember->value.GetUint64();
+    for (auto target = targetsMember->value.MemberBegin(); target != targetsMember->value.MemberEnd(); ++target)
+    {
+      append_adsb_targets(target->value, target->name.GetString(), snapshot.targets);
+    }
+    snapshots.push_back(std::move(snapshot));
+  }
+
+  std::sort(snapshots.begin(), snapshots.end(), [](const AdsbSnapshot &left, const AdsbSnapshot &right) {
+    return left.timestampMs < right.timestampMs;
+  });
+
+  return snapshots;
+}
+
+const AdsbSnapshot *find_adsb_snapshot(const std::vector<AdsbSnapshot> &snapshots,
+  uint64_t timestampMs, uint64_t maxAgeMs, size_t &cursor)
+{
+  if (snapshots.empty())
+  {
+    return nullptr;
+  }
+
+  if (cursor >= snapshots.size())
+  {
+    cursor = snapshots.size() - 1;
+  }
+
+  while (cursor + 1 < snapshots.size() && snapshots[cursor + 1].timestampMs <= timestampMs)
+  {
+    cursor++;
+  }
+
+  size_t bestIndex = cursor;
+  uint64_t bestDistance = absolute_diff_u64(snapshots[bestIndex].timestampMs, timestampMs);
+  if (cursor + 1 < snapshots.size())
+  {
+    const uint64_t nextDistance = absolute_diff_u64(snapshots[cursor + 1].timestampMs, timestampMs);
+    if (nextDistance < bestDistance)
+    {
+      bestIndex = cursor + 1;
+      bestDistance = nextDistance;
+    }
+  }
+
+  if (bestDistance > maxAgeMs)
+  {
+    return nullptr;
+  }
+
+  return &snapshots[bestIndex];
+}
+
+void record_adsb_match(const Detection &detection, const AdsbSnapshot &snapshot,
+  double delayBinWidthKm, const AdsbMatchConfig &config, AdsbMatchSummary &summary)
+{
+  summary.cpisWithTruth++;
+
+  const std::vector<double> &detectionDelay = detection.get_delay();
+  const std::vector<double> &detectionDoppler = detection.get_doppler();
+  std::vector<bool> matchedTargets(snapshot.targets.size(), false);
+
+  for (size_t i = 0; i < detection.get_nDetections(); i++)
+  {
+    const double delayKm = detectionDelay[i] * delayBinWidthKm;
+    const double dopplerHz = detectionDoppler[i];
+    int bestIndex = -1;
+    double bestScore = std::numeric_limits<double>::infinity();
+
+    for (size_t j = 0; j < snapshot.targets.size(); j++)
+    {
+      if (matchedTargets[j])
+      {
+        continue;
+      }
+
+      const double delayError = std::abs(delayKm - snapshot.targets[j].delayKm);
+      const double dopplerError = std::abs(dopplerHz - snapshot.targets[j].dopplerHz);
+      if (delayError > config.delayWindowKm || dopplerError > config.dopplerWindowHz)
+      {
+        continue;
+      }
+
+      const double delayScore = delayError / config.delayWindowKm;
+      const double dopplerScore = dopplerError / config.dopplerWindowHz;
+      const double score = (delayScore * delayScore) + (dopplerScore * dopplerScore);
+      if (score < bestScore)
+      {
+        bestScore = score;
+        bestIndex = static_cast<int>(j);
+      }
+    }
+
+    if (bestIndex >= 0)
+    {
+      matchedTargets[static_cast<size_t>(bestIndex)] = true;
+      summary.matchedDetections++;
+    }
+    else
+    {
+      summary.falsePositives++;
+    }
+  }
+
+  for (bool matched : matchedTargets)
+  {
+    if (!matched)
+    {
+      summary.missedTruthTargets++;
+    }
+  }
+}
+
 void validate_runtime_config(const RuntimeConfig &config)
 {
   if (config.replayFile.empty())
@@ -330,6 +701,7 @@ void validate_runtime_config(const RuntimeConfig &config)
   {
     throw std::runtime_error("Invalid capture/process config: fs and CPI must be positive finite values");
   }
+  config.delayBinWidthKm = Constants::c / static_cast<double>(config.fs) / 1000.0;
   if (config.nSamples == 0)
   {
     throw std::runtime_error("Derived CPI sample count is zero");
@@ -502,8 +874,18 @@ std::string format_metric(double value)
   return stream.str();
 }
 
+double sortable_metric(double value)
+{
+  if (std::isnan(value))
+  {
+    return -std::numeric_limits<double>::infinity();
+  }
+  return value;
+}
+
 void print_summary(const RuntimeConfig &config, const std::vector<SweepCase> &sweepCases,
-  uint64_t rawCpis, uint64_t analysedCpis, uint64_t skippedCpis)
+  uint64_t rawCpis, uint64_t analysedCpis, uint64_t skippedCpis,
+  const std::optional<AdsbRunContext> &adsbContext)
 {
   std::vector<const SweepCase *> ranked;
   ranked.reserve(sweepCases.size());
@@ -512,14 +894,30 @@ void print_summary(const RuntimeConfig &config, const std::vector<SweepCase> &sw
     ranked.push_back(&sweepCase);
   }
 
-  std::sort(ranked.begin(), ranked.end(), [](const SweepCase *left, const SweepCase *right) {
-    if (left->detection_rate() != right->detection_rate())
+  const bool hasAdsb = adsbContext.has_value();
+  std::sort(ranked.begin(), ranked.end(), [hasAdsb](const SweepCase *left, const SweepCase *right) {
+    if (hasAdsb)
     {
-      return left->detection_rate() > right->detection_rate();
+      if (sortable_metric(left->adsb_match_rate()) != sortable_metric(right->adsb_match_rate()))
+      {
+        return sortable_metric(left->adsb_match_rate()) > sortable_metric(right->adsb_match_rate());
+      }
+      if (sortable_metric(left->adsb_false_positive_rate()) != sortable_metric(right->adsb_false_positive_rate()))
+      {
+        return sortable_metric(left->adsb_false_positive_rate()) < sortable_metric(right->adsb_false_positive_rate());
+      }
+      if (left->adsb.matchedDetections != right->adsb.matchedDetections)
+      {
+        return left->adsb.matchedDetections > right->adsb.matchedDetections;
+      }
     }
-    if (left->mean_peak_snr() != right->mean_peak_snr())
+    if (sortable_metric(left->detection_rate()) != sortable_metric(right->detection_rate()))
     {
-      return left->mean_peak_snr() > right->mean_peak_snr();
+      return sortable_metric(left->detection_rate()) > sortable_metric(right->detection_rate());
+    }
+    if (sortable_metric(left->mean_peak_snr()) != sortable_metric(right->mean_peak_snr()))
+    {
+      return sortable_metric(left->mean_peak_snr()) > sortable_metric(right->mean_peak_snr());
     }
     return left->mean_detections() > right->mean_detections();
   });
@@ -530,6 +928,16 @@ void print_summary(const RuntimeConfig &config, const std::vector<SweepCase> &sw
   std::cout << "Skipped CPIs     : " << skippedCpis << "\n";
   std::cout << "Sweep cases      : " << sweepCases.size() << "\n\n";
 
+  if (hasAdsb)
+  {
+    std::cout << "ADS-B file       : " << adsbContext->file << "\n";
+    std::cout << "ADS-B snapshots  : " << adsbContext->snapshotCount << "\n";
+    std::cout << "Capture start ms : " << adsbContext->captureStartMs << "\n";
+    std::cout << "ADS-B range win  : " << format_metric(adsbContext->matchConfig.delayWindowKm) << " km\n";
+    std::cout << "ADS-B doppler win: " << format_metric(adsbContext->matchConfig.dopplerWindowHz) << " Hz\n";
+    std::cout << "ADS-B max age ms : " << adsbContext->matchConfig.maxAgeMs << "\n\n";
+  }
+
   std::cout << std::left
     << std::setw(6) << "Rank"
     << std::setw(8) << "Mode"
@@ -539,7 +947,20 @@ void print_summary(const RuntimeConfig &config, const std::vector<SweepCase> &sw
     << std::setw(12) << "HitRate"
     << std::setw(16) << "TotalDetect"
     << std::setw(16) << "Mean/CPI"
-    << std::setw(16) << "MeanPeakSnr"
+    << std::setw(16) << "MeanPeakSnr";
+
+  if (hasAdsb)
+  {
+    std::cout
+      << std::setw(12) << "TruthCPI"
+      << std::setw(12) << "MatchDet"
+      << std::setw(12) << "FalsePos"
+      << std::setw(12) << "MissedAdsb"
+      << std::setw(12) << "MatchPct"
+      << std::setw(12) << "FPRate";
+  }
+
+  std::cout
     << "\n";
 
   size_t rank = 1;
@@ -554,8 +975,20 @@ void print_summary(const RuntimeConfig &config, const std::vector<SweepCase> &sw
       << std::setw(12) << format_metric(sweepCase->detection_rate())
       << std::setw(16) << sweepCase->totalDetections
       << std::setw(16) << format_metric(sweepCase->mean_detections())
-      << std::setw(16) << format_metric(sweepCase->mean_peak_snr())
-      << "\n";
+      << std::setw(16) << format_metric(sweepCase->mean_peak_snr());
+
+    if (hasAdsb)
+    {
+      std::cout
+        << std::setw(12) << sweepCase->adsb.cpisWithTruth
+        << std::setw(12) << sweepCase->adsb.matchedDetections
+        << std::setw(12) << sweepCase->adsb.falsePositives
+        << std::setw(12) << sweepCase->adsb.missedTruthTargets
+        << std::setw(12) << format_metric(sweepCase->adsb_match_rate())
+        << std::setw(12) << format_metric(sweepCase->adsb_false_positive_rate());
+    }
+
+    std::cout << "\n";
     rank++;
   }
 }
@@ -574,6 +1007,42 @@ int main(int argc, char **argv)
 
     RuntimeConfig config = load_runtime_config(options);
     std::vector<SweepCase> sweepCases = build_sweep_cases(options, config);
+    std::vector<AdsbSnapshot> adsbSnapshots;
+    std::optional<AdsbRunContext> adsbContext;
+    if (!options.adsbFile.empty())
+    {
+      if (!(options.adsbDelayWindowKm > 0.0) || !(options.adsbDopplerWindowHz > 0.0))
+      {
+        throw std::runtime_error("ADS-B match windows must be positive");
+      }
+
+      AdsbRunContext runContext;
+      runContext.file = options.adsbFile;
+      runContext.captureStartMs = options.captureStartMs;
+      if (runContext.captureStartMs == 0)
+      {
+        runContext.captureStartMs = parse_capture_start_ms_from_replay_file(config.replayFile);
+      }
+      runContext.matchConfig.delayWindowKm = options.adsbDelayWindowKm;
+      runContext.matchConfig.dopplerWindowHz = options.adsbDopplerWindowHz;
+      if (options.adsbMaxAgeMs != 0)
+      {
+        runContext.matchConfig.maxAgeMs = options.adsbMaxAgeMs;
+      }
+      else
+      {
+        runContext.matchConfig.maxAgeMs = std::max<uint64_t>(
+          2000, static_cast<uint64_t>(std::llround(config.tCpi * 1000.0)));
+      }
+
+      adsbSnapshots = load_adsb_snapshots(options.adsbFile);
+      if (adsbSnapshots.empty())
+      {
+        throw std::runtime_error("ADS-B sidecar file did not contain any snapshots");
+      }
+      runContext.snapshotCount = adsbSnapshots.size();
+      adsbContext = runContext;
+    }
 
     std::ifstream replay(config.replayFile, std::ios::binary);
     if (!replay.is_open())
@@ -597,6 +1066,7 @@ int main(int argc, char **argv)
     uint64_t rawCpis = 0;
     uint64_t analysedCpis = 0;
     uint64_t skippedCpis = 0;
+    size_t adsbSnapshotCursor = 0;
 
     while (options.maxCpis == 0 || rawCpis < options.maxCpis)
     {
@@ -618,12 +1088,27 @@ int main(int argc, char **argv)
       map->set_metrics();
       analysedCpis++;
 
+      const AdsbSnapshot *adsbSnapshot = nullptr;
+      if (adsbContext.has_value())
+      {
+        const uint64_t cpiOffsetMs = static_cast<uint64_t>(
+          std::llround(static_cast<double>(rawCpis - 1) * config.tCpi * 1000.0));
+        const uint64_t cpiTimestampMs = adsbContext->captureStartMs + cpiOffsetMs;
+        adsbSnapshot = find_adsb_snapshot(adsbSnapshots, cpiTimestampMs,
+          adsbContext->matchConfig.maxAgeMs, adsbSnapshotCursor);
+      }
+
       for (SweepCase &sweepCase : sweepCases)
       {
         std::unique_ptr<Detection> detectionPhase1 = sweepCase.detector.process(map);
         std::unique_ptr<Detection> detectionPhase2 = centroid.process(detectionPhase1.get());
         std::unique_ptr<Detection> detection = interpolate.process(detectionPhase2.get(), map);
         sweepCase.record(*detection);
+        if (adsbSnapshot != nullptr)
+        {
+          record_adsb_match(*detection, *adsbSnapshot, config.delayBinWidthKm,
+            adsbContext->matchConfig, sweepCase.adsb);
+        }
       }
     }
 
@@ -636,7 +1121,13 @@ int main(int argc, char **argv)
       throw std::runtime_error("No CPIs were analysed. Check clutter filter stability or disable clutter for the sweep");
     }
 
-    print_summary(config, sweepCases, rawCpis, analysedCpis, skippedCpis);
+    if (adsbContext.has_value() && !sweepCases.empty() && sweepCases.front().adsb.cpisWithTruth == 0)
+    {
+      std::cerr << "Warning: ADS-B sidecar was loaded but no analysed CPI had a nearby truth snapshot within "
+        << adsbContext->matchConfig.maxAgeMs << " ms" << std::endl;
+    }
+
+    print_summary(config, sweepCases, rawCpis, analysedCpis, skippedCpis, adsbContext);
     return 0;
   }
   catch (const std::exception &error)

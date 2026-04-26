@@ -10,6 +10,7 @@
 #include <vector>
 #include <atomic>
 #include <memory>
+#include <mutex>
 #include <ryml/ryml.hpp>
 #include <ryml/ryml_std.hpp> // optional header, provided for std:: interop
 #include <c4/format.hpp> // needed for the examples below
@@ -28,6 +29,12 @@ private:
 
   /// @brief True if IQ data to be saved.
   std::atomic<bool> saveIq;
+
+  /// @brief Mutex protecting the active IQ save path.
+  mutable std::mutex currentIqSaveFileMutex;
+
+  /// @brief Full path of the currently active IQ capture file.
+  std::string currentIqSaveFile;
 
   /// @brief True if file replay is enabled.
   bool replay;
@@ -78,6 +85,14 @@ public:
   /// @param file Absolute path of file to replay.
   /// @return Void.
   void set_replay(bool loop, std::string file);
+
+  /// @brief Check whether live IQ capture is currently active.
+  /// @return True when the capture toggle is actively saving IQ samples.
+  bool is_saving_iq() const;
+
+  /// @brief Get the current IQ capture file path.
+  /// @return Full path of the active IQ file, or empty when capture is idle.
+  std::string get_current_iq_save_file() const;
 
 };
 
