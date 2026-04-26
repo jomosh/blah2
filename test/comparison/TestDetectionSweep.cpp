@@ -487,28 +487,54 @@ uint64_t absolute_diff_u64(uint64_t left, uint64_t right)
   return (left > right) ? (left - right) : (right - left);
 }
 
+double parse_adsb_numeric_value(const rapidjson::Value &value, const std::string &fieldName)
+{
+  if (value.IsNumber())
+  {
+    return value.GetDouble();
+  }
+
+  if (!value.IsString())
+  {
+    throw std::runtime_error("ADS-B target field '" + fieldName + "' must be numeric or a numeric string");
+  }
+
+  try
+  {
+    size_t parsedLength = 0;
+    const std::string text = value.GetString();
+    const double parsedValue = std::stod(text, &parsedLength);
+    if (parsedLength != text.size())
+    {
+      throw std::runtime_error("ADS-B target field '" + fieldName + "' contains trailing characters");
+    }
+    return parsedValue;
+  }
+  catch (const std::exception &)
+  {
+    throw std::runtime_error("ADS-B target field '" + fieldName + "' must be a parseable number");
+  }
+}
+
 std::vector<double> parse_adsb_axis_values(const rapidjson::Value &value, const std::string &fieldName)
 {
   std::vector<double> values;
-  if (value.IsNumber())
+  if (value.IsNumber() || value.IsString())
   {
-    values.push_back(value.GetDouble());
+    values.push_back(parse_adsb_numeric_value(value, fieldName));
     return values;
   }
 
   if (!value.IsArray())
   {
-    throw std::runtime_error("ADS-B target field '" + fieldName + "' must be a number or array of numbers");
+    throw std::runtime_error(
+      "ADS-B target field '" + fieldName + "' must be a number, numeric string, or array of those values");
   }
 
   values.reserve(value.Size());
   for (const rapidjson::Value &entry : value.GetArray())
   {
-    if (!entry.IsNumber())
-    {
-      throw std::runtime_error("ADS-B target field '" + fieldName + "' contains a non-numeric value");
-    }
-    values.push_back(entry.GetDouble());
+    values.push_back(parse_adsb_numeric_value(entry, fieldName));
   }
   return values;
 }
