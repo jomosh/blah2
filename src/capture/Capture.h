@@ -8,7 +8,9 @@
 
 #include <string>
 #include <vector>
+#include <atomic>
 #include <memory>
+#include <mutex>
 #include <ryml/ryml.hpp>
 #include <ryml/ryml_std.hpp> // optional header, provided for std:: interop
 #include <c4/format.hpp> // needed for the examples below
@@ -26,7 +28,16 @@ private:
   std::string type;
 
   /// @brief True if IQ data to be saved.
-  bool saveIq;
+  std::atomic<bool> saveIq;
+
+  /// @brief Mutex protecting the active IQ save path.
+  mutable std::mutex currentIqSaveFileMutex;
+
+  /// @brief Full path of the currently active IQ capture file.
+  std::string currentIqSaveFile;
+
+  /// @brief POSIX ms when the current IQ capture window started.
+  uint64_t currentIqCaptureStartMs = 0;
 
   /// @brief True if file replay is enabled.
   bool replay;
@@ -38,6 +49,13 @@ private:
   std::string file;
 
 public:
+
+  /// @brief Active IQ capture window state.
+  struct ActiveIqCapture
+  {
+    std::string file;
+    uint64_t startMs = 0;
+  };
 
   /// @brief Sampling frequency (Hz).
   uint32_t fs;
@@ -77,6 +95,14 @@ public:
   /// @param file Absolute path of file to replay.
   /// @return Void.
   void set_replay(bool loop, std::string file);
+
+  /// @brief Check whether live IQ capture is currently active.
+  /// @return True when the capture toggle is actively saving IQ samples.
+  bool is_saving_iq() const;
+
+  /// @brief Get the current IQ capture state.
+  /// @return Active IQ capture file path and the explicit capture start time.
+  ActiveIqCapture get_active_iq_capture() const;
 
 };
 

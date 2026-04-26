@@ -69,7 +69,7 @@ sudo docker compose up -d --build --force-recreate
   - `?api_base=//<host>:<port>` (example: `?api_base=//localhost:3100`)
 - Controller behavior follows the same API targeting rules:
   - API/Stash links on `/controller` are rewritten using the active `api_port`/`api_base` values.
-  - Spacebar capture toggle on `/` calls the API using the same resolved base URL.
+  - IQ Capture buttons on the detection map pages call the API using the same resolved base URL.
 - Example node2 UI URLs:
   - `http://localhost:49153/?api_port=3100`
   - `http://localhost:49153/controller?api_port=3100`

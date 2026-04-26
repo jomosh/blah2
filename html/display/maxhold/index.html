@@ -18,8 +18,17 @@
   <div class="container-fluid" style="height: 100vh; width: 95vw">
     <div class="row g-2">
       <div class="col-lg-9">
-        <div style="height: calc(100vh - 72px); width: 100%;" class="row d-flex">
-          <div class="justify-content-center" id="data"></div>
+        <div style="height: calc(100vh - 72px); width: 100%;" class="d-flex flex-column">
+          <div class="d-flex justify-content-end mb-2">
+            <div class="d-flex flex-wrap align-items-center gap-2 border rounded bg-white px-3 py-2 shadow-sm" data-iq-capture-control>
+              <span class="small text-uppercase text-muted">IQ Capture</span>
+              <span class="badge text-bg-secondary" data-iq-capture-status>Checking...</span>
+              <button type="button" class="btn btn-sm btn-outline-secondary" data-iq-capture-toggle disabled>IQ Capture Unavailable</button>
+            </div>
+          </div>
+          <div class="flex-grow-1 d-flex">
+            <div class="justify-content-center h-100 w-100" id="data"></div>
+          </div>
         </div>
       </div>
       <div class="col-lg-3">
@@ -46,5 +55,6 @@
   var urlMap = '/stash/map';
 </script>
 <script src="../../js/common.js"></script>
+<script src="../../control.js"></script>
 <script src="../../js/plot_map.js"></script>
 </html>

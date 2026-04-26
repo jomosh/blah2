@@ -7,7 +7,7 @@
 
 // constructor
 Kraken::Kraken(std::string _type, uint32_t _fc, uint32_t _fs, 
-  std::string _path, bool *_saveIq, std::vector<double> _gain)
+    std::string _path, std::atomic<bool> *_saveIq, std::vector<double> _gain)
     : Source(_type, _fc, _fs, _path, _saveIq)
 {
     // convert gain to tenths of dB
@@ -86,8 +86,14 @@ void Kraken::stop()
 void Kraken::process(IqData *buffer1, IqData *buffer2)
 {
     std::vector<std::thread> threads;
-    threads.emplace_back(rtlsdr_read_async, devs[0], callback, buffer1, 0, 16 * 16384);
-    threads.emplace_back(rtlsdr_read_async, devs[1], callback, buffer2, 0, 16 * 16384);
+    callbackContexts[0].device = this;
+    callbackContexts[0].buffer = buffer1;
+    callbackContexts[0].channelIndex = 0;
+    callbackContexts[1].device = this;
+    callbackContexts[1].buffer = buffer2;
+    callbackContexts[1].channelIndex = 1;
+    threads.emplace_back(rtlsdr_read_async, devs[0], callback, &callbackContexts[0], 0, 16 * 16384);
+    threads.emplace_back(rtlsdr_read_async, devs[1], callback, &callbackContexts[1], 0, 16 * 16384);
     // join threads
     for (auto& thread : threads) {
         thread.join();
@@ -96,8 +102,9 @@ void Kraken::process(IqData *buffer1, IqData *buffer2)
 
 void Kraken::callback(unsigned char *buf, uint32_t len, void *ctx) 
 {
-    IqData* buffer_blah2 = (IqData*)ctx;
-    int8_t* buffer_kraken = (int8_t*)buf;
+    CallbackContext *context = static_cast<CallbackContext *>(ctx);
+    IqData *buffer_blah2 = context->buffer;
+    int8_t *buffer_kraken = reinterpret_cast<int8_t *>(buf);
 
     buffer_blah2->lock();
 
@@ -109,11 +116,20 @@ void Kraken::callback(unsigned char *buf, uint32_t len, void *ctx)
     }
 
     buffer_blah2->unlock_and_notify();
+
+        context->device->append_save_samples(context->channelIndex, buffer_kraken,
+            static_cast<size_t>(len / 2));
+}
+
+void Kraken::append_save_samples(size_t channelIndex, const int8_t *samples,
+    size_t nComplexSamples)
+{
+    append_blah2_paired_iq_samples(channelIndex, samples, nComplexSamples);
 }
 
 void Kraken::replay(IqData *buffer1, IqData *buffer2, std::string _file, bool _loop)
 {
-    // todo
+    replay_blah2_iq_file(buffer1, buffer2, _file, _loop);
 }
 
 void Kraken::check_status(int status, std::string message)

@@ -3,14 +3,14 @@
 /// @brief A class to capture data on the HackRF.
 /// @author sdn-ninja
 /// @author 30hours
-/// @todo Replay functionality.
-
 #ifndef HACKRF_H
 #define HACKRF_H
 
 #include "capture/Source.h"
 #include "data/IqData.h"
 
+#include <complex>
+#include <cstddef>
 #include <stdint.h>
 #include <string>
 #include <vector>
@@ -33,10 +33,28 @@ private:
   /// @brief Enable extra amplifier U13 on receive.
   std::vector<bool> ampEnable;
 
+  /// @brief Callback context for each HackRF receive stream.
+  struct CallbackContext
+  {
+    HackRf *device;
+    IqData *buffer;
+    size_t channelIndex;
+  };
+
+  /// @brief Context data passed into each HackRF callback.
+  CallbackContext callbackContexts[2];
+
   /// @brief Check status of HackRF API returns.
   /// @param status Return code of API call.
   /// @param message Message if API call error.
   void check_status(uint8_t status, std::string message);
+
+  /// @brief Append callback samples into the paired IQ save queues.
+  /// @param channelIndex Zero-based channel index.
+  /// @param samples Pointer to interleaved IQ byte samples.
+  /// @param nComplexSamples Number of IQ samples in this callback.
+  void append_save_samples(size_t channelIndex, const int8_t *samples,
+    size_t nComplexSamples);
 
 protected:
   /// @brief Array of pointers to HackRF devices.
@@ -54,7 +72,7 @@ public:
   /// @param path Path to save IQ data.
   /// @return The object.
   HackRf(std::string type, uint32_t fc, uint32_t fs, std::string path, 
-    bool *saveIq, std::vector<std::string> serial, 
+    std::atomic<bool> *saveIq, std::vector<std::string> serial, 
     std::vector<uint32_t> gainLna, std::vector<uint32_t> gainVga, 
     std::vector<bool> ampEnable);
 

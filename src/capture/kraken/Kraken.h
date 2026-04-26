@@ -12,14 +12,14 @@
 /// Also works using 2 RTL-SDRs which have been clock synchronised.
 /// @author 30hours, Michael Brock, sdn-ninja
 /// @todo Add support for multiple surveillance channels.
-/// @todo Replay support.
-
 #ifndef KRAKEN_H
 #define KRAKEN_H
 
 #include "capture/Source.h"
 #include "data/IqData.h"
 
+#include <complex>
+#include <cstddef>
 #include <stdint.h>
 #include <string>
 #include <vector>
@@ -38,11 +38,29 @@ private:
   /// @brief Gain for each channel.
   std::vector<int> gain;
 
+  /// @brief Callback context for each Kraken receive stream.
+  struct CallbackContext
+  {
+    Kraken *device;
+    IqData *buffer;
+    size_t channelIndex;
+  };
+
+  /// @brief Context data passed into each Kraken callback.
+  CallbackContext callbackContexts[2];
+
   /// @brief Check status of API returns.
   /// @param status Return code of API call.
   /// @param message Message if API call error.
   /// @return Void.
   void check_status(int status, std::string message);
+
+  /// @brief Append callback samples into the paired IQ save queues.
+  /// @param channelIndex Zero-based channel index.
+  /// @param samples Pointer to interleaved IQ byte samples.
+  /// @param nComplexSamples Number of IQ samples in this callback.
+  void append_save_samples(size_t channelIndex, const int8_t *samples,
+    size_t nComplexSamples);
 
   /// @brief Callback function when buffer is filled.
   /// @param buf Pointer to buffer of IQ data.
@@ -58,7 +76,7 @@ public:
   /// @param path Path to save IQ data.
   /// @return The object.
   Kraken(std::string type, uint32_t fc, uint32_t fs, std::string path, 
-    bool *saveIq, std::vector<double> gain);
+    std::atomic<bool> *saveIq, std::vector<double> gain);
 
   /// @brief Implement capture function on KrakenSDR.
   /// @param buffer Pointers to buffers for each channel.

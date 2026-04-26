@@ -8,7 +8,6 @@
 /// Requires a USB 3.0 cable for higher data rates.
 ///
 /// @author 30hours
-/// @todo Add replay to Usrp.
 /// @todo Fix single overflow per CPI.
 /// @todo Fix occasional timeout ERROR_CODE_TIMEOUT.
 
@@ -46,7 +45,7 @@ public:
   /// @param path Path to save IQ data.
   /// @return The object.
   Usrp(std::string type, uint32_t fc, uint32_t fs, std::string path, 
-    bool *saveIq, std::string address, std::string subdev, 
+    std::atomic<bool> *saveIq, std::string address, std::string subdev, 
     std::vector<std::string> antenna, std::vector<double> gain);
 
   /// @brief Implement capture function on USRP.
@@ -63,7 +62,7 @@ public:
   /// @return Void.
   void stop();
 
-  /// @brief Implement replay function on RSPduo.
+  /// @brief Replay a Blah2 two-channel IQ file.
   /// @param buffer1 Pointer to reference buffer.
   /// @param buffer2 Pointer to surveillance buffer.
   /// @param file Path to file to replay data from.

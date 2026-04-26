@@ -1,13 +1,12 @@
 #include "HackRf.h"
 
 #include <iostream>
-#include <complex>
 #include <stdexcept>
 #include <unordered_set>
 
 // constructor
 HackRf::HackRf(std::string _type, uint32_t _fc, uint32_t _fs, 
-  std::string _path, bool *_saveIq, std::vector<std::string> _serial,
+  std::string _path, std::atomic<bool> *_saveIq, std::vector<std::string> _serial,
   std::vector<uint32_t> _gainLna, std::vector<uint32_t> _gainVga, 
   std::vector<bool> _ampEnable)
     : Source(_type, _fc, _fs, _path, _saveIq)
@@ -106,17 +105,25 @@ void HackRf::stop()
 
 void HackRf::process(IqData *buffer1, IqData *buffer2)
 {
+    callbackContexts[0].device = this;
+    callbackContexts[0].buffer = buffer1;
+    callbackContexts[0].channelIndex = 0;
+    callbackContexts[1].device = this;
+    callbackContexts[1].buffer = buffer2;
+    callbackContexts[1].channelIndex = 1;
+
     int status;
-    status = hackrf_start_rx(dev[1], rx_callback, buffer2);
+    status = hackrf_start_rx(dev[1], rx_callback, &callbackContexts[1]);
     check_status(status, "Failed to start RX streaming.");
-    status = hackrf_start_rx(dev[0], rx_callback, buffer1);
+    status = hackrf_start_rx(dev[0], rx_callback, &callbackContexts[0]);
     check_status(status, "Failed to start RX streaming.");
 }
 
 int HackRf::rx_callback(hackrf_transfer* transfer)
 {
-  IqData* buffer_blah2 = (IqData*)transfer->rx_ctx;
-  int8_t* buffer_hackrf = (int8_t*) transfer->buffer;
+  CallbackContext *context = static_cast<CallbackContext *>(transfer->rx_ctx);
+  IqData *buffer_blah2 = context->buffer;
+  int8_t *buffer_hackrf = reinterpret_cast<int8_t *>(transfer->buffer);
 
   buffer_blah2->lock();
 
@@ -129,11 +136,20 @@ int HackRf::rx_callback(hackrf_transfer* transfer)
 
   buffer_blah2->unlock_and_notify();
 
+  context->device->append_save_samples(context->channelIndex, buffer_hackrf,
+    static_cast<size_t>(transfer->buffer_length / 2));
+
   return 0;
+}
+
+void HackRf::append_save_samples(size_t channelIndex, const int8_t *samples,
+  size_t nComplexSamples)
+{
+  append_blah2_paired_iq_samples(channelIndex, samples, nComplexSamples);
 }
 
 void HackRf::replay(IqData *buffer1, IqData *buffer2, std::string _file, bool _loop)
 {
-  return;
+  replay_blah2_iq_file(buffer1, buffer2, _file, _loop);
 }
 
