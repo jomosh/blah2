@@ -151,6 +151,17 @@ target_link_libraries(testDetectionPhaseB PRIVATE
 set_target_properties(testDetectionPhaseB PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_TEST_UNIT_DIR}")
 
+add_executable(testCentroid
+  test/unit/process/detection/TestCentroid.cpp
+  src/data/Detection.cpp
+  src/process/detection/Centroid.cpp
+)
+target_link_libraries(testCentroid PRIVATE
+  Catch2::Catch2WithMain
+)
+set_target_properties(testCentroid PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_TEST_UNIT_DIR}")
+
 add_executable(testSource
   test/unit/capture/TestSource.cpp
   src/capture/Source.cpp
@@ -191,3 +202,4 @@ add_test(NAME testTracker COMMAND testTracker)
 add_test(NAME testSource COMMAND testSource)
 add_test(NAME testDetectionPhaseA COMMAND testDetectionPhaseA)
 add_test(NAME testDetectionPhaseB COMMAND testDetectionPhaseB)
+add_test(NAME testCentroid COMMAND testCentroid)

@@ -34,6 +34,7 @@ process:
     minDelay: 5
     minDoppler: 15
     cfarMode: "CAGO" # Available types: CA, CAGO
+    postProcessMode: "cluster-centroid" # Available modes: local-peak, cluster-centroid
     nCentroid: 6
   tracker:
     enable: true

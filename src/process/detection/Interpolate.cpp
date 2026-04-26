@@ -5,6 +5,41 @@
 #include <stdint.h>
 #include <algorithm>
 
+namespace
+{
+size_t nearest_delay_index(const std::deque<int> &delayBins, double delay)
+{
+  size_t bestIndex = 0;
+  double bestDistance = std::abs(delay - static_cast<double>(delayBins[0]));
+  for (size_t index = 1; index < delayBins.size(); index++)
+  {
+    const double candidateDistance = std::abs(delay - static_cast<double>(delayBins[index]));
+    if (candidateDistance < bestDistance)
+    {
+      bestDistance = candidateDistance;
+      bestIndex = index;
+    }
+  }
+  return bestIndex;
+}
+
+size_t nearest_doppler_index(const std::deque<double> &dopplerBins, double doppler)
+{
+  size_t bestIndex = 0;
+  double bestDistance = std::abs(doppler - dopplerBins[0]);
+  for (size_t index = 1; index < dopplerBins.size(); index++)
+  {
+    const double candidateDistance = std::abs(doppler - dopplerBins[index]);
+    if (candidateDistance < bestDistance)
+    {
+      bestDistance = candidateDistance;
+      bestIndex = index;
+    }
+  }
+  return bestIndex;
+}
+}
+
 // constructor
 Interpolate::Interpolate(bool _doDelay, bool _doDoppler)
 {
@@ -31,9 +66,18 @@ std::unique_ptr<Detection> Interpolate::process(Detection *x, Map<std::complex<d
   std::deque<int> indexDelay = y->delay;
   std::deque<double> indexDoppler = y->doppler;
 
+  if (indexDelay.empty() || indexDoppler.empty())
+  {
+    return std::make_unique<Detection>(delay, doppler, snr);
+  }
+
   // loop over every detection
   for (size_t i = 0; i < snr.size(); i++)
   {
+    const size_t delayIndex = nearest_delay_index(indexDelay, delay[i]);
+    const size_t dopplerIndex = nearest_doppler_index(indexDoppler, doppler[i]);
+    const double centerDelay = static_cast<double>(indexDelay[delayIndex]);
+    const double centerDoppler = indexDoppler[dopplerIndex];
     bool useDelayInterpolation = doDelay;
     bool useDopplerInterpolation = doDoppler;
     // initialise interpolated values for bool flags
@@ -45,15 +89,15 @@ std::unique_ptr<Detection> Interpolate::process(Detection *x, Map<std::complex<d
     if (useDelayInterpolation)
     {
       // check not on boundary
-      if (delay[i] == indexDelay[0] || delay[i] == indexDelay.back())
+      if (delayIndex == 0 || delayIndex + 1 >= indexDelay.size())
       {
         useDelayInterpolation = false;
       }
       if (useDelayInterpolation)
       {
-        intSnr[0] = (double)10*std::log10(std::abs(y->data[y->doppler_hz_to_bin(doppler[i])][delay[i]-1-indexDelay[0]]))-y->noisePower;
-        intSnr[1] = (double)10*std::log10(std::abs(y->data[y->doppler_hz_to_bin(doppler[i])][delay[i]-indexDelay[0]]))-y->noisePower;
-        intSnr[2] = (double)10*std::log10(std::abs(y->data[y->doppler_hz_to_bin(doppler[i])][delay[i]+1-indexDelay[0]]))-y->noisePower;
+        intSnr[0] = (double)10*std::log10(std::abs(y->data[dopplerIndex][delayIndex - 1]))-y->noisePower;
+        intSnr[1] = (double)10*std::log10(std::abs(y->data[dopplerIndex][delayIndex]))-y->noisePower;
+        intSnr[2] = (double)10*std::log10(std::abs(y->data[dopplerIndex][delayIndex + 1]))-y->noisePower;
         // check detection has peak SNR of neighbours
         if (intSnr[1] < intSnr[0] || intSnr[1] < intSnr[2])
         {
@@ -62,22 +106,22 @@ std::unique_ptr<Detection> Interpolate::process(Detection *x, Map<std::complex<d
         }
         intDelay = (intSnr[0]-intSnr[2])/(2*(intSnr[0]-(2*intSnr[1])+intSnr[2]));
         intSnrDelay = intSnr[1] - (((intSnr[0]-intSnr[2])*intDelay)/4);
-        intDelay = delay[i] + intDelay;
+        intDelay = centerDelay + ((indexDelay[delayIndex + 1] - indexDelay[delayIndex]) * intDelay);
       }
     }
     // interpolate in Doppler
     if (useDopplerInterpolation)
     {
       // check not on boundary
-      if (doppler[i] == indexDoppler[0] || doppler[i] == indexDoppler.back())
+      if (dopplerIndex == 0 || dopplerIndex + 1 >= indexDoppler.size())
       {
         useDopplerInterpolation = false;
       }
       if (useDopplerInterpolation)
       {
-        intSnr[0] = (double)10*std::log10(std::abs(y->data[y->doppler_hz_to_bin(doppler[i])-1][delay[i]-indexDelay[0]]))-y->noisePower;
-        intSnr[1] = (double)10*std::log10(std::abs(y->data[y->doppler_hz_to_bin(doppler[i])][delay[i]-indexDelay[0]]))-y->noisePower;
-        intSnr[2] = (double)10*std::log10(std::abs(y->data[y->doppler_hz_to_bin(doppler[i])+1][delay[i]-indexDelay[0]]))-y->noisePower;
+        intSnr[0] = (double)10*std::log10(std::abs(y->data[dopplerIndex - 1][delayIndex]))-y->noisePower;
+        intSnr[1] = (double)10*std::log10(std::abs(y->data[dopplerIndex][delayIndex]))-y->noisePower;
+        intSnr[2] = (double)10*std::log10(std::abs(y->data[dopplerIndex + 1][delayIndex]))-y->noisePower;
         // check detection has peak SNR of neighbours
         if (intSnr[1] < intSnr[0] || intSnr[1] < intSnr[2])
         {
@@ -85,7 +129,7 @@ std::unique_ptr<Detection> Interpolate::process(Detection *x, Map<std::complex<d
         }
         intDoppler = (intSnr[0]-intSnr[2])/(2*(intSnr[0]-(2*intSnr[1])+intSnr[2]));
         intSnrDoppler = intSnr[1] - (((intSnr[0]-intSnr[2])*intDoppler)/4);
-        intDoppler = doppler[i] + ((indexDoppler[1]-indexDoppler[0])*intDoppler);
+        intDoppler = centerDoppler + ((indexDoppler[dopplerIndex + 1]-indexDoppler[dopplerIndex])*intDoppler);
       }
     }
     // store interpolated detections

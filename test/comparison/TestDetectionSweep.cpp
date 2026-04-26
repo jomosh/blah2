@@ -44,6 +44,7 @@ struct CliOptions
   std::vector<double> minDopplers;
   std::vector<int> minDelays;
   std::vector<CfarMode> modes;
+  std::vector<CentroidMode> centroidModes;
   uint64_t maxCpis = 0;
   std::string adsbFile;
   double adsbDelayWindowKm = 1.0;
@@ -71,6 +72,7 @@ struct RuntimeConfig
   double pfa = 0.0;
   double minDoppler = 0.0;
   CfarMode cfarMode = CfarMode::CAGO;
+  CentroidMode centroidMode = CentroidMode::LocalPeak;
   uint16_t nCentroid = 0;
   double delayBinWidthKm = 0.0;
 };
@@ -151,7 +153,9 @@ struct SweepCase
   double minDoppler;
   int minDelay;
   CfarMode mode;
+  CentroidMode centroidMode;
   CfarDetector1D detector;
+  Centroid centroid;
   uint64_t cpisProcessed = 0;
   uint64_t cpisWithDetections = 0;
   uint64_t totalDetections = 0;
@@ -159,12 +163,15 @@ struct SweepCase
   AdsbMatchSummary adsb;
 
   SweepCase(double _pfa, int8_t nGuard, int8_t nTrain, int _minDelay,
-    double _minDoppler, CfarMode _mode)
+    double _minDoppler, CfarMode _mode, uint16_t _nCentroid,
+    double _tCpi, CentroidMode _centroidMode)
     : pfa(_pfa),
       minDoppler(_minDoppler),
       minDelay(_minDelay),
       mode(_mode),
-      detector(_pfa, nGuard, nTrain, static_cast<int8_t>(_minDelay), _minDoppler, _mode)
+      centroidMode(_centroidMode),
+      detector(_pfa, nGuard, nTrain, static_cast<int8_t>(_minDelay), _minDoppler, _mode),
+      centroid(_nCentroid, _nCentroid, 1.0 / _tCpi, _centroidMode)
   {
   }
 
@@ -304,6 +311,7 @@ void print_help()
     << "  --min-doppler <csv>        Comma-separated minimum Doppler thresholds in Hz.\n"
     << "  --min-delay <csv>          Comma-separated minimum delay thresholds in bins.\n"
     << "  --cfar-modes <csv>         Comma-separated modes from CA,CAGO.\n"
+    << "  --post-process-modes <csv> Comma-separated modes from local-peak,cluster-centroid.\n"
     << "  --max-cpis <n>             Limit replay processing to the first n CPIs.\n"
     << "  --adsb-file <file.adsb>    Optional timestamped ADS-B sidecar file for truth scoring.\n"
     << "  --adsb-delay-window-km <x> Match window in bistatic range km (default 1.0).\n"
@@ -313,7 +321,8 @@ void print_help()
     << "  --help                     Show this help text.\n\n"
     << "Example:\n"
     << "  testDetectionSweep --config config/config.yml --replay-file /tmp/capture.iq \\\n"
-    << "    --pfa 1e-5,1e-4,1e-3 --min-doppler 5,10,15 --min-delay 0,5,10 --cfar-modes CAGO\n"
+    << "    --pfa 1e-5,1e-4,1e-3 --min-doppler 5,10,15 --min-delay 0,5,10 \\\n"
+    << "    --cfar-modes CAGO --post-process-modes local-peak,cluster-centroid\n"
     << "  testDetectionSweep --config config/config.yml --replay-file /tmp/capture.iq \\\n"
     << "    --adsb-file /tmp/capture.adsb --adsb-delay-window-km 1.0 --adsb-doppler-window-hz 10\n";
 }
@@ -382,6 +391,18 @@ bool parse_arguments(int argc, char **argv, CliOptions &options, int &exitCode)
       });
       continue;
     }
+    if (argument == "--post-process-modes")
+    {
+      options.centroidModes = parse_csv_list<CentroidMode>(require_value(argument), [](const std::string &value) {
+        CentroidMode mode = CentroidMode::LocalPeak;
+        if (!try_parse_centroid_mode(value, mode))
+        {
+          throw std::invalid_argument("Unsupported post-process mode '" + value + "'");
+        }
+        return mode;
+      });
+      continue;
+    }
     if (argument == "--max-cpis")
     {
       options.maxCpis = static_cast<uint64_t>(std::stoull(require_value(argument)));
@@ -428,6 +449,7 @@ bool parse_arguments(int argc, char **argv, CliOptions &options, int &exitCode)
   dedupe_preserve_order(options.minDopplers);
   dedupe_preserve_order(options.minDelays);
   dedupe_preserve_order(options.modes);
+  dedupe_preserve_order(options.centroidModes);
   return true;
 }
 
@@ -803,6 +825,17 @@ RuntimeConfig load_runtime_config(const CliOptions &options)
     throw std::runtime_error("Unsupported process.detection.cfarMode '" + modeString + "'");
   }
 
+  std::string centroidModeString = "local-peak";
+  auto centroidModeNode = tree["process"]["detection"]["postProcessMode"];
+  if (centroidModeNode.valid())
+  {
+    centroidModeNode >> centroidModeString;
+  }
+  if (!try_parse_centroid_mode(centroidModeString, config.centroidMode))
+  {
+    throw std::runtime_error("Unsupported process.detection.postProcessMode '" + centroidModeString + "'");
+  }
+
   if (!options.replayFile.empty())
   {
     config.replayFile = options.replayFile;
@@ -827,6 +860,7 @@ std::vector<SweepCase> build_sweep_cases(const CliOptions &options, const Runtim
   std::vector<double> minDopplers = options.minDopplers;
   std::vector<int> minDelays = options.minDelays;
   std::vector<CfarMode> modes = options.modes;
+  std::vector<CentroidMode> centroidModes = options.centroidModes;
 
   if (pfas.empty())
   {
@@ -843,6 +877,10 @@ std::vector<SweepCase> build_sweep_cases(const CliOptions &options, const Runtim
   if (modes.empty())
   {
     modes.push_back(config.cfarMode);
+  }
+  if (centroidModes.empty())
+  {
+    centroidModes.push_back(config.centroidMode);
   }
 
   for (double pfa : pfas)
@@ -862,22 +900,49 @@ std::vector<SweepCase> build_sweep_cases(const CliOptions &options, const Runtim
   }
 
   std::vector<SweepCase> sweepCases;
-  for (CfarMode mode : modes)
+  for (CentroidMode centroidMode : centroidModes)
   {
-    for (double pfa : pfas)
+    for (CfarMode mode : modes)
     {
-      for (double minDoppler : minDopplers)
+      for (double pfa : pfas)
       {
-        for (int minDelay : minDelays)
+        for (double minDoppler : minDopplers)
         {
-          sweepCases.emplace_back(pfa, static_cast<int8_t>(config.nGuard),
-            static_cast<int8_t>(config.nTrain), minDelay, minDoppler, mode);
+          for (int minDelay : minDelays)
+          {
+            sweepCases.emplace_back(pfa, static_cast<int8_t>(config.nGuard),
+              static_cast<int8_t>(config.nTrain), minDelay, minDoppler, mode,
+              config.nCentroid, config.tCpi, centroidMode);
+          }
         }
       }
     }
   }
 
   return sweepCases;
+}
+
+std::string format_centroid_modes(const std::vector<SweepCase> &sweepCases)
+{
+  std::vector<CentroidMode> modes;
+  for (const SweepCase &sweepCase : sweepCases)
+  {
+    if (std::find(modes.begin(), modes.end(), sweepCase.centroidMode) == modes.end())
+    {
+      modes.push_back(sweepCase.centroidMode);
+    }
+  }
+
+  std::ostringstream stream;
+  for (size_t index = 0; index < modes.size(); index++)
+  {
+    if (index > 0)
+    {
+      stream << ", ";
+    }
+    stream << format_centroid_mode(modes[index]);
+  }
+  return stream.str();
 }
 
 bool read_blah2_iq_cpi(std::ifstream &replay, uint32_t nSamples, IqData &x, IqData &y)
@@ -970,7 +1035,8 @@ void print_summary(const RuntimeConfig &config, const std::vector<SweepCase> &sw
   std::cout << "Raw CPIs read    : " << rawCpis << "\n";
   std::cout << "Analysed CPIs    : " << analysedCpis << "\n";
   std::cout << "Skipped CPIs     : " << skippedCpis << "\n";
-  std::cout << "Sweep cases      : " << sweepCases.size() << "\n\n";
+  std::cout << "Sweep cases      : " << sweepCases.size() << "\n";
+  std::cout << "Post-process set : " << format_centroid_modes(sweepCases) << "\n\n";
 
   if (hasAdsb)
   {
@@ -986,6 +1052,7 @@ void print_summary(const RuntimeConfig &config, const std::vector<SweepCase> &sw
   std::cout << std::left
     << std::setw(6) << "Rank"
     << std::setw(8) << "Mode"
+    << std::setw(18) << "PostProc"
     << std::setw(12) << "Pfa"
     << std::setw(14) << "MinDoppHz"
     << std::setw(12) << "MinDelay"
@@ -1014,6 +1081,7 @@ void print_summary(const RuntimeConfig &config, const std::vector<SweepCase> &sw
     std::cout << std::left
       << std::setw(6) << rank
       << std::setw(8) << format_mode(sweepCase->mode)
+      << std::setw(18) << format_centroid_mode(sweepCase->centroidMode)
       << std::setw(12) << format_metric(sweepCase->pfa)
       << std::setw(14) << format_metric(sweepCase->minDoppler)
       << std::setw(12) << sweepCase->minDelay
@@ -1109,7 +1177,6 @@ int main(int argc, char **argv)
       filter = std::make_unique<WienerHopf>(config.clutterDelayMin,
         config.clutterDelayMax, config.nSamples);
     }
-    Centroid centroid(config.nCentroid, config.nCentroid, 1.0 / config.tCpi);
     Interpolate interpolate(true, true);
 
     uint64_t rawCpis = 0;
@@ -1150,7 +1217,7 @@ int main(int argc, char **argv)
       for (SweepCase &sweepCase : sweepCases)
       {
         std::unique_ptr<Detection> detectionPhase1 = sweepCase.detector.process(map);
-        std::unique_ptr<Detection> detectionPhase2 = centroid.process(detectionPhase1.get());
+        std::unique_ptr<Detection> detectionPhase2 = sweepCase.centroid.process(detectionPhase1.get(), map);
         std::unique_ptr<Detection> detection = interpolate.process(detectionPhase2.get(), map);
         sweepCase.record(*detection);
         if (adsbSnapshot != nullptr)
