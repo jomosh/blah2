@@ -14,6 +14,84 @@
 #include <random>
 #include <iostream>
 #include <filesystem>
+#include <array>
+
+namespace
+{
+std::vector<std::complex<double>> make_deterministic_qpsk_sequence(uint32_t nSamples)
+{
+  static const std::array<std::complex<double>, 4> kSymbols = {{
+    {1.0, 0.0},
+    {0.0, 1.0},
+    {-1.0, 0.0},
+    {0.0, -1.0}
+  }};
+
+  std::mt19937 generator(123456u);
+  std::uniform_int_distribution<int> symbolIndex(0, 3);
+  std::vector<std::complex<double>> sequence;
+  sequence.reserve(nSamples);
+  for (uint32_t i = 0; i < nSamples; i++)
+  {
+    sequence.push_back(kSymbols[static_cast<size_t>(symbolIndex(generator))]);
+  }
+  return sequence;
+}
+
+void append_samples(IqData &buffer,
+  const std::vector<std::complex<double>> &samples,
+  uint32_t startIndex, uint32_t endIndex)
+{
+  for (uint32_t index = startIndex; index < endIndex; index++)
+  {
+    buffer.push_back(samples[index]);
+  }
+}
+
+void extract_cpi_window(IqData &input, IqData &output, uint32_t nSamples)
+{
+  for (uint32_t i = 0; i < nSamples; i++)
+  {
+    output.push_back(input.pop_front());
+  }
+}
+
+struct MapPeak
+{
+  int delayBin;
+  double power;
+};
+
+MapPeak find_peak_delay_bin(const Map<std::complex<double>> &map)
+{
+  MapPeak peak{0, -1.0};
+  for (size_t dopplerIndex = 0; dopplerIndex < map.data.size(); dopplerIndex++)
+  {
+    for (size_t delayIndex = 0; delayIndex < map.data[dopplerIndex].size(); delayIndex++)
+    {
+      const double power = std::norm(map.data[dopplerIndex][delayIndex]);
+      if (power > peak.power)
+      {
+        peak.delayBin = map.delay[delayIndex];
+        peak.power = power;
+      }
+    }
+  }
+  return peak;
+}
+
+double get_delay_bin_power(const Map<std::complex<double>> &map, int delayBin)
+{
+  for (size_t delayIndex = 0; delayIndex < map.delay.size(); delayIndex++)
+  {
+    if (map.delay[delayIndex] == delayBin)
+    {
+      return std::norm(map.data[0][delayIndex]);
+    }
+  }
+  return 0.0;
+}
+}
 
 /// @brief Use random_device as RNG.
 std::random_device g_rd;
@@ -222,4 +300,93 @@ TEST_CASE("Process_NonZero_Doppler_Centering", "[process]")
 
     CHECK(peakIndex == map->doppler.size() / 2);
     CHECK_THAT(map->doppler[peakIndex], Catch::Matchers::WithinAbs(ambiguity.get_doppler_middle(), 1e-9));
+}
+
+TEST_CASE("Process_PairedBufferSkewReducesExpectedBinPower", "[process]")
+{
+    constexpr uint32_t nSamples = 256;
+    constexpr uint32_t sharedBufferSamples = nSamples + 1;
+    const std::vector<std::complex<double>> sourceSamples =
+      make_deterministic_qpsk_sequence(nSamples + 2);
+
+    IqData alignedReferenceBuffer(sharedBufferSamples);
+    IqData alignedSurveillanceBuffer(sharedBufferSamples);
+    append_samples(alignedReferenceBuffer, sourceSamples, 0, nSamples);
+    append_samples(alignedSurveillanceBuffer, sourceSamples, 0, nSamples);
+
+    IqData alignedReference(nSamples);
+    IqData alignedSurveillance(nSamples);
+    extract_cpi_window(alignedReferenceBuffer, alignedReference, nSamples);
+    extract_cpi_window(alignedSurveillanceBuffer, alignedSurveillance, nSamples);
+
+    Ambiguity alignedAmbiguity(0, 0, 0, 0, nSamples, nSamples, false);
+    Map<std::complex<double>> *alignedMap = alignedAmbiguity.process(
+      &alignedReference, &alignedSurveillance);
+    const double alignedPower = std::norm(alignedMap->data[0][0]);
+
+    IqData skewedReferenceBuffer(sharedBufferSamples);
+    IqData skewedSurveillanceBuffer(sharedBufferSamples);
+    append_samples(skewedReferenceBuffer, sourceSamples, 0, nSamples + 2);
+    append_samples(skewedSurveillanceBuffer, sourceSamples, 0, nSamples);
+
+    IqData skewedReference(nSamples);
+    IqData skewedSurveillance(nSamples);
+    extract_cpi_window(skewedReferenceBuffer, skewedReference, nSamples);
+    extract_cpi_window(skewedSurveillanceBuffer, skewedSurveillance, nSamples);
+
+    Ambiguity skewedAmbiguity(0, 0, 0, 0, nSamples, nSamples, false);
+    Map<std::complex<double>> *skewedMap = skewedAmbiguity.process(
+      &skewedReference, &skewedSurveillance);
+    const double skewedPower = std::norm(skewedMap->data[0][0]);
+
+    CHECK(alignedPower > 0.0);
+    CHECK(skewedPower > 0.0);
+    CHECK(skewedPower < alignedPower * 0.1);
+}
+
+TEST_CASE("Process_PairedBufferSkewMigratesPeakAcrossDelayBins", "[process]")
+{
+    auto round_hamming = GENERATE(true, false);
+
+    constexpr uint32_t nSamples = 256;
+    constexpr uint32_t sharedBufferSamples = nSamples + 1;
+    const std::vector<std::complex<double>> sourceSamples =
+      make_deterministic_qpsk_sequence(nSamples + 2);
+
+    IqData alignedReferenceBuffer(sharedBufferSamples);
+    IqData alignedSurveillanceBuffer(sharedBufferSamples);
+    append_samples(alignedReferenceBuffer, sourceSamples, 0, nSamples);
+    append_samples(alignedSurveillanceBuffer, sourceSamples, 0, nSamples);
+
+    IqData alignedReference(nSamples);
+    IqData alignedSurveillance(nSamples);
+    extract_cpi_window(alignedReferenceBuffer, alignedReference, nSamples);
+    extract_cpi_window(alignedSurveillanceBuffer, alignedSurveillance, nSamples);
+
+    Ambiguity alignedAmbiguity(-2, 2, 0, 0, nSamples, nSamples, round_hamming);
+    Map<std::complex<double>> *alignedMap = alignedAmbiguity.process(
+      &alignedReference, &alignedSurveillance);
+    const MapPeak alignedPeak = find_peak_delay_bin(*alignedMap);
+
+    IqData skewedReferenceBuffer(sharedBufferSamples);
+    IqData skewedSurveillanceBuffer(sharedBufferSamples);
+    append_samples(skewedReferenceBuffer, sourceSamples, 0, nSamples + 2);
+    append_samples(skewedSurveillanceBuffer, sourceSamples, 0, nSamples);
+
+    IqData skewedReference(nSamples);
+    IqData skewedSurveillance(nSamples);
+    extract_cpi_window(skewedReferenceBuffer, skewedReference, nSamples);
+    extract_cpi_window(skewedSurveillanceBuffer, skewedSurveillance, nSamples);
+
+    Ambiguity skewedAmbiguity(-2, 2, 0, 0, nSamples, nSamples, round_hamming);
+    Map<std::complex<double>> *skewedMap = skewedAmbiguity.process(
+      &skewedReference, &skewedSurveillance);
+    const MapPeak skewedPeak = find_peak_delay_bin(*skewedMap);
+    const double skewedZeroDelayPower = get_delay_bin_power(*skewedMap, 0);
+
+    CHECK(alignedPeak.delayBin == 0);
+    CHECK(alignedPeak.power > 0.0);
+    CHECK(std::abs(skewedPeak.delayBin) == 1);
+    CHECK(skewedPeak.power > alignedPeak.power * 0.95);
+    CHECK(skewedZeroDelayPower < skewedPeak.power * 0.1);
 }
