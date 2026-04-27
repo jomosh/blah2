@@ -22,7 +22,6 @@
 #include <condition_variable>
 #include <complex>
 #include <cstddef>
-#include <deque>
 #include <mutex>
 #include <stdint.h>
 #include <string>
@@ -57,6 +56,23 @@ private:
   /// @brief Context data passed into each Kraken callback.
   CallbackContext callbackContexts[2];
 
+  /// @brief Fixed-capacity sample ring buffer used by Kraken staging.
+  struct SampleRingBuffer
+  {
+    std::vector<std::complex<float>> data;
+    size_t head = 0;
+    size_t length = 0;
+
+    void set_capacity(size_t capacity);
+    void clear();
+    size_t size() const;
+    bool empty() const;
+    size_t append(const std::vector<std::complex<float>> &samples);
+    size_t discard_front(size_t count);
+    bool copy_tail(std::vector<std::complex<float>> *out, size_t count) const;
+    size_t pop_front_into(std::vector<std::complex<float>> *out, size_t count);
+  };
+
   /// @brief Shared output buffers for the aligned reference and surveillance streams.
   IqData *outputBuffers[nActiveChannels] = {nullptr, nullptr};
 
@@ -67,10 +83,10 @@ private:
   std::condition_variable alignmentCv;
 
   /// @brief Pending raw samples awaiting startup alignment or later drift correction.
-  std::deque<std::complex<float>> pendingOutputSamples[nActiveChannels];
+  SampleRingBuffer pendingOutputSamples[nActiveChannels];
 
   /// @brief Recent raw sample history used for startup alignment and drift rechecks.
-  std::deque<std::complex<float>> historySamples[nActiveChannels];
+  SampleRingBuffer historySamples[nActiveChannels];
 
   /// @brief Alignment drops queued for future callbacks when not enough samples are buffered yet.
   uint64_t scheduledAlignmentDrops[nActiveChannels] = {0, 0};
@@ -89,6 +105,9 @@ private:
 
   /// @brief Number of raw history samples retained per channel.
   size_t historyCapacitySamples = 0;
+
+  /// @brief Maximum pending aligned samples retained per channel.
+  size_t pendingOutputCapacitySamples = 0;
 
   /// @brief Raw startup lag estimate retained as the drift baseline.
   int64_t initialLagSamples = 0;

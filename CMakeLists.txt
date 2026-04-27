@@ -69,6 +69,7 @@ target_link_libraries(blah2 PRIVATE
   ryml::ryml
   httplib::httplib
   armadillo
+  ${CMAKE_DL_LIBS}
   ${UHD_LIBRARIES}
   fftw3
   fftw3_threads
@@ -181,6 +182,8 @@ add_executable(testKraken
 )
 target_link_libraries(testKraken PRIVATE
   Catch2::Catch2WithMain
+  Threads::Threads
+  ${CMAKE_DL_LIBS}
   fftw3
   rtlsdr
 )

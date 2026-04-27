@@ -3,6 +3,7 @@
 #include <fftw3.h>
 
 #include <algorithm>
+#include <dlfcn.h>
 #include <cmath>
 #include <complex>
 #include <cstdint>
@@ -18,6 +19,137 @@ constexpr size_t kMaxAlignmentWindowSamples = 262144;
 constexpr int64_t kLagConsensusToleranceSamples = 16;
 const std::chrono::minutes kDriftCheckInterval(10);
 const std::chrono::minutes kDriftRetryInterval(1);
+
+using RtlSdrSetDitheringFn = int (*)(rtlsdr_dev_t *, int);
+
+RtlSdrSetDitheringFn lookup_rtlsdr_set_dithering()
+{
+    static RtlSdrSetDitheringFn function = reinterpret_cast<RtlSdrSetDitheringFn>(
+      dlsym(RTLD_DEFAULT, "rtlsdr_set_dithering"));
+    return function;
+}
+
+int set_rtlsdr_dithering_if_supported(rtlsdr_dev_t *device, int enabled)
+{
+    const RtlSdrSetDitheringFn function = lookup_rtlsdr_set_dithering();
+    if (function != nullptr)
+    {
+        return function(device, enabled);
+    }
+
+    static bool warned = false;
+    if (!warned)
+    {
+        std::cout << "[Kraken] Warning: librtlsdr does not expose rtlsdr_set_dithering(); continuing without disabling PLL dithering. In shared-clock RTL-SDR setups this can reduce phase coherence and make startup/drift alignment less stable." << std::endl;
+        warned = true;
+    }
+
+    return 0;
+}
+}
+
+void Kraken::SampleRingBuffer::set_capacity(size_t capacity)
+{
+    data.assign(capacity, std::complex<float>(0.0f, 0.0f));
+    head = 0;
+    length = 0;
+}
+
+void Kraken::SampleRingBuffer::clear()
+{
+    head = 0;
+    length = 0;
+}
+
+size_t Kraken::SampleRingBuffer::size() const
+{
+    return length;
+}
+
+bool Kraken::SampleRingBuffer::empty() const
+{
+    return length == 0;
+}
+
+size_t Kraken::SampleRingBuffer::append(
+    const std::vector<std::complex<float>> &samples)
+{
+    if (data.empty() || samples.empty())
+    {
+        return 0;
+    }
+
+    size_t overwritten = 0;
+    const size_t capacity = data.size();
+    for (size_t i = 0; i < samples.size(); i++)
+    {
+        if (length < capacity)
+        {
+            data[(head + length) % capacity] = samples[i];
+            length++;
+            continue;
+        }
+
+        data[head] = samples[i];
+        head = (head + 1) % capacity;
+        overwritten++;
+    }
+
+    return overwritten;
+}
+
+size_t Kraken::SampleRingBuffer::discard_front(size_t count)
+{
+    const size_t discarded = std::min(count, length);
+    if (discarded == 0)
+    {
+        return 0;
+    }
+
+    head = (head + discarded) % data.size();
+    length -= discarded;
+    return discarded;
+}
+
+bool Kraken::SampleRingBuffer::copy_tail(std::vector<std::complex<float>> *out,
+    size_t count) const
+{
+    if (out == nullptr || count > length)
+    {
+        return false;
+    }
+
+    out->clear();
+    out->reserve(count);
+    const size_t capacity = data.size();
+    const size_t start = (head + length - count) % capacity;
+    for (size_t i = 0; i < count; i++)
+    {
+        out->push_back(data[(start + i) % capacity]);
+    }
+    return true;
+}
+
+size_t Kraken::SampleRingBuffer::pop_front_into(
+    std::vector<std::complex<float>> *out, size_t count)
+{
+    if (out == nullptr)
+    {
+        return 0;
+    }
+
+    const size_t nSamples = std::min(count, length);
+    out->clear();
+    out->reserve(nSamples);
+    const size_t capacity = data.size();
+    for (size_t i = 0; i < nSamples; i++)
+    {
+        out->push_back(data[(head + i) % capacity]);
+    }
+
+    head = (head + nSamples) % capacity;
+    length -= nSamples;
+    return nSamples;
 }
 
 // constructor
@@ -54,9 +186,9 @@ Kraken::Kraken(std::string _type, uint32_t _fc, uint32_t _fs,
         auto it = std::lower_bound(validGains.begin(),
             validGains.end(), adjustedGain);
         if (it != validGains.end()) {
-            gain.push_back(*it);
+            gain[i] = *it;
         } else {
-            gain.push_back(validGains.back());
+            gain[i] = validGains.back();
         }
         std::cout << "[Kraken] Gain update on channel " << i << " from " <<
             adjustedGain << " to " << gain[i] << "." << std::endl;
@@ -77,7 +209,7 @@ void Kraken::start()
         check_status(status, "Failed to set center frequency.");
         status = rtlsdr_set_sample_rate(devs[i], fs);
         check_status(status, "Failed to set sample rate.");
-        status = rtlsdr_set_dithering(devs[i], 0); // disable dither
+        status = set_rtlsdr_dithering_if_supported(devs[i], 0); // disable dither when supported
         check_status(status, "Failed to disable dithering.");
         status = rtlsdr_set_tuner_gain_mode(devs[i], 1); // disable AGC
         check_status(status, "Failed to disable AGC.");
@@ -104,10 +236,6 @@ void Kraken::process(IqData *buffer1, IqData *buffer2)
         std::lock_guard<std::mutex> lock(alignmentMutex);
         outputBuffers[0] = buffer1;
         outputBuffers[1] = buffer2;
-        pendingOutputSamples[0].clear();
-        pendingOutputSamples[1].clear();
-        historySamples[0].clear();
-        historySamples[1].clear();
         scheduledAlignmentDrops[0] = 0;
         scheduledAlignmentDrops[1] = 0;
         appliedAlignmentDrops[0] = 0;
@@ -121,6 +249,13 @@ void Kraken::process(IqData *buffer1, IqData *buffer2)
         alignmentWindowSamples = std::min(kMaxAlignmentWindowSamples,
             std::max(kMinAlignmentWindowSamples, requestedWindow));
         historyCapacitySamples = kStartupAlignmentAttempts * alignmentWindowSamples;
+        pendingOutputCapacitySamples = std::min(static_cast<size_t>(maxPendingBlah2PairedIqSamples),
+            historyCapacitySamples + kEmitChunkSamples);
+        for (size_t i = 0; i < nActiveChannels; i++)
+        {
+            pendingOutputSamples[i].set_capacity(pendingOutputCapacitySamples);
+            historySamples[i].set_capacity(historyCapacitySamples);
+        }
         nextDriftCheckTime = std::chrono::steady_clock::now() + kDriftCheckInterval;
     }
 
@@ -170,20 +305,23 @@ void Kraken::append_input_samples(size_t channelIndex, const int8_t *samples,
         return;
     }
 
-    std::lock_guard<std::mutex> lock(alignmentMutex);
-    std::deque<std::complex<float>> &pending = pendingOutputSamples[channelIndex];
-    std::deque<std::complex<float>> &history = historySamples[channelIndex];
+    thread_local std::vector<std::complex<float>> scratchSamples;
+    scratchSamples.resize(nComplexSamples);
     for (size_t i = 0; i < nComplexSamples; i++)
     {
-        const std::complex<float> sample(static_cast<float>(samples[2 * i]),
-          static_cast<float>(samples[2 * i + 1]));
-        pending.push_back(sample);
-        history.push_back(sample);
+        scratchSamples[i] = {static_cast<float>(samples[2 * i]),
+          static_cast<float>(samples[2 * i + 1])};
     }
 
-    while (history.size() > historyCapacitySamples)
+    std::lock_guard<std::mutex> lock(alignmentMutex);
+    const size_t overwrittenPending = pendingOutputSamples[channelIndex].append(scratchSamples);
+    historySamples[channelIndex].append(scratchSamples);
+    if (overwrittenPending > 0)
     {
-        history.pop_front();
+        const size_t accountedDrops = std::min<size_t>(overwrittenPending,
+          static_cast<size_t>(scheduledAlignmentDrops[channelIndex]));
+        scheduledAlignmentDrops[channelIndex] -= static_cast<uint64_t>(accountedDrops);
+        appliedAlignmentDrops[channelIndex] += static_cast<uint64_t>(accountedDrops);
     }
 
     alignmentCv.notify_all();
@@ -307,15 +445,10 @@ void Kraken::drain_scheduled_drops_locked()
 {
     for (size_t i = 0; i < nActiveChannels; i++)
     {
-        uint64_t nDropped = std::min<uint64_t>(scheduledAlignmentDrops[i],
-          static_cast<uint64_t>(pendingOutputSamples[i].size()));
-        while (nDropped > 0)
-        {
-            pendingOutputSamples[i].pop_front();
-            scheduledAlignmentDrops[i]--;
-            appliedAlignmentDrops[i]++;
-            nDropped--;
-        }
+                const size_t nDropped = pendingOutputSamples[i].discard_front(
+                    static_cast<size_t>(scheduledAlignmentDrops[i]));
+                scheduledAlignmentDrops[i] -= static_cast<uint64_t>(nDropped);
+                appliedAlignmentDrops[i] += static_cast<uint64_t>(nDropped);
     }
 }
 
@@ -351,12 +484,9 @@ bool Kraken::snapshot_recent_history_locked(LagSnapshot *snapshot) const
 
     for (size_t i = 0; i < nActiveChannels; i++)
     {
-        snapshot->channels[i].clear();
-        snapshot->channels[i].reserve(requiredSamples);
-        const size_t startIndex = historySamples[i].size() - requiredSamples;
-        for (size_t sampleIndex = startIndex; sampleIndex < historySamples[i].size(); sampleIndex++)
+        if (!historySamples[i].copy_tail(&snapshot->channels[i], requiredSamples))
         {
-            snapshot->channels[i].push_back(historySamples[i][sampleIndex]);
+            return false;
         }
     }
 
@@ -525,15 +655,8 @@ void Kraken::extract_output_chunk_locked(
         return;
     }
 
-    referenceChunk.reserve(nEmit);
-    surveillanceChunk.reserve(nEmit);
-    for (size_t i = 0; i < nEmit; i++)
-    {
-        referenceChunk.push_back(pendingOutputSamples[0].front());
-        pendingOutputSamples[0].pop_front();
-        surveillanceChunk.push_back(pendingOutputSamples[1].front());
-        pendingOutputSamples[1].pop_front();
-    }
+    pendingOutputSamples[0].pop_front_into(&referenceChunk, nEmit);
+    pendingOutputSamples[1].pop_front_into(&surveillanceChunk, nEmit);
 }
 
 void Kraken::emit_output_chunk(
