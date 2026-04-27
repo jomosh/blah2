@@ -173,6 +173,20 @@ target_link_libraries(testSource PRIVATE
 set_target_properties(testSource PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_TEST_UNIT_DIR}")
 
+add_executable(testKraken
+  test/unit/capture/TestKraken.cpp
+  src/capture/kraken/Kraken.cpp
+  src/capture/Source.cpp
+  src/data/IqData.cpp
+)
+target_link_libraries(testKraken PRIVATE
+  Catch2::Catch2WithMain
+  fftw3
+  rtlsdr
+)
+set_target_properties(testKraken PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_TEST_UNIT_DIR}")
+
 add_executable(testDetectionSweep
   test/comparison/TestDetectionSweep.cpp
   src/data/IqData.cpp
@@ -200,6 +214,7 @@ add_test(NAME testAmbiguity COMMAND testAmbiguity)
 add_test(NAME testIqData COMMAND testIqData)
 add_test(NAME testTracker COMMAND testTracker)
 add_test(NAME testSource COMMAND testSource)
+add_test(NAME testKraken COMMAND testKraken)
 add_test(NAME testDetectionPhaseA COMMAND testDetectionPhaseA)
 add_test(NAME testDetectionPhaseB COMMAND testDetectionPhaseB)
 add_test(NAME testCentroid COMMAND testCentroid)
