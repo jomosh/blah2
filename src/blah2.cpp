@@ -242,8 +242,19 @@ int main(int argc, char **argv)
 
   // set up process centroid
   uint16_t nCentroid;
+  CentroidMode centroidMode = CentroidMode::LocalPeak;
   tree["process"]["detection"]["nCentroid"] >> nCentroid;
-  Centroid *centroid = new Centroid(nCentroid, nCentroid, 1/tCpi);
+  auto centroidModeNode = tree["process"]["detection"]["postProcessMode"];
+  if (centroidModeNode.valid())
+  {
+    std::string centroidModeString;
+    centroidModeNode >> centroidModeString;
+    if (!try_parse_centroid_mode(centroidModeString, centroidMode))
+    {
+      throw std::runtime_error("Unsupported process.detection.postProcessMode '" + centroidModeString + "'");
+    }
+  }
+  Centroid *centroid = new Centroid(nCentroid, nCentroid, 1/tCpi, centroidMode);
 
   // set up process tracker
   uint8_t m, n, nDelete;
@@ -397,7 +408,7 @@ int main(int argc, char **argv)
           if (isDetection)
           {
             detection1 = cfarDetector1D->process(map);
-            detection2 = centroid->process(detection1.get());
+            detection2 = centroid->process(detection1.get(), map);
             detection = interpolate->process(detection2.get(), map);
             timing_helper(timing_name, timing_time, time, "detector");
           }

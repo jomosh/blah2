@@ -83,9 +83,12 @@ sudo docker exec -it blah2 /blah2/bin/test/comparison/testDetectionSweep \
 	--min-doppler 5,10,15 \
 	--min-delay 0,5,10 \
 	--cfar-modes CAGO \
+	--post-process-modes local-peak,cluster-centroid \
 	--adsb-delay-window-km 1.0 \
 	--adsb-doppler-window-hz 10
 ```
+
+Use `--post-process-modes` when you want one run to compare the legacy local-peak suppression against the newer cluster-based weighted centroid stage on the same replay data.
 
 With `--adsb-file`, the sweep summary adds truth-aware columns for matched Blah2 detection points, false-positive detection points, missed ADS-B truth points, and the corresponding per-detection-point rates for each sweep case.
 
@@ -95,6 +98,7 @@ When `--adsb-file` is supplied, `testDetectionSweep` scores each Blah2 detection
 
 - `Rank`: Sort order of the sweep cases. With ADS-B truth, cases are ranked by higher `MatchPctPt`, then lower `FPRatePt`, then higher `MatchPts`. Without ADS-B truth, ranking falls back to `HitRate`, `MeanPeakSnr`, and `Mean/CPI`.
 - `Mode`: CFAR mode used for that sweep case.
+- `PostProc`: Detection post-process mode used for that sweep case. `local-peak` is the legacy nearby-peak suppression stage. `cluster-centroid` groups nearby detections and emits one weighted centroid per cluster.
 - `Pfa`: CFAR probability of false alarm used for that sweep case. The table prints 3 decimal places, so values such as `1e-5` and `1e-4` will appear as `0.000`.
 - `MinDoppHz`: Minimum Doppler threshold in Hz.
 - `MinDelay`: Minimum delay-bin threshold applied by the detector.
