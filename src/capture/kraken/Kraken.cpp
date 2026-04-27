@@ -7,17 +7,17 @@
 #include <cmath>
 #include <complex>
 #include <cstdint>
+#include <fstream>
 #include <iostream>
+#include <sstream>
+#include <stdexcept>
 #include <thread>
 
 namespace
 {
-constexpr size_t kStartupAlignmentAttempts = 3;
 constexpr size_t kEmitChunkSamples = 16384;
 constexpr size_t kMinAlignmentWindowSamples = 65536;
 constexpr size_t kMaxAlignmentWindowSamples = 262144;
-constexpr int64_t kLagConsensusToleranceSamples = 16;
-const std::chrono::minutes kDriftCheckInterval(10);
 const std::chrono::minutes kDriftRetryInterval(1);
 
 using RtlSdrSetDitheringFn = int (*)(rtlsdr_dev_t *, int);
@@ -154,9 +154,34 @@ size_t Kraken::SampleRingBuffer::pop_front_into(
 
 // constructor
 Kraken::Kraken(std::string _type, uint32_t _fc, uint32_t _fs,
-    std::string _path, std::atomic<bool> *_saveIq, std::vector<double> _gain)
+    std::string _path, std::atomic<bool> *_saveIq, std::vector<double> _gain,
+    size_t _alignmentWindowCount, int64_t _lagConsensusToleranceSamples,
+    std::chrono::minutes _driftCheckInterval)
     : Source(_type, _fc, _fs, _path, _saveIq)
 {
+    if (_alignmentWindowCount == 0)
+    {
+        throw std::invalid_argument("[Kraken] capture.device.alignment.windowCount must be at least 1.");
+    }
+    if (_lagConsensusToleranceSamples < 0)
+    {
+        throw std::invalid_argument("[Kraken] capture.device.alignment.consensusToleranceSamples must be non-negative.");
+    }
+    if (_driftCheckInterval.count() <= 0)
+    {
+        throw std::invalid_argument("[Kraken] capture.device.alignment.recheckIntervalMinutes must be greater than 0.");
+    }
+
+    alignmentWindowCount = _alignmentWindowCount;
+    lagConsensusToleranceSamples = _lagConsensusToleranceSamples;
+    driftCheckInterval = _driftCheckInterval;
+    runtimeMetricPath = path;
+    if (!runtimeMetricPath.empty() && runtimeMetricPath.back() != '/')
+    {
+        runtimeMetricPath += "/";
+    }
+    runtimeMetricPath += "kraken-alignment-runtime.json";
+
     // convert gain to tenths of dB
     for (size_t i = 0; i < _gain.size(); i++)
     {
@@ -232,6 +257,7 @@ void Kraken::stop()
 
 void Kraken::process(IqData *buffer1, IqData *buffer2)
 {
+    RuntimeMetricSnapshot initialMetric;
     {
         std::lock_guard<std::mutex> lock(alignmentMutex);
         outputBuffers[0] = buffer1;
@@ -243,12 +269,15 @@ void Kraken::process(IqData *buffer1, IqData *buffer2)
         stopRequested = false;
         alignmentReady = false;
         initialLagSamples = 0;
+        lastMeasuredRawLagSamples = 0;
+        rawLagValid = false;
+        runtimeMetricDirty = false;
         const size_t callbackBlockSamples = 16 * 16384 / 2;
         const size_t requestedWindow = next_power_of_two(std::max(
             callbackBlockSamples, static_cast<size_t>(std::max<uint32_t>(fs / 10, 1))));
         alignmentWindowSamples = std::min(kMaxAlignmentWindowSamples,
             std::max(kMinAlignmentWindowSamples, requestedWindow));
-        historyCapacitySamples = kStartupAlignmentAttempts * alignmentWindowSamples;
+        historyCapacitySamples = alignmentWindowCount * alignmentWindowSamples;
         pendingOutputCapacitySamples = std::min(static_cast<size_t>(maxPendingBlah2PairedIqSamples),
             historyCapacitySamples + kEmitChunkSamples);
         for (size_t i = 0; i < nActiveChannels; i++)
@@ -256,8 +285,11 @@ void Kraken::process(IqData *buffer1, IqData *buffer2)
             pendingOutputSamples[i].set_capacity(pendingOutputCapacitySamples);
             historySamples[i].set_capacity(historyCapacitySamples);
         }
-        nextDriftCheckTime = std::chrono::steady_clock::now() + kDriftCheckInterval;
+        nextDriftCheckTime = std::chrono::steady_clock::now() + driftCheckInterval;
+        initialMetric = snapshot_runtime_metric_locked();
     }
+
+    write_runtime_metric(initialMetric);
 
     std::thread alignmentThread(&Kraken::alignment_worker, this);
     std::vector<std::thread> threads;
@@ -322,6 +354,7 @@ void Kraken::append_input_samples(size_t channelIndex, const int8_t *samples,
           static_cast<size_t>(scheduledAlignmentDrops[channelIndex]));
         scheduledAlignmentDrops[channelIndex] -= static_cast<uint64_t>(accountedDrops);
         appliedAlignmentDrops[channelIndex] += static_cast<uint64_t>(accountedDrops);
+        runtimeMetricDirty = true;
     }
 
     alignmentCv.notify_all();
@@ -332,7 +365,9 @@ void Kraken::alignment_worker()
     while (true)
     {
         LagSnapshot snapshot;
+        RuntimeMetricSnapshot runtimeMetricSnapshot;
         bool measureLag = false;
+        bool writeRuntimeMetric = false;
         std::vector<std::complex<float>> referenceChunk;
         std::vector<std::complex<float>> surveillanceChunk;
 
@@ -345,6 +380,12 @@ void Kraken::alignment_worker()
             });
 
             drain_scheduled_drops_locked();
+            if (runtimeMetricDirty)
+            {
+                runtimeMetricSnapshot = snapshot_runtime_metric_locked();
+                runtimeMetricDirty = false;
+                writeRuntimeMetric = true;
+            }
 
             if (stopRequested && !alignmentReady)
             {
@@ -381,55 +422,80 @@ void Kraken::alignment_worker()
             }
         }
 
+        if (writeRuntimeMetric)
+        {
+            write_runtime_metric(runtimeMetricSnapshot);
+        }
+
         if (measureLag)
         {
             const LagMeasurement measurement = measure_snapshot_lag(snapshot);
-            std::lock_guard<std::mutex> lock(alignmentMutex);
-            if (stopRequested)
             {
-                continue;
-            }
-
-            if (!measurement.valid)
-            {
-                if (alignmentReady)
+                std::lock_guard<std::mutex> lock(alignmentMutex);
+                if (stopRequested)
                 {
-                    std::cout << "[Kraken] Drift recheck could not establish a stable lag estimate; retrying in 1 minute." << std::endl;
-                    nextDriftCheckTime = std::chrono::steady_clock::now() + kDriftRetryInterval;
+                    continue;
                 }
-                continue;
+
+                if (!measurement.valid)
+                {
+                    if (alignmentReady)
+                    {
+                        std::cout << "[Kraken] Drift recheck could not establish a stable lag estimate; retrying in 1 minute." << std::endl;
+                        nextDriftCheckTime = std::chrono::steady_clock::now() + kDriftRetryInterval;
+                    }
+                    continue;
+                }
+
+                lastMeasuredRawLagSamples = measurement.lagSamples;
+                rawLagValid = true;
+
+                const int64_t currentCorrection = static_cast<int64_t>(appliedAlignmentDrops[0])
+                  - static_cast<int64_t>(appliedAlignmentDrops[1]);
+                const int64_t correctionDelta = measurement.lagSamples - currentCorrection;
+
+                if (!alignmentReady)
+                {
+                    initialLagSamples = measurement.lagSamples;
+                    schedule_alignment_delta_locked(correctionDelta);
+                    alignmentReady = true;
+                    nextDriftCheckTime = std::chrono::steady_clock::now() + driftCheckInterval;
+                    runtimeMetricDirty = true;
+                    runtimeMetricSnapshot = snapshot_runtime_metric_locked();
+                    runtimeMetricDirty = false;
+                    writeRuntimeMetric = true;
+                    std::cout << "[Kraken] Startup sample-time alignment established at "
+                      << measurement.lagSamples << " samples ("
+                      << lag_samples_to_microseconds(measurement.lagSamples)
+                      << " us)." << std::endl;
+                    alignmentCv.notify_all();
+                }
+                else
+                {
+                    nextDriftCheckTime = std::chrono::steady_clock::now() + driftCheckInterval;
+                    runtimeMetricDirty = true;
+                    if (correctionDelta != 0)
+                    {
+                        const int64_t driftFromInitial = measurement.lagSamples - initialLagSamples;
+                        schedule_alignment_delta_locked(correctionDelta);
+                        std::cout << "[Kraken] Sample-time drift detected: current difference "
+                          << measurement.lagSamples << " samples ("
+                          << lag_samples_to_microseconds(measurement.lagSamples)
+                          << " us), drift from initial " << driftFromInitial
+                          << " samples (" << lag_samples_to_microseconds(driftFromInitial)
+                          << " us)." << std::endl;
+                        alignmentCv.notify_all();
+                    }
+
+                    runtimeMetricSnapshot = snapshot_runtime_metric_locked();
+                    runtimeMetricDirty = false;
+                    writeRuntimeMetric = true;
+                }
             }
 
-            const int64_t currentCorrection = static_cast<int64_t>(appliedAlignmentDrops[0])
-              - static_cast<int64_t>(appliedAlignmentDrops[1]);
-            const int64_t correctionDelta = measurement.lagSamples - currentCorrection;
-
-            if (!alignmentReady)
+            if (writeRuntimeMetric)
             {
-                initialLagSamples = measurement.lagSamples;
-                schedule_alignment_delta_locked(correctionDelta);
-                alignmentReady = true;
-                nextDriftCheckTime = std::chrono::steady_clock::now() + kDriftCheckInterval;
-                std::cout << "[Kraken] Startup sample-time alignment established at "
-                  << measurement.lagSamples << " samples ("
-                  << lag_samples_to_microseconds(measurement.lagSamples)
-                  << " us)." << std::endl;
-                alignmentCv.notify_all();
-                continue;
-            }
-
-            nextDriftCheckTime = std::chrono::steady_clock::now() + kDriftCheckInterval;
-            if (correctionDelta != 0)
-            {
-                const int64_t driftFromInitial = measurement.lagSamples - initialLagSamples;
-                schedule_alignment_delta_locked(correctionDelta);
-                std::cout << "[Kraken] Sample-time drift detected: current difference "
-                  << measurement.lagSamples << " samples ("
-                  << lag_samples_to_microseconds(measurement.lagSamples)
-                  << " us), drift from initial " << driftFromInitial
-                  << " samples (" << lag_samples_to_microseconds(driftFromInitial)
-                  << " us)." << std::endl;
-                alignmentCv.notify_all();
+                write_runtime_metric(runtimeMetricSnapshot);
             }
             continue;
         }
@@ -445,10 +511,14 @@ void Kraken::drain_scheduled_drops_locked()
 {
     for (size_t i = 0; i < nActiveChannels; i++)
     {
-                const size_t nDropped = pendingOutputSamples[i].discard_front(
-                    static_cast<size_t>(scheduledAlignmentDrops[i]));
-                scheduledAlignmentDrops[i] -= static_cast<uint64_t>(nDropped);
-                appliedAlignmentDrops[i] += static_cast<uint64_t>(nDropped);
+        const size_t nDropped = pendingOutputSamples[i].discard_front(
+          static_cast<size_t>(scheduledAlignmentDrops[i]));
+        scheduledAlignmentDrops[i] -= static_cast<uint64_t>(nDropped);
+        appliedAlignmentDrops[i] += static_cast<uint64_t>(nDropped);
+        if (nDropped > 0)
+        {
+            runtimeMetricDirty = true;
+        }
     }
 }
 
@@ -473,7 +543,7 @@ bool Kraken::snapshot_recent_history_locked(LagSnapshot *snapshot) const
         return false;
     }
 
-    const size_t requiredSamples = kStartupAlignmentAttempts * alignmentWindowSamples;
+    const size_t requiredSamples = alignmentWindowCount * alignmentWindowSamples;
     for (size_t i = 0; i < nActiveChannels; i++)
     {
         if (historySamples[i].size() < requiredSamples)
@@ -496,7 +566,7 @@ bool Kraken::snapshot_recent_history_locked(LagSnapshot *snapshot) const
 Kraken::LagMeasurement Kraken::measure_snapshot_lag(const LagSnapshot &snapshot) const
 {
     LagMeasurement measurement;
-    const size_t requiredSamples = kStartupAlignmentAttempts * alignmentWindowSamples;
+    const size_t requiredSamples = alignmentWindowCount * alignmentWindowSamples;
     if (snapshot.channels[0].size() != requiredSamples
       || snapshot.channels[1].size() != requiredSamples)
     {
@@ -504,10 +574,10 @@ Kraken::LagMeasurement Kraken::measure_snapshot_lag(const LagSnapshot &snapshot)
     }
 
     std::vector<int64_t> lags;
-    lags.reserve(kStartupAlignmentAttempts);
+    lags.reserve(alignmentWindowCount);
     double peakMagnitude = 0.0;
 
-    for (size_t attempt = 0; attempt < kStartupAlignmentAttempts; attempt++)
+    for (size_t attempt = 0; attempt < alignmentWindowCount; attempt++)
     {
         const size_t offset = attempt * alignmentWindowSamples;
         std::vector<std::complex<float>> referenceWindow(
@@ -531,7 +601,7 @@ Kraken::LagMeasurement Kraken::measure_snapshot_lag(const LagSnapshot &snapshot)
     const int64_t medianLag = sortedLags[sortedLags.size() / 2];
     for (size_t i = 0; i < lags.size(); i++)
     {
-        if (std::llabs(lags[i] - medianLag) > kLagConsensusToleranceSamples)
+        if (std::llabs(lags[i] - medianLag) > lagConsensusToleranceSamples)
         {
             return measurement;
         }
@@ -705,6 +775,57 @@ double Kraken::lag_samples_to_microseconds(int64_t lagSamples) const
         return 0.0;
     }
     return static_cast<double>(lagSamples) * 1000000.0 / static_cast<double>(fs);
+}
+
+uint64_t Kraken::current_time_ms()
+{
+    return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+      std::chrono::system_clock::now().time_since_epoch()).count());
+}
+
+Kraken::RuntimeMetricSnapshot Kraken::snapshot_runtime_metric_locked() const
+{
+    RuntimeMetricSnapshot snapshot;
+    snapshot.alignmentReady = alignmentReady;
+    snapshot.rawLagValid = rawLagValid;
+    snapshot.updatedAtMs = current_time_ms();
+    snapshot.currentRawLagSamples = lastMeasuredRawLagSamples;
+    snapshot.appliedCorrectionSamples = static_cast<int64_t>(appliedAlignmentDrops[0])
+      - static_cast<int64_t>(appliedAlignmentDrops[1]);
+    if (rawLagValid)
+    {
+        snapshot.driftSamples = lastMeasuredRawLagSamples - initialLagSamples;
+    }
+    return snapshot;
+}
+
+void Kraken::write_runtime_metric(const RuntimeMetricSnapshot &snapshot)
+{
+    std::ofstream metricFile(runtimeMetricPath, std::ios::trunc);
+    if (!metricFile.is_open())
+    {
+        if (!runtimeMetricWriteWarned)
+        {
+            std::cerr << "[Kraken] Warning: failed to write alignment runtime metric to "
+              << runtimeMetricPath << std::endl;
+            runtimeMetricWriteWarned = true;
+        }
+        return;
+    }
+
+    std::ostringstream json;
+    json << "{\n"
+         << "  \"timestamp\": " << snapshot.updatedAtMs << ",\n"
+         << "  \"alignmentReady\": " << (snapshot.alignmentReady ? "true" : "false") << ",\n"
+         << "  \"rawLagValid\": " << (snapshot.rawLagValid ? "true" : "false") << ",\n"
+         << "  \"currentRawLagSamples\": " << snapshot.currentRawLagSamples << ",\n"
+         << "  \"currentRawLagUs\": " << lag_samples_to_microseconds(snapshot.currentRawLagSamples) << ",\n"
+         << "  \"appliedCorrectionSamples\": " << snapshot.appliedCorrectionSamples << ",\n"
+         << "  \"appliedCorrectionUs\": " << lag_samples_to_microseconds(snapshot.appliedCorrectionSamples) << ",\n"
+         << "  \"driftSamples\": " << snapshot.driftSamples << ",\n"
+         << "  \"driftUs\": " << lag_samples_to_microseconds(snapshot.driftSamples) << "\n"
+         << "}\n";
+    metricFile << json.str();
 }
 
 void Kraken::replay(IqData *buffer1, IqData *buffer2, std::string _file, bool _loop)

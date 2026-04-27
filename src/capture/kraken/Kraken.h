@@ -109,8 +109,32 @@ private:
   /// @brief Maximum pending aligned samples retained per channel.
   size_t pendingOutputCapacitySamples = 0;
 
+  /// @brief Number of recent windows used to establish alignment consensus.
+  size_t alignmentWindowCount = 3;
+
+  /// @brief Maximum allowed lag spread between alignment windows.
+  int64_t lagConsensusToleranceSamples = 16;
+
+  /// @brief Period between drift rechecks after startup alignment.
+  std::chrono::minutes driftCheckInterval = std::chrono::minutes(10);
+
   /// @brief Raw startup lag estimate retained as the drift baseline.
   int64_t initialLagSamples = 0;
+
+  /// @brief Most recent measured raw lag before applying any new correction.
+  int64_t lastMeasuredRawLagSamples = 0;
+
+  /// @brief True when a raw lag measurement has been established.
+  bool rawLagValid = false;
+
+  /// @brief Metric file path for local runtime monitoring.
+  std::string runtimeMetricPath;
+
+  /// @brief True when the local runtime metric should be rewritten.
+  bool runtimeMetricDirty = false;
+
+  /// @brief True once metric-file write failures have been reported.
+  bool runtimeMetricWriteWarned = false;
 
   /// @brief Deadline for the next drift recheck.
   std::chrono::steady_clock::time_point nextDriftCheckTime;
@@ -136,6 +160,17 @@ private:
   struct LagSnapshot
   {
     std::vector<std::complex<float>> channels[nActiveChannels];
+  };
+
+  /// @brief Snapshot of the local alignment runtime metric.
+  struct RuntimeMetricSnapshot
+  {
+    bool alignmentReady = false;
+    bool rawLagValid = false;
+    uint64_t updatedAtMs = 0;
+    int64_t currentRawLagSamples = 0;
+    int64_t appliedCorrectionSamples = 0;
+    int64_t driftSamples = 0;
   };
 
   /// @brief Check status of API returns.
@@ -215,6 +250,19 @@ private:
   /// @return Signed lag in microseconds.
   double lag_samples_to_microseconds(int64_t lagSamples) const;
 
+  /// @brief Get the current time in POSIX milliseconds.
+  /// @return Current time in POSIX milliseconds.
+  static uint64_t current_time_ms();
+
+  /// @brief Snapshot the current local alignment runtime metric.
+  /// @return Metric snapshot.
+  RuntimeMetricSnapshot snapshot_runtime_metric_locked() const;
+
+  /// @brief Persist the local alignment runtime metric to disk.
+  /// @param snapshot Metric snapshot to persist.
+  /// @return Void.
+  void write_runtime_metric(const RuntimeMetricSnapshot &snapshot);
+
   friend struct KrakenTestAccess;
 
   /// @brief Callback function when buffer is filled.
@@ -231,7 +279,9 @@ public:
   /// @param path Path to save IQ data.
   /// @return The object.
   Kraken(std::string type, uint32_t fc, uint32_t fs, std::string path, 
-    std::atomic<bool> *saveIq, std::vector<double> gain);
+    std::atomic<bool> *saveIq, std::vector<double> gain,
+    size_t alignmentWindowCount, int64_t lagConsensusToleranceSamples,
+    std::chrono::minutes driftCheckInterval);
 
   /// @brief Implement capture function on KrakenSDR.
   /// @param buffer Pointers to buffers for each channel.
