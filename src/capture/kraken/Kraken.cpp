@@ -422,74 +422,71 @@ void Kraken::alignment_worker()
             }
         }
 
-        if (writeRuntimeMetric)
-        {
-            write_runtime_metric(runtimeMetricSnapshot);
-        }
-
         if (measureLag)
         {
             const LagMeasurement measurement = measure_snapshot_lag(snapshot);
+            bool stopAfterMeasurement = false;
             {
                 std::lock_guard<std::mutex> lock(alignmentMutex);
                 if (stopRequested)
                 {
-                    continue;
+                    stopAfterMeasurement = true;
                 }
-
-                if (!measurement.valid)
+                else if (!measurement.valid)
                 {
                     if (alignmentReady)
                     {
                         std::cout << "[Kraken] Drift recheck could not establish a stable lag estimate; retrying in 1 minute." << std::endl;
                         nextDriftCheckTime = std::chrono::steady_clock::now() + kDriftRetryInterval;
                     }
-                    continue;
-                }
-
-                lastMeasuredRawLagSamples = measurement.lagSamples;
-                rawLagValid = true;
-
-                const int64_t currentCorrection = static_cast<int64_t>(appliedAlignmentDrops[0])
-                  - static_cast<int64_t>(appliedAlignmentDrops[1]);
-                const int64_t correctionDelta = measurement.lagSamples - currentCorrection;
-
-                if (!alignmentReady)
-                {
-                    initialLagSamples = measurement.lagSamples;
-                    schedule_alignment_delta_locked(correctionDelta);
-                    alignmentReady = true;
-                    nextDriftCheckTime = std::chrono::steady_clock::now() + driftCheckInterval;
-                    runtimeMetricDirty = true;
-                    runtimeMetricSnapshot = snapshot_runtime_metric_locked();
-                    runtimeMetricDirty = false;
-                    writeRuntimeMetric = true;
-                    std::cout << "[Kraken] Startup sample-time alignment established at "
-                      << measurement.lagSamples << " samples ("
-                      << lag_samples_to_microseconds(measurement.lagSamples)
-                      << " us)." << std::endl;
-                    alignmentCv.notify_all();
+                    stopAfterMeasurement = true;
                 }
                 else
                 {
-                    nextDriftCheckTime = std::chrono::steady_clock::now() + driftCheckInterval;
-                    runtimeMetricDirty = true;
-                    if (correctionDelta != 0)
+                    lastMeasuredRawLagSamples = measurement.lagSamples;
+                    rawLagValid = true;
+
+                    const int64_t currentCorrection = static_cast<int64_t>(appliedAlignmentDrops[0])
+                      - static_cast<int64_t>(appliedAlignmentDrops[1]);
+                    const int64_t correctionDelta = measurement.lagSamples - currentCorrection;
+
+                    if (!alignmentReady)
                     {
-                        const int64_t driftFromInitial = measurement.lagSamples - initialLagSamples;
+                        initialLagSamples = measurement.lagSamples;
                         schedule_alignment_delta_locked(correctionDelta);
-                        std::cout << "[Kraken] Sample-time drift detected: current difference "
+                        alignmentReady = true;
+                        nextDriftCheckTime = std::chrono::steady_clock::now() + driftCheckInterval;
+                        runtimeMetricDirty = true;
+                        runtimeMetricSnapshot = snapshot_runtime_metric_locked();
+                        runtimeMetricDirty = false;
+                        writeRuntimeMetric = true;
+                        std::cout << "[Kraken] Startup sample-time alignment established at "
                           << measurement.lagSamples << " samples ("
                           << lag_samples_to_microseconds(measurement.lagSamples)
-                          << " us), drift from initial " << driftFromInitial
-                          << " samples (" << lag_samples_to_microseconds(driftFromInitial)
                           << " us)." << std::endl;
                         alignmentCv.notify_all();
                     }
+                    else
+                    {
+                        nextDriftCheckTime = std::chrono::steady_clock::now() + driftCheckInterval;
+                        runtimeMetricDirty = true;
+                        if (correctionDelta != 0)
+                        {
+                            const int64_t driftFromInitial = measurement.lagSamples - initialLagSamples;
+                            schedule_alignment_delta_locked(correctionDelta);
+                            std::cout << "[Kraken] Sample-time drift detected: current difference "
+                              << measurement.lagSamples << " samples ("
+                              << lag_samples_to_microseconds(measurement.lagSamples)
+                              << " us), drift from initial " << driftFromInitial
+                              << " samples (" << lag_samples_to_microseconds(driftFromInitial)
+                              << " us)." << std::endl;
+                            alignmentCv.notify_all();
+                        }
 
-                    runtimeMetricSnapshot = snapshot_runtime_metric_locked();
-                    runtimeMetricDirty = false;
-                    writeRuntimeMetric = true;
+                        runtimeMetricSnapshot = snapshot_runtime_metric_locked();
+                        runtimeMetricDirty = false;
+                        writeRuntimeMetric = true;
+                    }
                 }
             }
 
@@ -497,7 +494,18 @@ void Kraken::alignment_worker()
             {
                 write_runtime_metric(runtimeMetricSnapshot);
             }
+
+            if (stopAfterMeasurement)
+            {
+                continue;
+            }
+
             continue;
+        }
+
+        if (writeRuntimeMetric)
+        {
+            write_runtime_metric(runtimeMetricSnapshot);
         }
 
         if (!referenceChunk.empty())
