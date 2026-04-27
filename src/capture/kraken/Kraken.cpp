@@ -163,20 +163,20 @@ Kraken::Kraken(std::string _type, uint32_t _fc, uint32_t _fs,
         gain.push_back(static_cast<int>(_gain[i]*10));
         channelIndex.push_back(i);
     }
-    std::vector<rtlsdr_dev_t*> devs(channelIndex.size());
+    std::vector<rtlsdr_dev_t*> gainProbeDevs(channelIndex.size());
 
     // store all valid gains
     std::vector<int> validGains;
     int nGains, status;
-    status = rtlsdr_open(&devs[0], 0);
+    status = rtlsdr_open(&gainProbeDevs[0], 0);
     check_status(status, "Failed to open device for available gains.");
-    nGains = rtlsdr_get_tuner_gains(devs[0], nullptr);
+    nGains = rtlsdr_get_tuner_gains(gainProbeDevs[0], nullptr);
     check_status(nGains, "Failed to get number of gains.");
     std::unique_ptr<int[]> _validGains(new int[nGains]);
-    status = rtlsdr_get_tuner_gains(devs[0], _validGains.get());
+    status = rtlsdr_get_tuner_gains(gainProbeDevs[0], _validGains.get());
     check_status(status, "Failed to get number of gains.");
     validGains.assign(_validGains.get(), _validGains.get() + nGains);
-    status = rtlsdr_close(devs[0]);
+    status = rtlsdr_close(gainProbeDevs[0]);
     check_status(status, "Failed to close device for available gains.");
 
     // update gains to next value if invalid
