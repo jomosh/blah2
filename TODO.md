@@ -3,8 +3,9 @@
 
 ## Capture & DSR
 
-- [ ] Expand SDR device support (UHD integration, additional hardware)
-- [ ] Add replay/file-based capture modes
+- [X] Expand SDR device support (UHD integration, additional hardware)
+- [X] Add replay/file-based capture modes
+- [ ] Add 2x RTL-SDR sample-time alignment for shared-clock setups without shared trigger (use a noise source or equivalent startup calibration to establish a common trigger after device start)
 - [ ] Optimize IQ sample streaming performance
 
 ## DSP & Processing
@@ -12,18 +13,18 @@
 - [ ] Enhance clutter filtering algorithms
 - [ ] Improve detection/tracking robustness
 - [ ] Optimize ambiguity map computation
-- [ ] Add spectrum analysis features
+- [X] Add spectrum analysis features
 
 ## Data & Serialization
 
 - [ ] Review JSON schema stability for API contract
-- [ ] Add data persistence/logging features
+- [X] Add data persistence/logging features
 - [ ] Improve metadata handling and timestamps
 
 ## API Layer (Node.js)
 
-- [ ] Expand REST endpoint coverage
-- [ ] Implement error handling/logging
+- [X] Expand REST endpoint coverage
+- [X] Implement error handling/logging
 - [ ] Add configuration hot-reload support
 - [ ] Performance optimize TCP socket handling
 
@@ -50,7 +51,7 @@
 
 - [ ] Add architecture documentation
 - [ ] Create API endpoint reference
-- [ ] Document deployment steps
+- [X] Document deployment steps
 
 ## Performance & Real-Time
 
@@ -71,11 +72,11 @@
 - [X] Remove fixed Docker container names to allow multi-instance deployment
 - [X] Parameterize API/web port bindings per node instance
 - [X] Replace hardcoded localhost:3000 assumptions in stash modules
-- [ ] Add null-safe handling for `/capture` polling in capture thread
+- [X] Add null-safe handling for `/capture` polling in capture thread
 
 ### Q3 Milestones
 
-- [ ] Validate 2x node deployment on one host with independent configs and ports
+- [X] Validate 2x node deployment on one host with independent configs and ports
 - [ ] Add startup preflight checks for occupied ports and SDR device lock conflicts
 - [ ] Add observability endpoints for node health and data freshness
 - [ ] Document multi-node deployment and 3lips integration patterns
