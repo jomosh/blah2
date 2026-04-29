@@ -18,19 +18,26 @@
 #include "capture/Source.h"
 #include "data/IqData.h"
 
+#include <chrono>
+#include <condition_variable>
 #include <complex>
 #include <cstddef>
+#include <mutex>
 #include <stdint.h>
 #include <string>
 #include <vector>
 #include <rtl-sdr.h>
 
+struct KrakenTestAccess;
+
 class Kraken : public Source
 {
 private:
 
+  static constexpr size_t nActiveChannels = 2;
+
   /// @brief Individual RTL-SDR devices.
-  rtlsdr_dev_t* devs[5];
+  rtlsdr_dev_t* devs[5] = {nullptr, nullptr, nullptr, nullptr, nullptr};
 
   /// @brief Device indices for Kraken.
   std::vector<int> channelIndex;
@@ -49,6 +56,126 @@ private:
   /// @brief Context data passed into each Kraken callback.
   CallbackContext callbackContexts[2];
 
+  /// @brief Fixed-capacity sample ring buffer used by Kraken staging.
+  struct SampleRingBuffer
+  {
+    std::vector<std::complex<float>> data;
+    size_t head = 0;
+    size_t length = 0;
+
+    void set_capacity(size_t capacity);
+    void clear();
+    size_t size() const;
+    bool empty() const;
+    size_t append(const std::vector<std::complex<float>> &samples);
+    size_t discard_front(size_t count);
+    bool copy_tail(std::vector<std::complex<float>> *out, size_t count) const;
+    size_t pop_front_into(std::vector<std::complex<float>> *out, size_t count);
+  };
+
+  /// @brief Shared output buffers for the aligned reference and surveillance streams.
+  IqData *outputBuffers[nActiveChannels] = {nullptr, nullptr};
+
+  /// @brief Protects alignment state shared across callback and worker threads.
+  std::mutex alignmentMutex;
+
+  /// @brief Wakes the alignment worker when fresh raw samples arrive.
+  std::condition_variable alignmentCv;
+
+  /// @brief Pending raw samples awaiting startup alignment or later drift correction.
+  SampleRingBuffer pendingOutputSamples[nActiveChannels];
+
+  /// @brief Recent raw sample history used for startup alignment and drift rechecks.
+  SampleRingBuffer historySamples[nActiveChannels];
+
+  /// @brief Alignment drops queued for future callbacks when not enough samples are buffered yet.
+  uint64_t scheduledAlignmentDrops[nActiveChannels] = {0, 0};
+
+  /// @brief Total alignment drops already applied to each channel.
+  uint64_t appliedAlignmentDrops[nActiveChannels] = {0, 0};
+
+  /// @brief True once the capture worker should stop processing.
+  bool stopRequested = false;
+
+  /// @brief True once startup alignment has completed and aligned samples may flow downstream.
+  bool alignmentReady = false;
+
+  /// @brief Enable startup alignment and periodic drift correction.
+  bool alignmentEnabled = true;
+
+  /// @brief Number of samples per lag-estimation window.
+  size_t alignmentWindowSamples = 0;
+
+  /// @brief Number of raw history samples retained per channel.
+  size_t historyCapacitySamples = 0;
+
+  /// @brief Maximum pending aligned samples retained per channel.
+  size_t pendingOutputCapacitySamples = 0;
+
+  /// @brief Number of recent windows used to establish alignment consensus.
+  size_t alignmentWindowCount = 3;
+
+  /// @brief Maximum allowed lag spread between alignment windows.
+  int64_t lagConsensusToleranceSamples = 16;
+
+  /// @brief Period between drift rechecks after startup alignment.
+  std::chrono::minutes driftCheckInterval = std::chrono::minutes(10);
+
+  /// @brief Raw startup lag estimate retained as the drift baseline.
+  int64_t initialLagSamples = 0;
+
+  /// @brief Most recent measured raw lag before applying any new correction.
+  int64_t lastMeasuredRawLagSamples = 0;
+
+  /// @brief True when a raw lag measurement has been established.
+  bool rawLagValid = false;
+
+  /// @brief Metric file path for local runtime monitoring.
+  std::string runtimeMetricPath;
+
+  /// @brief True when the local runtime metric should be rewritten.
+  bool runtimeMetricDirty = false;
+
+  /// @brief True once metric-file write failures have been reported.
+  bool runtimeMetricWriteWarned = false;
+
+  /// @brief Deadline for the next drift recheck.
+  std::chrono::steady_clock::time_point nextDriftCheckTime;
+
+  /// @brief Single-window lag estimate.
+  struct LagEstimate
+  {
+    bool valid = false;
+    int64_t lagSamples = 0;
+    double peakMagnitude = 0.0;
+  };
+
+  /// @brief Multi-window lag estimate used to establish startup certainty.
+  struct LagMeasurement
+  {
+    bool valid = false;
+    int64_t lagSamples = 0;
+    double peakMagnitude = 0.0;
+    std::vector<int64_t> attemptLags;
+  };
+
+  /// @brief Snapshot of recent raw IQ windows for lag estimation.
+  struct LagSnapshot
+  {
+    std::vector<std::complex<float>> channels[nActiveChannels];
+  };
+
+  /// @brief Snapshot of the local alignment runtime metric.
+  struct RuntimeMetricSnapshot
+  {
+    bool alignmentReady = false;
+    bool rawLagValid = false;
+    uint64_t updatedAtMs = 0;
+    int64_t currentRawLagSamples = 0;
+    int64_t appliedCorrectionSamples = 0;
+    int64_t driftSamples = 0;
+  };
+
   /// @brief Check status of API returns.
   /// @param status Return code of API call.
   /// @param message Message if API call error.
@@ -61,6 +188,85 @@ private:
   /// @param nComplexSamples Number of IQ samples in this callback.
   void append_save_samples(size_t channelIndex, const int8_t *samples,
     size_t nComplexSamples);
+
+  /// @brief Append raw callback samples into the alignment and history queues.
+  /// @param channelIndex Zero-based channel index.
+  /// @param samples Pointer to interleaved IQ byte samples.
+  /// @param nComplexSamples Number of IQ samples in this callback.
+  /// @return Void.
+  void append_input_samples(size_t channelIndex, const int8_t *samples,
+    size_t nComplexSamples);
+
+  /// @brief Run startup alignment and periodic drift rechecks.
+  /// @return Void.
+  void alignment_worker();
+
+  /// @brief Drop any queued correction samples that now have backing data.
+  /// @return Void.
+  void drain_scheduled_drops_locked();
+
+  /// @brief Queue a signed alignment correction on the earlier channel.
+  /// @param deltaSamples Positive when channel 1 lags channel 0.
+  /// @return Void.
+  void schedule_alignment_delta_locked(int64_t deltaSamples);
+
+  /// @brief Copy a recent raw history snapshot for lag estimation.
+  /// @param snapshot Destination snapshot.
+  /// @return True when enough history was available.
+  bool snapshot_recent_history_locked(LagSnapshot *snapshot) const;
+
+  /// @brief Estimate lag across several recent windows.
+  /// @param snapshot Raw IQ windows.
+  /// @return Consensus lag measurement.
+  LagMeasurement measure_snapshot_lag(const LagSnapshot &snapshot) const;
+
+  /// @brief Estimate lag from a single pair of IQ windows.
+  /// @param reference Reference channel IQ window.
+  /// @param surveillance Surveillance channel IQ window.
+  /// @return Single-window lag estimate.
+  static LagEstimate estimate_window_lag(
+    const std::vector<std::complex<float>> &reference,
+    const std::vector<std::complex<float>> &surveillance);
+
+  /// @brief Copy one aligned output chunk out of the pending queues.
+  /// @param referenceChunk Destination reference chunk.
+  /// @param surveillanceChunk Destination surveillance chunk.
+  /// @param maxSamples Maximum pairs to extract in one chunk.
+  /// @return Void.
+  void extract_output_chunk_locked(std::vector<std::complex<float>> &referenceChunk,
+    std::vector<std::complex<float>> &surveillanceChunk, size_t maxSamples);
+
+  /// @brief Emit an aligned output chunk into live buffers and optional IQ save.
+  /// @param referenceChunk Reference samples.
+  /// @param surveillanceChunk Surveillance samples.
+  /// @return Void.
+  void emit_output_chunk(const std::vector<std::complex<float>> &referenceChunk,
+    const std::vector<std::complex<float>> &surveillanceChunk);
+
+  /// @brief Compute the next power of two greater than or equal to value.
+  /// @param value Input value.
+  /// @return Next power of two.
+  static size_t next_power_of_two(size_t value);
+
+  /// @brief Convert signed lag samples into microseconds.
+  /// @param lagSamples Signed lag in samples.
+  /// @return Signed lag in microseconds.
+  double lag_samples_to_microseconds(int64_t lagSamples) const;
+
+  /// @brief Get the current time in POSIX milliseconds.
+  /// @return Current time in POSIX milliseconds.
+  static uint64_t current_time_ms();
+
+  /// @brief Snapshot the current local alignment runtime metric.
+  /// @return Metric snapshot.
+  RuntimeMetricSnapshot snapshot_runtime_metric_locked() const;
+
+  /// @brief Persist the local alignment runtime metric to disk.
+  /// @param snapshot Metric snapshot to persist.
+  /// @return Void.
+  void write_runtime_metric(const RuntimeMetricSnapshot &snapshot);
+
+  friend struct KrakenTestAccess;
 
   /// @brief Callback function when buffer is filled.
   /// @param buf Pointer to buffer of IQ data.
@@ -76,7 +282,9 @@ public:
   /// @param path Path to save IQ data.
   /// @return The object.
   Kraken(std::string type, uint32_t fc, uint32_t fs, std::string path, 
-    std::atomic<bool> *saveIq, std::vector<double> gain);
+    std::atomic<bool> *saveIq, std::vector<double> gain, bool alignmentEnabled,
+    size_t alignmentWindowCount, int64_t lagConsensusToleranceSamples,
+    std::chrono::minutes driftCheckInterval);
 
   /// @brief Implement capture function on KrakenSDR.
   /// @param buffer Pointers to buffers for each channel.

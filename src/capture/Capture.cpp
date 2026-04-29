@@ -220,13 +220,49 @@ std::unique_ptr<Source> Capture::factory_source(const std::string& type, c4::yml
     else if (type == VALID_TYPE[3])
     {
       std::vector<double> gain;
+      bool alignmentEnabled = true;
+      uint32_t alignmentWindowCount = 3;
+      int64_t lagConsensusToleranceSamples = 16;
+      uint32_t driftCheckIntervalMinutes = 10;
       float _gain;
       for (auto child : config["gain"].children())
       {
         c4::atof(child.val(), &_gain);
         gain.push_back(static_cast<double>(_gain));
       }
-      return std::make_unique<Kraken>(type, fc, fs, path, &saveIq, gain);
+
+      auto alignmentNode = config["alignment"];
+      if (alignmentNode.valid())
+      {
+        auto alignmentEnabledNode = alignmentNode["enabled"];
+        if (alignmentEnabledNode.valid())
+        {
+          alignmentEnabledNode >> alignmentEnabled;
+        }
+
+        auto alignmentWindowCountNode = alignmentNode["windowCount"];
+        if (alignmentWindowCountNode.valid())
+        {
+          alignmentWindowCountNode >> alignmentWindowCount;
+        }
+
+        auto consensusToleranceNode = alignmentNode["consensusToleranceSamples"];
+        if (consensusToleranceNode.valid())
+        {
+          consensusToleranceNode >> lagConsensusToleranceSamples;
+        }
+
+        auto recheckIntervalNode = alignmentNode["recheckIntervalMinutes"];
+        if (recheckIntervalNode.valid())
+        {
+          recheckIntervalNode >> driftCheckIntervalMinutes;
+        }
+      }
+
+      return std::make_unique<Kraken>(type, fc, fs, path, &saveIq, gain,
+        alignmentEnabled,
+        static_cast<size_t>(alignmentWindowCount), lagConsensusToleranceSamples,
+        std::chrono::minutes(driftCheckIntervalMinutes));
     }
     // handle unknown type
     std::cerr << "Error: Source type does not exist." << std::endl;
