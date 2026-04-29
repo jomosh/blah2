@@ -258,6 +258,7 @@ void Kraken::stop()
 void Kraken::process(IqData *buffer1, IqData *buffer2)
 {
     RuntimeMetricSnapshot initialMetric;
+    size_t requiredHistorySamples = 0;
     {
         std::lock_guard<std::mutex> lock(alignmentMutex);
         outputBuffers[0] = buffer1;
@@ -280,6 +281,7 @@ void Kraken::process(IqData *buffer1, IqData *buffer2)
         historyCapacitySamples = alignmentWindowCount * alignmentWindowSamples;
         pendingOutputCapacitySamples = std::min(static_cast<size_t>(maxPendingBlah2PairedIqSamples),
             historyCapacitySamples + kEmitChunkSamples);
+        requiredHistorySamples = alignmentWindowCount * alignmentWindowSamples;
         for (size_t i = 0; i < nActiveChannels; i++)
         {
             pendingOutputSamples[i].set_capacity(pendingOutputCapacitySamples);
@@ -291,6 +293,11 @@ void Kraken::process(IqData *buffer1, IqData *buffer2)
 
     write_runtime_metric(initialMetric);
 
+        std::cout << "[Kraken] Startup alignment configured for "
+            << alignmentWindowCount << " windows x " << alignmentWindowSamples
+            << " samples; waiting for " << requiredHistorySamples
+            << " samples per channel before first lag estimate." << std::endl;
+        std::cout << "[Kraken] Starting alignment worker thread." << std::endl;
     std::thread alignmentThread(&Kraken::alignment_worker, this);
     std::vector<std::thread> threads;
     callbackContexts[0].device = this;
@@ -299,8 +306,18 @@ void Kraken::process(IqData *buffer1, IqData *buffer2)
     callbackContexts[1].device = this;
     callbackContexts[1].buffer = buffer2;
     callbackContexts[1].channelIndex = 1;
-    threads.emplace_back(rtlsdr_read_async, devs[0], callback, &callbackContexts[0], 0, 16 * 16384);
-    threads.emplace_back(rtlsdr_read_async, devs[1], callback, &callbackContexts[1], 0, 16 * 16384);
+        std::cout << "[Kraken] Starting async readers on both channels." << std::endl;
+        const auto launch_async_reader = [this](size_t channel, CallbackContext *context)
+        {
+                std::cout << "[Kraken] Async read loop entering on channel "
+                    << channel << "." << std::endl;
+                const int status = rtlsdr_read_async(devs[channel], callback,
+                    context, 0, 16 * 16384);
+                std::cout << "[Kraken] Async read loop exited on channel " << channel
+                    << " with status " << status << "." << std::endl;
+        };
+        threads.emplace_back(launch_async_reader, 0, &callbackContexts[0]);
+        threads.emplace_back(launch_async_reader, 1, &callbackContexts[1]);
     // join threads
     for (auto& thread : threads) {
         thread.join();
@@ -346,8 +363,16 @@ void Kraken::append_input_samples(size_t channelIndex, const int8_t *samples,
     }
 
     std::lock_guard<std::mutex> lock(alignmentMutex);
+        const bool firstCallbackForChannel = pendingOutputSamples[channelIndex].empty()
+            && historySamples[channelIndex].empty();
     const size_t overwrittenPending = pendingOutputSamples[channelIndex].append(scratchSamples);
     historySamples[channelIndex].append(scratchSamples);
+        if (firstCallbackForChannel)
+        {
+                std::cout << "[Kraken] Received first callback block on channel "
+                    << channelIndex << " with " << nComplexSamples
+                    << " IQ samples." << std::endl;
+        }
     if (overwrittenPending > 0)
     {
         const size_t accountedDrops = std::min<size_t>(overwrittenPending,
@@ -362,6 +387,12 @@ void Kraken::append_input_samples(size_t channelIndex, const int8_t *samples,
 
 void Kraken::alignment_worker()
 {
+    bool startupHistoryReadyLogged = false;
+    bool firstAlignedChunkLogged = false;
+    uint64_t startupInvalidMeasurementCount = 0;
+    auto nextStartupProgressLogTime = std::chrono::steady_clock::now();
+    auto nextStartupInvalidLogTime = nextStartupProgressLogTime;
+
     while (true)
     {
         LagSnapshot snapshot;
@@ -387,6 +418,22 @@ void Kraken::alignment_worker()
                 writeRuntimeMetric = true;
             }
 
+                        if (!alignmentReady)
+                        {
+                                const size_t requiredSamples = alignmentWindowCount * alignmentWindowSamples;
+                                const auto now = std::chrono::steady_clock::now();
+                                if ((historySamples[0].size() < requiredSamples
+                                    || historySamples[1].size() < requiredSamples)
+                                    && now >= nextStartupProgressLogTime)
+                                {
+                                        std::cout << "[Kraken] Waiting for startup alignment history: channel 0 has "
+                                            << historySamples[0].size() << "/" << requiredSamples
+                                            << " samples, channel 1 has " << historySamples[1].size()
+                                            << "/" << requiredSamples << "." << std::endl;
+                                        nextStartupProgressLogTime = now + std::chrono::seconds(1);
+                                }
+                        }
+
             if (stopRequested && !alignmentReady)
             {
                 pendingOutputSamples[0].clear();
@@ -400,6 +447,11 @@ void Kraken::alignment_worker()
             {
                 if (!alignmentReady)
                 {
+                    if (!startupHistoryReadyLogged)
+                    {
+                        std::cout << "[Kraken] Collected enough startup history; beginning lag measurement." << std::endl;
+                        startupHistoryReadyLogged = true;
+                    }
                     measureLag = true;
                 }
                 else if (std::chrono::steady_clock::now() >= nextDriftCheckTime)
@@ -438,6 +490,18 @@ void Kraken::alignment_worker()
                     {
                         std::cout << "[Kraken] Drift recheck could not establish a stable lag estimate; retrying in 1 minute." << std::endl;
                         nextDriftCheckTime = std::chrono::steady_clock::now() + kDriftRetryInterval;
+                    }
+                    else
+                    {
+                        startupInvalidMeasurementCount++;
+                        const auto now = std::chrono::steady_clock::now();
+                        if (now >= nextStartupInvalidLogTime)
+                        {
+                            std::cout << "[Kraken] Startup alignment attempt "
+                              << startupInvalidMeasurementCount
+                              << " did not produce a stable lag estimate yet; waiting for more IQ history." << std::endl;
+                            nextStartupInvalidLogTime = now + std::chrono::seconds(1);
+                        }
                     }
                     stopAfterMeasurement = true;
                 }
@@ -510,6 +574,12 @@ void Kraken::alignment_worker()
 
         if (!referenceChunk.empty())
         {
+            if (!firstAlignedChunkLogged)
+            {
+                std::cout << "[Kraken] First aligned output chunk ready with "
+                  << referenceChunk.size() << " IQ samples per channel." << std::endl;
+                firstAlignedChunkLogged = true;
+            }
             emit_output_chunk(referenceChunk, surveillanceChunk);
         }
     }
@@ -534,14 +604,29 @@ void Kraken::schedule_alignment_delta_locked(int64_t deltaSamples)
 {
     if (deltaSamples > 0)
     {
+                std::cout << "[Kraken] Scheduling alignment correction: drop "
+                    << deltaSamples << " samples from channel 0." << std::endl;
         scheduledAlignmentDrops[0] += static_cast<uint64_t>(deltaSamples);
     }
     else if (deltaSamples < 0)
     {
+                std::cout << "[Kraken] Scheduling alignment correction: drop "
+                    << -deltaSamples << " samples from channel 1." << std::endl;
         scheduledAlignmentDrops[1] += static_cast<uint64_t>(-deltaSamples);
     }
 
     drain_scheduled_drops_locked();
+
+        if (scheduledAlignmentDrops[0] > 0)
+        {
+                std::cout << "[Kraken] Waiting to apply remaining correction of "
+                    << scheduledAlignmentDrops[0] << " samples on channel 0 as more IQ arrives." << std::endl;
+        }
+        if (scheduledAlignmentDrops[1] > 0)
+        {
+                std::cout << "[Kraken] Waiting to apply remaining correction of "
+                    << scheduledAlignmentDrops[1] << " samples on channel 1 as more IQ arrives." << std::endl;
+        }
 }
 
 bool Kraken::snapshot_recent_history_locked(LagSnapshot *snapshot) const
