@@ -220,6 +220,7 @@ std::unique_ptr<Source> Capture::factory_source(const std::string& type, c4::yml
     else if (type == VALID_TYPE[3])
     {
       std::vector<double> gain;
+      bool alignmentEnabled = true;
       uint32_t alignmentWindowCount = 3;
       int64_t lagConsensusToleranceSamples = 16;
       uint32_t driftCheckIntervalMinutes = 10;
@@ -233,6 +234,12 @@ std::unique_ptr<Source> Capture::factory_source(const std::string& type, c4::yml
       auto alignmentNode = config["alignment"];
       if (alignmentNode.valid())
       {
+        auto alignmentEnabledNode = alignmentNode["enabled"];
+        if (alignmentEnabledNode.valid())
+        {
+          alignmentEnabledNode >> alignmentEnabled;
+        }
+
         auto alignmentWindowCountNode = alignmentNode["windowCount"];
         if (alignmentWindowCountNode.valid())
         {
@@ -253,6 +260,7 @@ std::unique_ptr<Source> Capture::factory_source(const std::string& type, c4::yml
       }
 
       return std::make_unique<Kraken>(type, fc, fs, path, &saveIq, gain,
+        alignmentEnabled,
         static_cast<size_t>(alignmentWindowCount), lagConsensusToleranceSamples,
         std::chrono::minutes(driftCheckIntervalMinutes));
     }

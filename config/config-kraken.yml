@@ -5,6 +5,7 @@ capture:
     type: "Kraken"
     gain: [15.0, 15.0]
     alignment:
+      enabled: true # Enable startup sample-time alignment and periodic drift correction.
       windowCount: 3 # Number of consecutive windows used to establish startup/recheck consensus.
       consensusToleranceSamples: 16 # Maximum lag spread allowed across the alignment windows.
       recheckIntervalMinutes: 10 # Interval between drift rechecks after startup alignment.

@@ -100,6 +100,9 @@ private:
   /// @brief True once startup alignment has completed and aligned samples may flow downstream.
   bool alignmentReady = false;
 
+  /// @brief Enable startup alignment and periodic drift correction.
+  bool alignmentEnabled = true;
+
   /// @brief Number of samples per lag-estimation window.
   size_t alignmentWindowSamples = 0;
 
@@ -279,7 +282,7 @@ public:
   /// @param path Path to save IQ data.
   /// @return The object.
   Kraken(std::string type, uint32_t fc, uint32_t fs, std::string path, 
-    std::atomic<bool> *saveIq, std::vector<double> gain,
+    std::atomic<bool> *saveIq, std::vector<double> gain, bool alignmentEnabled,
     size_t alignmentWindowCount, int64_t lagConsensusToleranceSamples,
     std::chrono::minutes driftCheckInterval);
 

@@ -155,23 +155,25 @@ size_t Kraken::SampleRingBuffer::pop_front_into(
 // constructor
 Kraken::Kraken(std::string _type, uint32_t _fc, uint32_t _fs,
     std::string _path, std::atomic<bool> *_saveIq, std::vector<double> _gain,
+    bool _alignmentEnabled,
     size_t _alignmentWindowCount, int64_t _lagConsensusToleranceSamples,
     std::chrono::minutes _driftCheckInterval)
     : Source(_type, _fc, _fs, _path, _saveIq)
 {
-    if (_alignmentWindowCount == 0)
+    if (_alignmentEnabled && _alignmentWindowCount == 0)
     {
         throw std::invalid_argument("[Kraken] capture.device.alignment.windowCount must be at least 1.");
     }
-    if (_lagConsensusToleranceSamples < 0)
+    if (_alignmentEnabled && _lagConsensusToleranceSamples < 0)
     {
         throw std::invalid_argument("[Kraken] capture.device.alignment.consensusToleranceSamples must be non-negative.");
     }
-    if (_driftCheckInterval.count() <= 0)
+    if (_alignmentEnabled && _driftCheckInterval.count() <= 0)
     {
         throw std::invalid_argument("[Kraken] capture.device.alignment.recheckIntervalMinutes must be greater than 0.");
     }
 
+    alignmentEnabled = _alignmentEnabled;
     alignmentWindowCount = _alignmentWindowCount;
     lagConsensusToleranceSamples = _lagConsensusToleranceSamples;
     driftCheckInterval = _driftCheckInterval;
@@ -268,7 +270,7 @@ void Kraken::process(IqData *buffer1, IqData *buffer2)
         appliedAlignmentDrops[0] = 0;
         appliedAlignmentDrops[1] = 0;
         stopRequested = false;
-        alignmentReady = false;
+        alignmentReady = !alignmentEnabled;
         initialLagSamples = 0;
         lastMeasuredRawLagSamples = 0;
         rawLagValid = false;
@@ -293,11 +295,18 @@ void Kraken::process(IqData *buffer1, IqData *buffer2)
 
     write_runtime_metric(initialMetric);
 
+    if (alignmentEnabled)
+    {
         std::cout << "[Kraken] Startup alignment configured for "
             << alignmentWindowCount << " windows x " << alignmentWindowSamples
             << " samples; waiting for " << requiredHistorySamples
             << " samples per channel before first lag estimate." << std::endl;
-        std::cout << "[Kraken] Starting alignment worker thread." << std::endl;
+    }
+    else
+    {
+        std::cout << "[Kraken] Startup alignment disabled; forwarding channels without startup or drift correction." << std::endl;
+    }
+    std::cout << "[Kraken] Starting alignment worker thread." << std::endl;
     std::thread alignmentThread(&Kraken::alignment_worker, this);
     std::vector<std::thread> threads;
     callbackContexts[0].device = this;
@@ -441,7 +450,8 @@ void Kraken::alignment_worker()
                 break;
             }
 
-            if (snapshot_recent_history_locked(&snapshot)
+                        if (alignmentEnabled
+                            && snapshot_recent_history_locked(&snapshot)
               && scheduledAlignmentDrops[0] == 0
               && scheduledAlignmentDrops[1] == 0)
             {
