@@ -39,7 +39,7 @@ Building the code using the following instructions;
 - Run the docker-compose command.
 
 ```bash
-sudo git clone http://github.com/30hours/blah2 /opt/blah2
+sudo git clone http://github.com/jomosh/blah2 /opt/blah2
 cd /opt/blah2
 sudo chown -R $USER .
 sudo chmod a+x ./lib/sdrplay-3.15.2/SDRplay_RSP_API-Linux-3.15.2.run
