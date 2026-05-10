@@ -33,6 +33,9 @@ private:
   /// @brief Enable extra amplifier U13 on receive.
   std::vector<bool> ampEnable;
 
+  /// @brief Baseband filter bandwidth in Hz.
+  uint32_t bandwidth;
+
   /// @brief Callback context for each HackRF receive stream.
   struct CallbackContext
   {
@@ -70,11 +73,12 @@ public:
   /// @brief Constructor.
   /// @param fc Center frequency (Hz).
   /// @param path Path to save IQ data.
+  /// @param bandwidth Baseband filter bandwidth in Hz.
   /// @return The object.
   HackRf(std::string type, uint32_t fc, uint32_t fs, std::string path, 
     std::atomic<bool> *saveIq, std::vector<std::string> serial, 
     std::vector<uint32_t> gainLna, std::vector<uint32_t> gainVga, 
-    std::vector<bool> ampEnable);
+    std::vector<bool> ampEnable, uint32_t bandwidth);
 
   /// @brief Implement capture function on HackRF.
   /// @param buffer1 Pointer to reference buffer.

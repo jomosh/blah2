@@ -189,6 +189,7 @@ std::unique_ptr<Source> Capture::factory_source(const std::string& type, c4::yml
       std::vector<std::string> serial;
       std::vector<uint32_t> gainLna, gainVga;
       std::vector<bool> ampEnable;
+      uint32_t bandwidth;
       std::string _serial;
       uint32_t gain;
       int _gain;
@@ -197,6 +198,7 @@ std::unique_ptr<Source> Capture::factory_source(const std::string& type, c4::yml
       serial.push_back(_serial);
       config["serial"][1] >> _serial;
       serial.push_back(_serial);
+      config["bandwidth"] >> bandwidth;
       config["gain_lna"][0] >> _gain;
       gain = static_cast<uint32_t> (_gain);
       gainLna.push_back(gain);
@@ -214,7 +216,7 @@ std::unique_ptr<Source> Capture::factory_source(const std::string& type, c4::yml
       config["amp_enable"][1] >> _ampEnable;
       ampEnable.push_back(_ampEnable);
       return std::make_unique<HackRf>(type, fc, fs, path, &saveIq,
-        serial, gainLna, gainVga, ampEnable);
+        serial, gainLna, gainVga, ampEnable, bandwidth);
     }
     // Kraken
     else if (type == VALID_TYPE[3])
