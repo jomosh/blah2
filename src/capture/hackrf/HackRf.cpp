@@ -8,11 +8,12 @@
 HackRf::HackRf(std::string _type, uint32_t _fc, uint32_t _fs, 
   std::string _path, std::atomic<bool> *_saveIq, std::vector<std::string> _serial,
   std::vector<uint32_t> _gainLna, std::vector<uint32_t> _gainVga, 
-  std::vector<bool> _ampEnable)
+  std::vector<bool> _ampEnable, uint32_t _bandwidth)
     : Source(_type, _fc, _fs, _path, _saveIq)
 {
   serial = _serial;
   ampEnable = _ampEnable;
+  bandwidth = _bandwidth;
 
   // validate LNA gain
   std::unordered_set<uint32_t> validLna;
@@ -39,11 +40,12 @@ HackRf::HackRf(std::string _type, uint32_t _fc, uint32_t _fs,
   gainVga = _gainVga;
 }
 
-void HackRf::check_status(uint8_t status, std::string message)
+void HackRf::check_status(int status, const std::string &message)
 {
   if (status != HACKRF_SUCCESS)
   {
-    throw std::runtime_error("[HackRF] " + message);
+    throw std::runtime_error("[HackRF] " + message
+      + " (status=" + std::to_string(status) + ")");
   }
 }
 
@@ -67,6 +69,8 @@ void HackRf::start()
   check_status(status, "Failed to set frequency.");
   status = hackrf_set_sample_rate(dev[1], fs);
   check_status(status, "Failed to set sample rate.");
+  status = hackrf_set_baseband_filter_bandwidth(dev[1], bandwidth);
+  check_status(status, "Failed to set baseband filter bandwidth.");
   status = hackrf_set_amp_enable(dev[1], ampEnable[1] ? 1 : 0);
   check_status(status, "Failed to set AMP status.");
   status = hackrf_set_lna_gain(dev[1], gainLna[1]);
@@ -86,6 +90,8 @@ void HackRf::start()
   check_status(status, "Failed to set frequency.");
   status = hackrf_set_sample_rate(dev[0], fs);
   check_status(status, "Failed to set sample rate.");
+  status = hackrf_set_baseband_filter_bandwidth(dev[0], bandwidth);
+  check_status(status, "Failed to set baseband filter bandwidth.");
   status = hackrf_set_amp_enable(dev[0], ampEnable[0] ? 1 : 0);
   check_status(status, "Failed to set AMP status.");
   status = hackrf_set_lna_gain(dev[0], gainLna[0]);

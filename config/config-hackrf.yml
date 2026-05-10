@@ -9,6 +9,7 @@ capture:
     gain_lna: [32, 32]
     gain_vga: [30, 30]
     amp_enable: [false, false]
+    bandwidth: 1750000
   replay:
     state: false
     loop: true
