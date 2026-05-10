@@ -40,11 +40,12 @@ HackRf::HackRf(std::string _type, uint32_t _fc, uint32_t _fs,
   gainVga = _gainVga;
 }
 
-void HackRf::check_status(uint8_t status, std::string message)
+void HackRf::check_status(int status, const std::string &message)
 {
   if (status != HACKRF_SUCCESS)
   {
-    throw std::runtime_error("[HackRF] " + message);
+    throw std::runtime_error("[HackRF] " + message
+      + " (status=" + std::to_string(status) + ")");
   }
 }
 

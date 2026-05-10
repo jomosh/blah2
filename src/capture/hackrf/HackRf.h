@@ -50,7 +50,7 @@ private:
   /// @brief Check status of HackRF API returns.
   /// @param status Return code of API call.
   /// @param message Message if API call error.
-  void check_status(uint8_t status, std::string message);
+  void check_status(int status, const std::string &message);
 
   /// @brief Append callback samples into the paired IQ save queues.
   /// @param channelIndex Zero-based channel index.
