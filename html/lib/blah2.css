@@ -852,7 +852,7 @@ div.plotly-notifier {
   }
 
   .controller-menu__panel {
-    width: min(100vw - 28px, 360px);
+    width: min(calc(100vw - 28px), 360px);
   }
 
   .panel,

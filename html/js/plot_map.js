@@ -20,6 +20,7 @@ var isMaxholdMap = (typeof urlMap === 'string' && urlMap.indexOf('/stash/map') !
 var maxholdTrackHistory = {};
 var maxholdTrackTtlCpi = 20;
 var maxholdFrame = 0;
+var lastLockedAxisBounds = null;
 
 var configReady = request_json(urlConfig)
   .then(function (data_config) {
@@ -504,23 +505,35 @@ function buildMapTraces(mapData) {
 }
 
 function lockMapAxes(mapData) {
+  var nextBounds = {};
   var axisUpdate = {};
 
   if (Array.isArray(mapData.delay) && mapData.delay.length > 0) {
+    nextBounds.x = [mapData.delay[0], mapData.delay[mapData.delay.length - 1]];
     axisUpdate['xaxis.autorange'] = false;
-    axisUpdate['xaxis.range'] = [mapData.delay[0], mapData.delay[mapData.delay.length - 1]];
+    axisUpdate['xaxis.range'] = nextBounds.x;
   }
 
   if (Array.isArray(mapData.doppler) && mapData.doppler.length > 0) {
+    nextBounds.y = [mapData.doppler[0], mapData.doppler[mapData.doppler.length - 1]];
     axisUpdate['yaxis.autorange'] = false;
-    axisUpdate['yaxis.range'] = [mapData.doppler[0], mapData.doppler[mapData.doppler.length - 1]];
+    axisUpdate['yaxis.range'] = nextBounds.y;
   }
 
   if (Object.keys(axisUpdate).length === 0) {
     return Promise.resolve();
   }
 
-  return Plotly.relayout('data', axisUpdate);
+  if (
+    lastLockedAxisBounds &&
+    JSON.stringify(lastLockedAxisBounds) === JSON.stringify(nextBounds)
+  ) {
+    return Promise.resolve();
+  }
+
+  return Promise.resolve(Plotly.relayout('data', axisUpdate)).then(function () {
+    lastLockedAxisBounds = nextBounds;
+  });
 }
 
 function renderMap(mapData) {
@@ -534,9 +547,9 @@ function renderMap(mapData) {
     plotPromise = Plotly.update('data', {
       x: [traces[0].x, traces[1].x, traces[2].x, traces[3].x, traces[4].x],
       y: [traces[0].y, traces[1].y, traces[2].y, traces[3].y, traces[4].y],
-      z: [traces[0].z, [], [], [], []],
-      zmax: [traces[0].zmax, [], [], [], []],
-      text: [[], traces[1].text, traces[2].text, traces[3].text, traces[4].text]
+      z: [traces[0].z, undefined, undefined, undefined, undefined],
+      zmax: [traces[0].zmax, undefined, undefined, undefined, undefined],
+      text: [undefined, traces[1].text, traces[2].text, traces[3].text, traces[4].text]
     });
   }
 
