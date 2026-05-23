@@ -8,7 +8,7 @@ RUN apt-get update && apt-get install -y software-properties-common \
   && apt-add-repository ppa:ettusresearch/uhd \
   && apt-get update \
   && DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt-get install -y \
-  g++ make cmake git curl zip unzip doxygen graphviz \
+  g++ make cmake ninja-build git curl zip unzip doxygen graphviz \
   libfftw3-dev pkg-config gfortran libhackrf-dev \
   libuhd-dev \
   uhd-host \
@@ -36,11 +36,11 @@ RUN export ARCH=$(uname -m) \
   && export VER=${MAJVER}.${MINVER} \
   && cd /blah2/lib/sdrplay-${VER} \
   && chmod +x SDRplay_RSP_API-Linux-${VER}.run \
-  && ./SDRplay_RSP_API-Linux-${MAJVER}.${MINVER}.run --tar -xvf -C /blah2/lib/sdrplay-${VER} \ 
-  && cp ${ARCH}/libsdrplay_api.so.${MAJVER} /usr/local/lib/libsdrplay_api.so \ 
-  && cp ${ARCH}/libsdrplay_api.so.${MAJVER} /usr/local/lib/libsdrplay_api.so.${MAJVER} \ 
-  && cp inc/* /usr/local/include \ 
-  && chmod 644 /usr/local/lib/libsdrplay_api.so /usr/local/lib/libsdrplay_api.so.${MAJVER} \ 
+  && ./SDRplay_RSP_API-Linux-${MAJVER}.${MINVER}.run --tar -xvf -C /blah2/lib/sdrplay-${VER} \
+  && cp ${ARCH}/libsdrplay_api.so.${MAJVER} /usr/local/lib/libsdrplay_api.so \
+  && cp ${ARCH}/libsdrplay_api.so.${MAJVER} /usr/local/lib/libsdrplay_api.so.${MAJVER} \
+  && cp inc/* /usr/local/include \
+  && chmod 644 /usr/local/lib/libsdrplay_api.so /usr/local/lib/libsdrplay_api.so.${MAJVER} \
   && ldconfig
 
 # install UHD API
