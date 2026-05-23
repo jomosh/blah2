@@ -1,39 +1,48 @@
-var timestamp;
-var nRows = 3;
-var range_x = [];
-var range_y = [];
+var nRows = -1;
+var detectionPoller = null;
+var resizeBinding = null;
+var exportBinding = null;
+var themeBinding = null;
+var livePanel = create_live_panel(document.querySelector('[data-live-panel]'));
 
-// setup API
-var urlTimestamp = build_api_url('/api/timestamp');
 var urlDetection = build_api_url('/stash/detection');
 
-// setup plotly
 var layout = {
-  autosize: false,
+  autosize: true,
+  uirevision: 'detection-history',
   margin: {
-    l: 50,
-    r: 50,
-    b: 50,
-    t: 10,
+    l: 60,
+    r: 30,
+    b: 60,
+    t: 20,
     pad: 0
   },
-  hoverlabel: {
-    namelength: 0
+  font: {
+    family: 'Trebuchet MS, Gill Sans, sans-serif',
+    color: '#ebe6dc'
   },
-  width: document.getElementById('data').offsetWidth,
-  height: document.getElementById('data').offsetHeight,
-  plot_bgcolor: "rgba(0,0,0,0)",
-  paper_bgcolor: "rgba(0,0,0,0)",
+  hoverlabel: {
+    namelength: 0,
+    bgcolor: 'rgba(8, 18, 22, 0.96)',
+    bordercolor: '#ce9861',
+    font: {
+      family: 'Trebuchet MS, Gill Sans, sans-serif'
+    }
+  },
+  plot_bgcolor: 'rgba(0,0,0,0)',
+  paper_bgcolor: 'rgba(0,0,0,0)',
   annotations: [],
-  displayModeBar: false,
   xaxis: {
     title: {
       text: xTitle,
       font: {
-        size: 24
+        size: 22
       }
     },
-    showgrid: false,
+    showgrid: true,
+    gridcolor: 'rgba(206, 152, 97, 0.12)',
+    linecolor: 'rgba(235, 230, 220, 0.28)',
+    zerolinecolor: 'rgba(235, 230, 220, 0.18)',
     ticks: '',
     side: 'bottom'
   },
@@ -41,95 +50,119 @@ var layout = {
     title: {
       text: yTitle,
       font: {
-        size: 24
+        size: 22
       }
     },
-    showgrid: false,
+    showgrid: true,
+    gridcolor: 'rgba(206, 152, 97, 0.12)',
+    linecolor: 'rgba(235, 230, 220, 0.28)',
+    zerolinecolor: 'rgba(235, 230, 220, 0.18)',
     ticks: '',
-    ticksuffix: ' ',
-    autosize: false,
-    categoryorder: "total descending"
+    ticksuffix: ' '
   }
 };
 var config = {
+  responsive: true,
   displayModeBar: false,
   scrollZoom: true
+};
+
+apply_plot_theme(layout);
+
+function convert_detection_axis(values) {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+
+  if (xVariable !== 'timestamp') {
+    return values.slice();
+  }
+
+  return values.map(function (value) {
+    return new Date(value);
+  });
 }
 
-// setup plotly data
-var data = [
-  {
-    z: [[0, 0, 0], [0, 0, 0], [0, 0, 0]],
-    colorscale: 'Jet',
-    type: 'heatmap'
-  }
-];
-
-Plotly.newPlot('data', data, layout, config);
-
-// callback function
-var intervalId = window.setInterval(function () {
-
-  // check if timestamp is updated
-  var timestampData = $.get(urlTimestamp, function () { })
-
-    .done(function (data) {
-      if (timestamp != data) {
-        timestamp = data;
-
-        // get new data
-        var apiData = $.getJSON(urlDetection, function () { })
-          .done(function (data) {
-
-            // case draw new plot
-            if (data.nRows != nRows) {
-              nRows = data.nRows;
-
-              // timestamp posix to js
-              if (xVariable === "timestamp")
-              {
-                for (i = 0; i < data[xVariable].length; i++)
-                {
-                  data[xVariable][i] = new Date(data[xVariable][i]);
-                }
-              }
-
-              var trace1 = {
-                  x: data[xVariable],
-                  y: data[yVariable],
-                  mode: 'markers',
-                  type: 'scatter'
-              };
-              
-              var data_trace = [trace1];
-              Plotly.newPlot('data', data_trace, layout, config);
-            }
-            // case update plot
-            else {
-              // timestamp posix to js
-              if (xVariable === "timestamp")
-              {
-                for (i = 0; i < data[xVariable].length; i++)
-                {
-                  data[xVariable][i] = new Date(data[xVariable][i]);
-                }
-              }
-              var trace_update = {
-                x: [data[xVariable]],
-                y: [data[yVariable]]
-              };
-              Plotly.update('data', trace_update);
-            }
-
-          })
-          .fail(function () {
-          })
-          .always(function () {
-          });
+function build_detection_trace(payload) {
+  return {
+    x: convert_detection_axis(payload[xVariable]),
+    y: Array.isArray(payload[yVariable]) ? payload[yVariable].slice() : [],
+    mode: 'markers',
+    type: 'scatter',
+    marker: {
+      size: 11,
+      color: 'rgba(240, 186, 127, 0.92)',
+      line: {
+        width: 1,
+        color: 'rgba(3, 9, 12, 0.9)'
       }
-    })
-    .fail(function () {
-    })
-    .always(function () {
+    },
+    hovertemplate: xTitle + ': %{x}<br>' + yTitle + ': %{y}<extra></extra>'
+  };
+}
+
+function render_detection(payload) {
+  var trace = build_detection_trace(payload);
+
+  if (payload.nRows !== nRows) {
+    nRows = payload.nRows;
+    Plotly.react('data', [trace], layout, config);
+  }
+  else {
+    Plotly.update('data', {
+      x: [trace.x],
+      y: [trace.y]
     });
-}, 100);
+  }
+
+  if (livePanel) {
+    livePanel.setMetrics({
+      samples: trace.y.length,
+      rows: payload.nRows || 0
+    });
+  }
+}
+
+Plotly.newPlot('data', [{
+  x: [],
+  y: [],
+  mode: 'markers',
+  type: 'scatter',
+  marker: {
+    size: 11,
+    color: 'rgba(240, 186, 127, 0.92)'
+  }
+}], layout, config);
+resizeBinding = bind_plot_resize('data');
+exportBinding = bind_plot_exports({
+  plotId: 'data',
+  baseFilename: xVariable === 'timestamp' && yVariable === 'delay'
+    ? 'blah2-detection-delay'
+    : xVariable === 'timestamp' && yVariable === 'doppler'
+      ? 'blah2-detection-doppler'
+      : 'blah2-detection-delay-doppler'
+});
+themeBinding = bind_plot_theme('data', layout);
+
+detectionPoller = create_timestamp_poller({
+  livePanel: livePanel,
+  visibleMinDelayMs: 425,
+  visibleMaxDelayMs: 2600,
+  idleStepMs: 260,
+  onRefresh: function () {
+    return request_json(urlDetection).then(render_detection);
+  }
+});
+detectionPoller.start();
+
+window.addEventListener('beforeunload', function () {
+  if (detectionPoller) {
+    detectionPoller.stop();
+  }
+  if (resizeBinding) {
+    resizeBinding.disconnect();
+  }
+  if (themeBinding) {
+    themeBinding.disconnect();
+  }
+});

@@ -3,27 +3,71 @@
 <head>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta charset="UTF-8">
-  <title>blah2</title>
-  <!-- load lib js -->
+  <title>blah2 | Timing Display</title>
   <script src="../../lib/bootstrap-5.2.3.min.js"></script>
   <script src="../../lib/plotly-2.20.0.min.js"></script>
   <script src="../../lib/jquery-3.6.4.min.js"></script>
-  <!-- load lib css -->
   <link rel="stylesheet" href="../../lib/bootstrap-5.2.3.min.css">
-  <link rel="stylesheet" href="../../lib/blah2.css">
-  <style>
-  </style>
+  <link rel="stylesheet" href="../../lib/blah2.css?v=20260523g">
 </head>
 <body>
-  <div style="height: 100vh; width: 95vw" class="container-fluid">
-    <div style="height: 100vh; width: 95vw" class="row d-flex">
-      <div class="justify-content-center" id="data"></div>
-    </div>
+  <div class="app-shell">
+    <main class="focus-grid">
+      <section class="panel panel--plot">
+        <div class="panel-toolbar">
+          <div>
+            <h1 class="panel-title panel-title--plain">Timing display</h1>
+          </div>
+          <div class="export-actions">
+            <button type="button" class="ghost-button" data-export-png>Export PNG</button>
+            <button type="button" class="ghost-button" data-export-csv>Export CSV</button>
+          </div>
+        </div>
+
+        <div class="panel-meta-grid">
+          <div class="live-panel" data-live-panel>
+            <div class="live-main">
+              <span class="status-pill" data-live-state>Waiting</span>
+              <button type="button" class="ghost-button" data-live-toggle aria-pressed="false">Pause stream</button>
+            </div>
+            <p class="live-detail" data-live-detail>CPI unavailable</p>
+            <div class="live-meta">
+              <span data-live-updated>Waiting for first frame</span>
+              <span data-live-next>Polling paused</span>
+            </div>
+          </div>
+
+          <div class="metric-strip">
+            <div class="metric-card">
+              <span class="metric-label">Series</span>
+              <strong data-stat-value="series">-</strong>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">Samples</span>
+              <strong data-stat-value="samples">-</strong>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">Uptime</span>
+              <strong data-stat-value="uptime">-</strong>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">XAxis</span>
+              <strong data-stat-value="xaxis">Time</strong>
+            </div>
+          </div>
+        </div>
+
+        <div class="plot-surface">
+          <div class="plot-host" id="data"></div>
+        </div>
+      </section>
+    </main>
+  </div>
 </body>
 <script>
   xTitle = "Timestamp";
   yTitle = "Time (ms)";
 </script>
-<script src="../../js/common.js"></script>
-<script src="../../js/plot_timing.js"></script>
+<script src="../../js/common.js?v=20260523d"></script>
+<script src="../../js/plot_timing.js?v=20260523c"></script>
 </html>

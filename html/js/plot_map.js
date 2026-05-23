@@ -1,142 +1,18 @@
-var timestamp = -1;
-var nRows = 3;
-var range_x = [];
-var range_y = [];
+var nRows = -1;
+var mapPoller = null;
+var resizeBinding = null;
+var exportBinding = null;
+var themeBinding = null;
+var livePanel = create_live_panel(document.querySelector('[data-live-panel]'));
 
-// setup API
-var urlTimestamp;
-var urlDetection;
-var urlAdsb;
-var urlConfig;
-var urlTracker;
-urlTimestamp = build_api_url('/api/timestamp');
-urlDetection = build_api_url('/api/detection');
-urlAdsb = build_api_url('/api/adsb');
-urlConfig = build_api_url('/api/config');
-urlTracker = build_api_url('/api/tracker');
+var urlDetection = build_api_url('/api/detection');
+var urlAdsb = build_api_url('/api/adsb');
+var urlConfig = build_api_url('/api/config');
+var urlTracker = build_api_url('/api/tracker');
 urlMap = build_api_url(urlMap);
 
-// get truth flag
 var isTruth = false;
-$.getJSON(urlConfig, function () { })
-.done(function (data_config) {
-  if (data_config.truth.adsb.enabled === true) {
-    isTruth = true;
-  }
-});
-
-// setup plotly
-var layout = {
-  autosize: true,
-  margin: {
-    l: 50,
-    r: 50,
-    b: 50,
-    t: 10,
-    pad: 0
-  },
-  hoverlabel: {
-    namelength: 0
-  },
-  plot_bgcolor: "rgba(0,0,0,0)",
-  paper_bgcolor: "rgba(0,0,0,0)",
-  annotations: [],
-  displayModeBar: false,
-  xaxis: {
-    title: {
-      text: 'Bistatic Range (km)',
-      font: {
-        size: 24
-      }
-    },
-    ticks: '',
-    side: 'bottom'
-  },
-  yaxis: {
-    title: {
-      text: 'Bistatic Doppler (Hz)',
-      font: {
-        size: 24
-      }
-    },
-    ticks: '',
-    ticksuffix: ' ',
-    autosize: false,
-    categoryorder: "total descending"
-  },
-  showlegend: false
-};
-var config = {
-  responsive: true,
-  displayModeBar: false
-  //scrollZoom: true
-}
-
-// setup plotly data
-var data = [
-  {
-    z: [[0, 0, 0], [0, 0, 0], [0, 0, 0]],
-    colorscale: 'Jet',
-    type: 'heatmap'
-  },
-  {
-    x: [],
-    y: [],
-    text: [],
-    mode: 'markers',
-    type: 'scatter',
-    marker: {
-      size: 16,
-      opacity: 0.8,
-      color: 'rgba(255, 165, 0, 0.8)'
-    },
-    hovertemplate: 'Range: %{x}<br>Doppler: %{y}',
-    name: 'Blah2 Target'
-  },
-  {
-    x: [],
-    y: [],
-    text: [],
-    mode: 'markers',
-    type: 'scatter',
-    marker: {
-      size: 14,
-      opacity: 0.6,
-      color: 'rgba(0, 200, 0, 0.8)'
-    },
-    hovertemplate: 'ADS-B Target: %{text}<br>Range: %{x}<br>Doppler: %{y}',
-    name: 'ADS-B'
-  },
-  {
-    x: [],
-    y: [],
-    text: [],
-    mode: 'markers',
-    type: 'scatter',
-    marker: {
-      size: 18,
-      opacity: 1.0,
-      color: 'rgba(255, 255, 0, 1)'
-    },
-    hovertemplate: 'ADS-B Target: %{text}<br>Range: %{x}<br>Doppler: %{y}',
-    name: 'Selected ADS-B'
-  },
-  {
-    x: [],
-    y: [],
-    text: [],
-    mode: 'markers',
-    type: 'scatter',
-    marker: {
-      size: 5,
-      opacity: 1.0,
-      color: 'rgba(255, 0, 0, 1)'
-    },
-    hovertemplate: 'Track: %{text}<br>Range: %{x}<br>Doppler: %{y}',
-    name: 'Tracks'
-  }
-];
-var detection = [];
+var detection = { delay: [], doppler: [] };
 var adsbTargets = {};
 var selectedAdsbTarget = 'all';
 var track = {};
@@ -144,6 +20,160 @@ var isMaxholdMap = (typeof urlMap === 'string' && urlMap.indexOf('/stash/map') !
 var maxholdTrackHistory = {};
 var maxholdTrackTtlCpi = 20;
 var maxholdFrame = 0;
+
+var configReady = request_json(urlConfig)
+  .then(function (data_config) {
+    isTruth = Boolean(
+      data_config &&
+      data_config.truth &&
+      data_config.truth.adsb &&
+      data_config.truth.adsb.enabled === true
+    );
+  })
+  .catch(function () {
+    isTruth = false;
+  });
+
+var layout = {
+  autosize: true,
+  uirevision: 'map-surface',
+  dragmode: 'pan',
+  margin: {
+    l: 60,
+    r: 30,
+    b: 60,
+    t: 20,
+    pad: 0
+  },
+  font: {
+    family: 'Trebuchet MS, Gill Sans, sans-serif',
+    color: '#ebe6dc'
+  },
+  hoverlabel: {
+    namelength: 0,
+    bgcolor: 'rgba(8, 18, 22, 0.96)',
+    bordercolor: '#ce9861',
+    font: {
+      family: 'Trebuchet MS, Gill Sans, sans-serif'
+    }
+  },
+  plot_bgcolor: 'rgba(0,0,0,0)',
+  paper_bgcolor: 'rgba(0,0,0,0)',
+  annotations: [],
+  xaxis: {
+    title: {
+      text: 'Bistatic Range (km)',
+      font: {
+        size: 22
+      }
+    },
+    ticks: '',
+    side: 'bottom',
+    showgrid: true,
+    gridcolor: 'rgba(206, 152, 97, 0.12)',
+    linecolor: 'rgba(235, 230, 220, 0.28)'
+  },
+  yaxis: {
+    title: {
+      text: 'Bistatic Doppler (Hz)',
+      font: {
+        size: 22
+      }
+    },
+    ticks: '',
+    ticksuffix: ' ',
+    showgrid: true,
+    gridcolor: 'rgba(206, 152, 97, 0.12)',
+    linecolor: 'rgba(235, 230, 220, 0.28)'
+  },
+  showlegend: false
+};
+var config = {
+  responsive: true,
+  displayModeBar: false
+};
+
+apply_plot_theme(layout);
+
+function get_placeholder_traces() {
+  return [
+    {
+      z: [[0]],
+      x: [0],
+      y: [0],
+      colorscale: 'Viridis',
+      type: 'heatmap'
+    },
+    {
+      x: [],
+      y: [],
+      text: [],
+      mode: 'markers',
+      type: 'scatter',
+      marker: {
+        size: 16,
+        opacity: 0.82,
+        color: 'rgba(255, 165, 0, 0.85)',
+        line: {
+          width: 1,
+          color: 'rgba(3, 9, 12, 0.9)'
+        }
+      },
+      hovertemplate: 'Range: %{x}<br>Doppler: %{y}<extra></extra>',
+      name: 'Blah2 Target'
+    },
+    {
+      x: [],
+      y: [],
+      text: [],
+      mode: 'markers',
+      type: 'scatter',
+      marker: {
+        size: 14,
+        opacity: 0.68,
+        color: 'rgba(211, 243, 106, 0.85)',
+        line: {
+          width: 1,
+          color: 'rgba(3, 9, 12, 0.9)'
+        }
+      },
+      hovertemplate: 'ADS-B Target: %{text}<br>Range: %{x}<br>Doppler: %{y}<extra></extra>',
+      name: 'ADS-B'
+    },
+    {
+      x: [],
+      y: [],
+      text: [],
+      mode: 'markers',
+      type: 'scatter',
+      marker: {
+        size: 18,
+        opacity: 1,
+        color: 'rgba(255, 241, 120, 1)',
+        line: {
+          width: 1,
+          color: 'rgba(3, 9, 12, 0.9)'
+        }
+      },
+      hovertemplate: 'ADS-B Target: %{text}<br>Range: %{x}<br>Doppler: %{y}<extra></extra>',
+      name: 'Selected ADS-B'
+    },
+    {
+      x: [],
+      y: [],
+      text: [],
+      mode: 'markers',
+      type: 'scatter',
+      marker: {
+        size: 6,
+        opacity: 1,
+        color: 'rgba(255, 120, 114, 1)'
+      },
+      hovertemplate: 'Track: %{text}<br>Range: %{x}<br>Doppler: %{y}<extra></extra>',
+      name: 'Tracks'
+    }
+  ];
+}
 
 function getAdsbTargetFilterValue() {
   return document.querySelector('#adsb-target-filter')?.value.trim().toLowerCase() || '';
@@ -153,18 +183,55 @@ function formatAdsbLabel(targetId, targetInfo) {
   return targetInfo.flight ? targetInfo.flight + ' (' + targetId + ')' : targetId;
 }
 
+function coerceNumericArray(value) {
+  var values = Array.isArray(value) ? value : value !== undefined ? [value] : [];
+  return values.map(function (entry) {
+    var numericValue = Number(entry);
+    return Number.isFinite(numericValue) ? numericValue : NaN;
+  });
+}
+
 function normalizeAdsbTarget(target, targetId) {
   if (!target) {
     return {delay: [], doppler: [], flight: []};
   }
-  var delay = Array.isArray(target.delay) ? target.delay : target.delay !== undefined ? [target.delay] : [];
-  var doppler = Array.isArray(target.doppler) ? target.doppler : target.doppler !== undefined ? [target.doppler] : [];
+  var rawDelay = coerceNumericArray(target.delay);
+  var rawDoppler = coerceNumericArray(target.doppler);
   var flightLabel = target.flight || targetId;
-  var length = Math.min(delay.length, doppler.length);
-  delay = delay.slice(0, length);
-  doppler = doppler.slice(0, length);
+  var length = Math.min(rawDelay.length, rawDoppler.length);
+  var delay = [];
+  var doppler = [];
+  for (var index = 0; index < length; index += 1) {
+    if (Number.isFinite(rawDelay[index]) && Number.isFinite(rawDoppler[index])) {
+      delay.push(rawDelay[index]);
+      doppler.push(rawDoppler[index]);
+    }
+  }
   var flight = Array(length).fill(flightLabel);
+  flight = Array(delay.length).fill(flightLabel);
   return {delay: delay, doppler: doppler, flight: flight};
+}
+
+function formatAdsbRangeValue(target, targetId) {
+  var finiteDelay = coerceNumericArray(target ? target.delay : undefined).filter(function (value) {
+    return Number.isFinite(value);
+  });
+
+  if (finiteDelay.length === 0) {
+    return '-';
+  }
+
+  if (finiteDelay.length === 1) {
+    return finiteDelay[0].toFixed(2);
+  }
+
+  var minDelay = Math.min.apply(null, finiteDelay);
+  var maxDelay = Math.max.apply(null, finiteDelay);
+  if (Math.abs(maxDelay - minDelay) < 0.01) {
+    return minDelay.toFixed(2);
+  }
+
+  return minDelay.toFixed(1) + ' to ' + maxDelay.toFixed(1);
 }
 
 function getAllAdsbTraceSelection() {
@@ -264,7 +331,8 @@ function updateAdsbTargetTable() {
     }
     row.dataset.targetId = targetId;
     row.innerHTML = '<td>' + (flight || '-') + '</td>' +
-                    '<td>' + targetId + '</td>';
+                    '<td>' + targetId + '</td>' +
+                    '<td>' + formatAdsbRangeValue(target, targetId) + '</td>';
     row.addEventListener('click', function () {
       selectedAdsbTarget = this.dataset.targetId;
       updateAdsbTargetTable();
@@ -277,7 +345,7 @@ function updateAdsbTargetTable() {
   if (Object.keys(adsbTargets).length === 0) {
     var emptyRow = document.createElement('tr');
     var emptyCell = document.createElement('td');
-    emptyCell.setAttribute('colspan', '2');
+    emptyCell.setAttribute('colspan', '3');
     emptyCell.className = 'text-center text-muted small';
     emptyCell.textContent = 'No ADS-B targets available';
     emptyRow.appendChild(emptyCell);
@@ -290,7 +358,7 @@ function updateAdsbTargetTable() {
     allRow.classList.add('table-active');
   }
   allRow.dataset.targetId = 'all';
-  allRow.innerHTML = '<td>All ADS-B targets</td><td>-</td>';
+  allRow.innerHTML = '<td>All ADS-B targets</td><td>-</td><td>-</td>';
   allRow.addEventListener('click', function () {
     selectedAdsbTarget = 'all';
     updateAdsbTargetTable();
@@ -300,7 +368,7 @@ function updateAdsbTargetTable() {
   if (rows.length === 0) {
     var emptyRow = document.createElement('tr');
     var emptyCell = document.createElement('td');
-    emptyCell.setAttribute('colspan', '2');
+    emptyCell.setAttribute('colspan', '3');
     emptyCell.className = 'text-center text-muted small';
     emptyCell.textContent = hasFilter ? 'No ADS-B targets match the filter' : 'No ADS-B targets available';
     emptyRow.appendChild(emptyCell);
@@ -320,166 +388,228 @@ function updateAdsbTrace() {
   }, {}, [2, 3]);
 }
 
-Plotly.newPlot('data', data, layout, config);
+function extractAdsbTargets(data_adsb) {
+  var nextTargets = {};
+  Object.keys(data_adsb || {}).forEach(function (aircraft) {
+    if (data_adsb[aircraft] && 'doppler' in data_adsb[aircraft]) {
+      nextTargets[aircraft] = {
+        delay: data_adsb[aircraft].delay,
+        doppler: data_adsb[aircraft].doppler,
+        flight: data_adsb[aircraft].flight
+      };
+    }
+  });
+  return nextTargets;
+}
 
-// callback function
-var intervalId = window.setInterval(function () {
+function updateMapMetrics(mapData) {
+  if (!livePanel) {
+    return;
+  }
 
-  // check if timestamp is updated
-  $.get(urlTimestamp, function () { })
+  livePanel.setMetrics({
+    detections: Array.isArray(detection.delay) ? detection.delay.length : 0,
+    tracks: Array.isArray(track.data) ? track.data.length : 0,
+    adsb: Object.keys(adsbTargets).length,
+    power: Number.isFinite(mapData.maxPower) ? Math.max(13, mapData.maxPower).toFixed(1) + ' dB' : '-'
+  });
+}
 
-    .done(function (data) {
-      if (timestamp != data) {
-        timestamp = data;
+function buildMapTraces(mapData) {
+  var allSelection = getAllAdsbTraceSelection();
+  var selectedSelection = getSelectedAdsbTraceSelection();
+  var trackSelection = getTrackTraceSelection(track);
+  var detectionText = Array.isArray(detection.delay) ? Array(detection.delay.length).fill('Blah2 Target') : [];
 
-        // get detection data (no detection lag)
-        $.getJSON(urlDetection, function () { })
-          .done(function (data_detection) {
-            detection = data_detection;
-          });
-
-        // get tracker data for the doppler map overlay
-        $.getJSON(urlTracker, function () { })
-          .done(function (data_tracker) {
-            track = data_tracker;
-          });
-
-        // get ADS-B data from the C++ pipeline if enabled
-        if (isTruth) {
-          $.getJSON(urlAdsb, function () { })
-            .done(function (data_adsb) {
-              adsbTargets = {};
-              for (const aircraft in data_adsb) {
-                if ('doppler' in data_adsb[aircraft]) {
-                  adsbTargets[aircraft] = {
-                    delay: data_adsb[aircraft]['delay'],
-                    doppler: data_adsb[aircraft]['doppler'],
-                    flight: data_adsb[aircraft]['flight']
-                  };
-                }
-              }
-              if (selectedAdsbTarget !== 'all' && !adsbTargets[selectedAdsbTarget]) {
-                selectedAdsbTarget = 'all';
-              }
-              updateAdsbTargetTable();
-              updateAdsbTrace();
-            });
+  return [
+    {
+      z: mapData.data,
+      x: mapData.delay,
+      y: mapData.doppler,
+      colorscale: 'Viridis',
+      zauto: false,
+      zmin: 0,
+      zmax: Math.max(13, mapData.maxPower || 13),
+      type: 'heatmap'
+    },
+    {
+      x: detection.delay,
+      y: detection.doppler,
+      text: detectionText,
+      mode: 'markers',
+      type: 'scatter',
+      marker: {
+        size: 16,
+        opacity: 0.82,
+        color: 'rgba(255, 165, 0, 0.85)',
+        line: {
+          width: 1,
+          color: 'rgba(3, 9, 12, 0.9)'
         }
+      },
+      hovertemplate: 'Range: %{x}<br>Doppler: %{y}<extra></extra>',
+      name: 'Blah2 Target'
+    },
+    {
+      x: allSelection.delay,
+      y: allSelection.doppler,
+      text: allSelection.flight,
+      mode: 'markers',
+      type: 'scatter',
+      marker: {
+        size: 14,
+        opacity: 0.68,
+        color: 'rgba(211, 243, 106, 0.85)',
+        line: {
+          width: 1,
+          color: 'rgba(3, 9, 12, 0.9)'
+        }
+      },
+      hovertemplate: 'ADS-B Target: %{text}<br>Range: %{x}<br>Doppler: %{y}<extra></extra>',
+      name: 'ADS-B'
+    },
+    {
+      x: selectedSelection.delay,
+      y: selectedSelection.doppler,
+      text: selectedSelection.flight,
+      mode: 'markers',
+      type: 'scatter',
+      marker: {
+        size: 18,
+        opacity: 1,
+        color: 'rgba(255, 241, 120, 1)',
+        line: {
+          width: 1,
+          color: 'rgba(3, 9, 12, 0.9)'
+        }
+      },
+      hovertemplate: 'ADS-B Target: %{text}<br>Range: %{x}<br>Doppler: %{y}<extra></extra>',
+      name: 'Selected ADS-B'
+    },
+    {
+      x: trackSelection.delay,
+      y: trackSelection.doppler,
+      text: trackSelection.flight,
+      mode: 'markers',
+      type: 'scatter',
+      marker: {
+        size: 6,
+        opacity: 1,
+        color: 'rgba(255, 120, 114, 1)'
+      },
+      hovertemplate: 'Track: %{text}<br>Range: %{x}<br>Doppler: %{y}<extra></extra>',
+      name: 'Tracks'
+    }
+  ];
+}
 
-        // get new map data
-        $.getJSON(urlMap, function () { })
-          .done(function (data) {
+function lockMapAxes(mapData) {
+  var axisUpdate = {};
 
-            // case draw new plot
-            if (data.nRows != nRows) {
-              nRows = data.nRows;
+  if (Array.isArray(mapData.delay) && mapData.delay.length > 0) {
+    axisUpdate['xaxis.autorange'] = false;
+    axisUpdate['xaxis.range'] = [mapData.delay[0], mapData.delay[mapData.delay.length - 1]];
+  }
 
-              // lock range before other trace
-              var layout_update = {
-                'xaxis.range': [data.delay[0], data.delay.slice(-1)[0]],
-                'yaxis.range': [data.doppler[0], data.doppler.slice(-1)[0]]
-              };
-              Plotly.relayout('data', layout_update);
+  if (Array.isArray(mapData.doppler) && mapData.doppler.length > 0) {
+    axisUpdate['yaxis.autorange'] = false;
+    axisUpdate['yaxis.range'] = [mapData.doppler[0], mapData.doppler[mapData.doppler.length - 1]];
+  }
 
-              var allSelection = getAllAdsbTraceSelection();
-              var selectedSelection = getSelectedAdsbTraceSelection();
-              var trace1 = {
-                  z: data.data,
-                  x: data.delay,
-                  y: data.doppler,
-                  colorscale: 'Viridis',
-                  zauto: false,
-                  zmin: 0,
-                  zmax: Math.max(13, data.maxPower),
-                  type: 'heatmap'
-              };
-              var detectionText = Array.isArray(detection.delay) ? Array(detection.delay.length).fill('Blah2 Target') : [];
-              var trace2 = {
-                  x: detection.delay,
-                  y: detection.doppler,
-                  text: detectionText,
-                  mode: 'markers',
-                  type: 'scatter',
-                  marker: {
-                    size: 16,
-                    opacity: 0.8,
-                    color: 'rgba(255, 165, 0, 0.8)'
-                  },
-                  hovertemplate: 'Range: %{x}<br>Doppler: %{y}',
-                  name: 'Blah2 Target'
-              };
-              var trace3 = {
-                x: allSelection.delay,
-                y: allSelection.doppler,
-                text: allSelection.flight,
-                mode: 'markers',
-                type: 'scatter',
-                marker: {
-                  size: 14,
-                  opacity: 0.6,
-                  color: 'rgba(0, 200, 0, 0.8)'
-                },
-                hovertemplate: 'ADS-B Target: %{text}<br>Range: %{x}<br>Doppler: %{y}',
-                name: 'ADS-B'
-              };
-              var trackSelection = getTrackTraceSelection(track);
-              var trace4 = {
-                x: selectedSelection.delay,
-                y: selectedSelection.doppler,
-                text: selectedSelection.flight,
-                mode: 'markers',
-                type: 'scatter',
-                marker: {
-                  size: 18,
-                  opacity: 1.0,
-                  color: 'rgba(255, 255, 0, 1)'
-                },
-                hovertemplate: 'ADS-B Target:%{text}<br>Range: %{x}<br>Doppler: %{y}',
-                name: 'Selected ADS-B'
-              };
-              var trace5 = {
-                x: trackSelection.delay,
-                y: trackSelection.doppler,
-                text: trackSelection.flight,
-                mode: 'markers',
-                type: 'scatter',
-                marker: {
-                  size: 5,
-                  opacity: 1.0,
-                  color: 'rgba(255, 0, 0, 1)'
-                },
-                hovertemplate: 'Track: %{text}<br>Range: %{x}<br>Doppler: %{y}',
-                name: 'Tracks'
-              };
+  if (Object.keys(axisUpdate).length === 0) {
+    return Promise.resolve();
+  }
 
-              var data_trace = [trace1, trace2, trace3, trace4, trace5];
-              Plotly.newPlot('data', data_trace, layout, config);
-            }
-            // case update plot
-            else {
-              var allSelection = getAllAdsbTraceSelection();
-              var selectedSelection = getSelectedAdsbTraceSelection();
-              var trackSelection = getTrackTraceSelection(track);
-              var detectionText = Array.isArray(detection.delay) ? Array(detection.delay.length).fill('Blah2 Target') : [];
-              var trace_update = {
-                x: [data.delay, detection.delay, allSelection.delay, selectedSelection.delay, trackSelection.delay],
-                y: [data.doppler, detection.doppler, allSelection.doppler, selectedSelection.doppler, trackSelection.doppler],
-                z: [data.data, [], [], [], []],
-                zmax: [Math.max(13, data.maxPower), [], [], [], []],
-                text: [[], detectionText, allSelection.flight, selectedSelection.flight, trackSelection.flight]
-              };
-              Plotly.update('data', trace_update);
-            }
+  return Plotly.relayout('data', axisUpdate);
+}
 
-          })
-          .fail(function () {
-          })
-          .always(function () {
-          });
-      }
-    })
-    .fail(function () {
-    })
-    .always(function () {
+function renderMap(mapData) {
+  var traces = buildMapTraces(mapData);
+  var plotPromise;
+  if (mapData.nRows !== nRows) {
+    nRows = mapData.nRows;
+    plotPromise = Plotly.react('data', traces, layout, config);
+  }
+  else {
+    plotPromise = Plotly.update('data', {
+      x: [traces[0].x, traces[1].x, traces[2].x, traces[3].x, traces[4].x],
+      y: [traces[0].y, traces[1].y, traces[2].y, traces[3].y, traces[4].y],
+      z: [traces[0].z, [], [], [], []],
+      zmax: [traces[0].zmax, [], [], [], []],
+      text: [[], traces[1].text, traces[2].text, traces[3].text, traces[4].text]
     });
-}, 100);
+  }
+
+  return Promise.resolve(plotPromise)
+    .then(function () {
+      return lockMapAxes(mapData);
+    })
+    .then(function () {
+      updateMapMetrics(mapData);
+    });
+}
+
+function refreshMap() {
+  return configReady.then(function () {
+    return Promise.all([
+      request_json(urlMap),
+      request_json(urlDetection).catch(function () {
+        return detection;
+      }),
+      request_json(urlTracker).catch(function () {
+        return track;
+      }),
+      isTruth ? request_json(urlAdsb).catch(function () {
+        return null;
+      }) : Promise.resolve(null)
+    ]).then(function (responses) {
+      var mapData = responses[0];
+      detection = responses[1] || { delay: [], doppler: [] };
+      track = responses[2] || {};
+
+      if (!isTruth) {
+        adsbTargets = {};
+        selectedAdsbTarget = 'all';
+      }
+      else if (responses[3] !== null) {
+        adsbTargets = extractAdsbTargets(responses[3]);
+      }
+
+      if (selectedAdsbTarget !== 'all' && !adsbTargets[selectedAdsbTarget]) {
+        selectedAdsbTarget = 'all';
+      }
+
+      updateAdsbTargetTable();
+      return renderMap(mapData);
+    });
+  });
+}
+
+Plotly.newPlot('data', get_placeholder_traces(), layout, config);
+resizeBinding = bind_plot_resize('data');
+exportBinding = bind_plot_exports({
+  plotId: 'data',
+  baseFilename: isMaxholdMap ? 'blah2-maxhold-map' : 'blah2-delay-doppler-map'
+});
+themeBinding = bind_plot_theme('data', layout);
+
+mapPoller = create_timestamp_poller({
+  livePanel: livePanel,
+  visibleMinDelayMs: 400,
+  visibleMaxDelayMs: 2400,
+  idleStepMs: 240,
+  onRefresh: refreshMap
+});
+mapPoller.start();
+
+window.addEventListener('beforeunload', function () {
+  if (mapPoller) {
+    mapPoller.stop();
+  }
+  if (resizeBinding) {
+    resizeBinding.disconnect();
+  }
+  if (themeBinding) {
+    themeBinding.disconnect();
+  }
+});

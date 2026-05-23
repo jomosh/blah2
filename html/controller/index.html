@@ -3,80 +3,80 @@
 <head>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta charset="UTF-8">
-  <title>blah2</title>
-  <!-- load lib js -->
+  <title>blah2 | Controller</title>
   <script src="../lib/bootstrap-5.2.3.min.js"></script>
   <script src="../lib/plotly-2.20.0.min.js"></script>
   <script src="../lib/jquery-3.6.4.min.js"></script>
-  <!-- load lib css -->
   <link rel="stylesheet" href="../lib/bootstrap-5.2.3.min.css">
-  <link rel="stylesheet" href="../lib/blah2.css">
-  <style>
-  </style>
+  <link rel="stylesheet" href="../lib/blah2.css?v=20260523g">
 </head>
 <body>
-  <div class="container-fluid">
-    <div class="row align-items-center d-flex">
-    <nav class="navbar navbar-light navbar-expand text-center pb-5">
-      <!-- Links -->
-      <ul class="navbar-nav mx-auto justify-content-center">
-        <li class="nav-item px-3 px-md-4">
-          <a class="navbar-brand mx-0 menu" href="/">RADAR</a>
-        </li>
-        <li class="nav-item px-3 px-md-4">
-          <a class="navbar-brand mx-0 menu text-decoration-underline" href="/controller">CONTROLLER</a>
-        </li>
-      </ul>
-    </nav>
-    <div class="col-sm-12 col-md-12">
-      <ul class="list-unstyled text-center label">
-        <li class="py-1 title">Display</li>
-        <li class="py-1"><a class="text-reset text-decoration-none" href="/display/map">Delay-Doppler map</a></li>
-        <li class="py-1"><a class="text-reset text-decoration-none" href="/display/maxhold">Max-hold delay Doppler map</a></li>
-        <li class="py-1"><a class="text-reset text-decoration-none" href="/display/detection/delay">Detections in delay over time</a></li>
-        <li class="py-1"><a class="text-reset text-decoration-none" href="/display/detection/doppler">Detections in Doppler over time</a></li>
-        <li class="py-1"><a class="text-reset text-decoration-none" href="/display/detection/delay-doppler">Detections in delay-Doppler over time</a></li>
-        <li class="py-1"><a class="text-reset text-decoration-none" href="/display/spectrum">Spectrum reference</a></li>
-        <li class="py-1"><a class="text-reset text-decoration-none" href="/display/timing">Timing display</a></li>
-      </ul>
-    </div>
-    <div class="col-sm-12 col-md-12">
-      <ul class="list-unstyled text-center label">
-        <li class="py-1 title">API</li>
-        <li class="py-1"><a class="text-reset text-decoration-none" href="/api/map">Map data</a></li>
-        <li class="py-1"><a class="text-reset text-decoration-none" href="/api/detection">Detection data</a></li>
-        <li class="py-1"><a class="text-reset text-decoration-none" href="/api/tracker">Tracker data</a></li>
-        <li class="py-1"><a class="text-reset text-decoration-none" href="/api/timing">Timing data</a></li>
-        <li class="py-1"><a class="text-reset text-decoration-none" href="/api/iqdata">IQ metadata</a></li>
-        <li class="py-1"><a class="text-reset text-decoration-none" href="/api/timestamp">Latest timestamp</a></li>
-      </ul>
-    </div>
-    <div class="col-sm-12 col-md-12">
-      <ul class="list-unstyled text-center label">
-        <li class="py-1 title">Stash</li>
-        <li class="py-1"><a class="text-reset text-decoration-none" href="/stash/map">Map data</a></li>
-        <li class="py-1"><a class="text-reset text-decoration-none" href="/stash/detection">Detection data</a></li>
-        <li class="py-1"><a class="text-reset text-decoration-none" href="/stash/iqdata">IqData metadata</a></li>
-        <li class="py-1"><a class="text-reset text-decoration-none" href="/stash/timing">Timing data</a></li>
-      </ul>
-    </div>
-  </div>
+  <div class="app-shell">
+    <main class="controller-grid">
+      <section class="resource-card">
+        <div class="resource-header">
+          <div>
+            <span class="panel-kicker">Displays</span>
+            <h2 class="resource-title">Live Views</h2>
+          </div>
+        </div>
+        <ul class="resource-list">
+          <li><a class="resource-link" href="/display/map" data-preserve-api-query><span class="resource-link-label">Delay-Doppler map</span><span class="resource-link-copy">Live surface</span></a></li>
+          <li><a class="resource-link" href="/display/maxhold" data-preserve-api-query><span class="resource-link-label">Max-hold map</span><span class="resource-link-copy">Persistent surface</span></a></li>
+          <li><a class="resource-link" href="/display/detection/delay" data-preserve-api-query><span class="resource-link-label">Detections in delay</span><span class="resource-link-copy">Range over time</span></a></li>
+          <li><a class="resource-link" href="/display/detection/doppler" data-preserve-api-query><span class="resource-link-label">Detections in Doppler</span><span class="resource-link-copy">Velocity over time</span></a></li>
+          <li><a class="resource-link" href="/display/detection/delay-doppler" data-preserve-api-query><span class="resource-link-label">Detections in delay-Doppler</span><span class="resource-link-copy">Scatter history</span></a></li>
+          <li><a class="resource-link" href="/display/spectrum" data-preserve-api-query><span class="resource-link-label">Spectrum reference</span><span class="resource-link-copy">IQ slice history</span></a></li>
+          <li><a class="resource-link" href="/display/timing" data-preserve-api-query><span class="resource-link-label">Timing display</span><span class="resource-link-copy">Pipeline timing</span></a></li>
+        </ul>
+      </section>
+
+      <section class="resource-card">
+        <div class="resource-header">
+          <div>
+            <span class="panel-kicker">API</span>
+            <h2 class="resource-title">Processor Outputs</h2>
+          </div>
+        </div>
+        <p class="resource-note">Direct endpoints from the active API target.</p>
+        <ul class="resource-list">
+          <li><a class="resource-link" href="/api/map" data-api-link><span class="resource-link-label">Map data</span><span class="resource-link-copy">Heatmap payload</span></a></li>
+          <li><a class="resource-link" href="/api/detection" data-api-link><span class="resource-link-label">Detection data</span><span class="resource-link-copy">Centroid history</span></a></li>
+          <li><a class="resource-link" href="/api/tracker" data-api-link><span class="resource-link-label">Tracker data</span><span class="resource-link-copy">Track state</span></a></li>
+          <li><a class="resource-link" href="/api/timing" data-api-link><span class="resource-link-label">Timing data</span><span class="resource-link-copy">Pipeline timing</span></a></li>
+          <li><a class="resource-link" href="/api/iqdata" data-api-link><span class="resource-link-label">IQ metadata</span><span class="resource-link-copy">Spectrum history</span></a></li>
+          <li><a class="resource-link" href="/api/timestamp" data-api-link><span class="resource-link-label">Latest timestamp</span><span class="resource-link-copy">Freshness check</span></a></li>
+        </ul>
+      </section>
+
+      <section class="resource-card">
+        <div class="resource-header">
+          <div>
+            <span class="panel-kicker">Stash</span>
+            <h2 class="resource-title">Cached Views</h2>
+          </div>
+        </div>
+        <p class="resource-note">Stable stash snapshots used by the frontend displays.</p>
+        <ul class="resource-list">
+          <li><a class="resource-link" href="/stash/map" data-api-link><span class="resource-link-label">Map data</span><span class="resource-link-copy">Cached heatmap</span></a></li>
+          <li><a class="resource-link" href="/stash/detection" data-api-link><span class="resource-link-label">Detection data</span><span class="resource-link-copy">Cached detections</span></a></li>
+          <li><a class="resource-link" href="/stash/iqdata" data-api-link><span class="resource-link-label">IQ metadata</span><span class="resource-link-copy">Cached spectrum</span></a></li>
+          <li><a class="resource-link" href="/stash/timing" data-api-link><span class="resource-link-label">Timing data</span><span class="resource-link-copy">Cached timing</span></a></li>
+        </ul>
+      </section>
+
+    </main>
   </div>
 </body>
-<script src="../js/common.js"></script>
+<script src="../js/common.js?v=20260523d"></script>
 <script>
-  window.onload = function() {
-  var anchors = document.getElementsByTagName('a');
-  for (var i = 0; i < anchors.length; i++) {
-    var rawHref = anchors[i].getAttribute('href');
-    if (!rawHref) {
-      continue;
-    }
-
-    if (rawHref.startsWith('/api/') || rawHref.startsWith('/stash/') || rawHref.startsWith('/capture/')) {
-      anchors[i].href = build_api_url(rawHref);
-    }
-  }
-};
+  window.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('[data-api-link]').forEach(function (anchor) {
+      var rawHref = anchor.getAttribute('href');
+      if (rawHref) {
+        anchor.href = build_api_url(rawHref);
+      }
+    });
+  });
 </script>
 </html>
