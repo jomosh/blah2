@@ -3,58 +3,102 @@
 <head>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta charset="UTF-8">
-  <title>blah2</title>
-  <!-- load lib js -->
+  <title>blah2 | Delay-Doppler Map</title>
   <script src="../../lib/bootstrap-5.2.3.min.js"></script>
   <script src="../../lib/plotly-2.20.0.min.js"></script>
   <script src="../../lib/jquery-3.6.4.min.js"></script>
-  <!-- load lib css -->
   <link rel="stylesheet" href="../../lib/bootstrap-5.2.3.min.css">
-  <link rel="stylesheet" href="../../lib/blah2.css">
-  <style>
-  </style>
+  <link rel="stylesheet" href="../../lib/blah2.css?v=20260523h">
 </head>
 <body>
-  <div class="container-fluid" style="height: 100vh; width: 95vw">
-    <div class="row g-2">
-      <div class="col-lg-9">
-        <div style="height: calc(100vh - 72px); width: 100%;" class="d-flex flex-column">
-          <div class="d-flex justify-content-end mb-2">
-            <div class="d-flex flex-wrap align-items-center gap-2 border rounded bg-white px-3 py-2 shadow-sm" data-iq-capture-control>
-              <span class="small text-uppercase text-muted">IQ Capture</span>
+  <div class="app-shell app-shell--full">
+    <main class="dashboard-grid">
+      <section class="panel panel--plot">
+        <div class="panel-toolbar">
+          <div>
+            <h1 class="panel-title panel-title--plain">Delay-Doppler map</h1>
+          </div>
+          <div class="toolbar-cluster">
+            <div class="capture-card" data-iq-capture-control>
+              <span class="small text-uppercase">IQ Capture</span>
               <span class="badge text-bg-secondary" data-iq-capture-status>Checking...</span>
               <button type="button" class="btn btn-sm btn-outline-secondary" data-iq-capture-toggle disabled>IQ Capture Unavailable</button>
             </div>
-          </div>
-          <div class="flex-grow-1 d-flex">
-            <div class="justify-content-center h-100 w-100" id="data"></div>
+            <div class="export-actions">
+              <button type="button" class="ghost-button" data-export-png>Export PNG</button>
+              <button type="button" class="ghost-button" data-export-csv>Export CSV</button>
+            </div>
           </div>
         </div>
-      </div>
-      <div class="col-lg-3">
-        <div style="height: calc(100vh - 72px); overflow-y: auto;" class="border rounded bg-dark p-2">
-          <div class="mb-2">
-            <label for="adsb-target-filter" class="form-label small mb-1 text-light">Filter ADS-B targets</label>
-            <input id="adsb-target-filter" type="search" class="form-control form-control-sm" placeholder="Callsign or Hex ID" oninput="updateAdsbTargetTable()">
+
+        <div class="panel-meta-grid">
+          <div class="live-panel" data-live-panel>
+            <div class="live-main">
+              <span class="status-pill" data-live-state>Waiting</span>
+              <button type="button" class="ghost-button" data-live-toggle aria-pressed="false">Pause stream</button>
+            </div>
+            <p class="live-detail" data-live-detail>CPI unavailable</p>
+            <div class="live-meta">
+              <span data-live-updated>Waiting for first frame</span>
+              <span data-live-next>Polling paused</span>
+            </div>
           </div>
-          <table id="adsb-target-table" class="table table-sm table-dark table-hover mb-0">
-            <thead>
-              <tr>
-                <th>Callsign</th>
-                <th>Hex ID (ICAO)</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
+
+          <div class="metric-strip metric-strip--summary">
+            <div class="metric-card">
+              <span class="metric-label">Detections</span>
+              <strong data-stat-value="detections">-</strong>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">Tracks</span>
+              <strong data-stat-value="tracks">-</strong>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">ADS-B</span>
+              <strong data-stat-value="adsb">-</strong>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">Power Ceiling</span>
+              <strong data-stat-value="power">-</strong>
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
+
+        <div class="plot-surface">
+          <div class="plot-host" id="data"></div>
+        </div>
+      </section>
+
+      <aside class="panel panel--sidebar">
+        <div class="sidebar-stack">
+          <section class="sidebar-card">
+            <div>
+              <label for="adsb-target-filter" class="form-label sidebar-filter-label">Filter ADS-B targets</label>
+              <input id="adsb-target-filter" type="search" class="form-control form-control-sm" placeholder="Callsign or Hex ID" oninput="updateAdsbTargetTable()">
+            </div>
+            <div class="table-shell">
+              <table id="adsb-target-table" class="table table-sm table-dark table-hover mb-0">
+                <thead>
+                  <tr>
+                    <th>Callsign</th>
+                    <th>Hex ID (ICAO)</th>
+                    <th>Range (km)</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </section>
+
+        </div>
+      </aside>
+    </main>
   </div>
 </body>
 <script>
   var urlMap = '/api/map';
 </script>
-<script src="../../js/common.js"></script>
+<script src="../../js/common.js?v=20260523d"></script>
 <script src="../../control.js"></script>
-<script src="../../js/plot_map.js"></script>
+<script src="../../js/plot_map.js?v=20260523h"></script>
 </html>

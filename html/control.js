@@ -2,9 +2,11 @@
   var controlRoot = null;
   var statusBadge = null;
   var toggleButton = null;
-  var pollId = null;
+  var pollTimerId = null;
   var currentCaptureState = null;
   var togglePending = false;
+  var pollInFlight = false;
+  var pollDelayMs = 1000;
 
   function normalize_capture_state(value) {
     if (typeof value === 'boolean') {
@@ -76,6 +78,39 @@
       });
   }
 
+  function clear_capture_poll_timer() {
+    if (pollTimerId !== null) {
+      window.clearTimeout(pollTimerId);
+      pollTimerId = null;
+    }
+  }
+
+  function schedule_capture_poll(delayMs) {
+    clear_capture_poll_timer();
+    if (document.hidden) {
+      return;
+    }
+    pollTimerId = window.setTimeout(run_capture_poll, delayMs);
+  }
+
+  function run_capture_poll() {
+    if (document.hidden) {
+      clear_capture_poll_timer();
+      return;
+    }
+
+    if (pollInFlight) {
+      schedule_capture_poll(pollDelayMs);
+      return;
+    }
+
+    pollInFlight = true;
+    fetch_capture_state().always(function () {
+      pollInFlight = false;
+      schedule_capture_poll(pollDelayMs);
+    });
+  }
+
   function toggle_capture_state() {
     if (togglePending || currentCaptureState === null) {
       return;
@@ -115,12 +150,13 @@
 
     toggleButton.addEventListener('click', toggle_capture_state);
     render_capture_state(null, 'Checking...', 'text-bg-secondary');
-    fetch_capture_state();
-    pollId = window.setInterval(fetch_capture_state, 1000);
+    fetch_capture_state().always(function () {
+      schedule_capture_poll(pollDelayMs);
+    });
+    document.addEventListener('visibilitychange', run_capture_poll);
     window.addEventListener('beforeunload', function () {
-      if (pollId !== null) {
-        window.clearInterval(pollId);
-      }
+      clear_capture_poll_timer();
+      document.removeEventListener('visibilitychange', run_capture_poll);
     });
   }
 
