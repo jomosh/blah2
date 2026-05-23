@@ -119,11 +119,10 @@ In practice, a high `HitRate` with a very low `MatchPctPt` means the detector is
 
 If you already have a saved IQ file, you can run the same comparison command directly against that file.
 
-- *TODO:* Run all test cases.
+- Run the deterministic CI-friendly test suite through CTest.
+
+This covers the unit tests, the functional JSON data-contract test, and a comparison smoke test for `testDetectionSweep --help`.
 
 ```
-sudo docker exec -it blah2 /blah2/bin/test/runall.sh
-sudo docker exec -it blah2 /blah2/bin/test/unit/runall.sh
-sudo docker exec -it blah2 /blah2/bin/test/functional/runall.sh
-sudo docker exec -it blah2 /blah2/bin/test/comparison/runall.sh
+sudo docker exec -it blah2 ctest --preset test-all-unix-release
 ```
