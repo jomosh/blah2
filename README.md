@@ -49,18 +49,6 @@ sudo systemctl enable docker
 sudo docker compose up -d --build
 ```
 
-Alternatively avoid building and use the pre-built Docker packages;
-
-```bash
-sudo docker pull ghcr.io/30hours/blah2:latest
-vim docker-compose.yml
---- build: .
-+++ image: ghcr.io/30hours/blah2:latest
-sudo docker compose up -d
-```
-
-The radar processing output is available on [http://localhost:49152](http://localhost:49152).
-
 ## Documentation
 
 - See `doxygen` pages hosted at [http://doc.30hours.dev/blah2](http://doc.30hours.dev/blah2).
