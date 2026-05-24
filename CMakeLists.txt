@@ -11,7 +11,14 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Werror")
 
 find_package(Threads REQUIRED)
 find_package(asio  REQUIRED)
-find_path(RAPIDJSON_INCLUDE_DIRS "rapidjson/allocators.h")
+file(GLOB VCPKG_INSTALLED_HINTS "${PROJECT_SOURCE_DIR}/lib/vcpkg_installed/*")
+find_path(
+  RAPIDJSON_INCLUDE_DIRS
+  "rapidjson/allocators.h"
+  HINTS ${VCPKG_INSTALLED_HINTS}
+  PATH_SUFFIXES include
+  REQUIRED
+)
 find_package(ryml CONFIG REQUIRED)
 find_package(httplib CONFIG REQUIRED)
 find_package(Armadillo CONFIG REQUIRED)
@@ -31,7 +38,7 @@ message("Binary path: ${PROJECT_BINARY_DIR}")
 message("Binary test path: ${PROJECT_BINARY_TEST_DIR}")
 
 # include from top-level src dir
-include_directories(src ${UHD_INCLUDE_DIRS})
+include_directories(src ${UHD_INCLUDE_DIRS} ${RAPIDJSON_INCLUDE_DIRS})
 
 # TODO: create FindSdrplay.cmake for this
 add_library(sdrplay /usr/local/include/sdrplay_api.h)
@@ -77,7 +84,7 @@ target_link_libraries(blah2 PRIVATE
   hackrf
   rtlsdr
 )
-target_include_directories(blah2 PRIVATE RAPIDJSON_INCLUDE_DIRS "rapidjson/allocators.h")
+target_include_directories(blah2 PRIVATE ${RAPIDJSON_INCLUDE_DIRS})
 
 # unit tests
 add_executable(testAmbiguity
@@ -190,6 +197,19 @@ target_link_libraries(testKraken PRIVATE
 set_target_properties(testKraken PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_TEST_UNIT_DIR}")
 
+add_executable(testDataContracts
+  test/functional/data/TestDataContracts.cpp
+  src/data/Detection.cpp
+  src/data/Track.cpp
+  src/data/Map.cpp
+  src/data/meta/Timing.cpp
+)
+target_link_libraries(testDataContracts PRIVATE
+  Catch2::Catch2WithMain
+)
+set_target_properties(testDataContracts PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_TEST_FUNCTIONAL_DIR}")
+
 add_executable(testDetectionSweep
   test/comparison/TestDetectionSweep.cpp
   src/data/IqData.cpp
@@ -221,3 +241,5 @@ add_test(NAME testKraken COMMAND testKraken)
 add_test(NAME testDetectionPhaseA COMMAND testDetectionPhaseA)
 add_test(NAME testDetectionPhaseB COMMAND testDetectionPhaseB)
 add_test(NAME testCentroid COMMAND testCentroid)
+add_test(NAME testDataContracts COMMAND testDataContracts)
+add_test(NAME testDetectionSweepHelp COMMAND testDetectionSweep --help)
