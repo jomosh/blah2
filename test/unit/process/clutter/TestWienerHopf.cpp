@@ -9,6 +9,12 @@
 
 #include <limits>
 #include <stdexcept>
+#include <type_traits>
+
+static_assert(!std::is_copy_constructible_v<WienerHopf>);
+static_assert(!std::is_copy_assignable_v<WienerHopf>);
+static_assert(!std::is_move_constructible_v<WienerHopf>);
+static_assert(!std::is_move_assignable_v<WienerHopf>);
 
 TEST_CASE("WienerHopfConstructorRejectsInvalidDelayRange", "[process][clutter]")
 {
@@ -53,4 +59,14 @@ TEST_CASE("WienerHopfProcessRejectsShortInputs", "[process][clutter]")
   IqData surveillance(64);
 
   CHECK(filter.process(&reference, &surveillance) == false);
+}
+
+TEST_CASE("WienerHopfProcessRejectsNullInputs", "[process][clutter]")
+{
+  WienerHopf filter(0, 0, 64);
+  IqData reference(64);
+  IqData surveillance(64);
+
+  CHECK(filter.process(nullptr, &surveillance) == false);
+  CHECK(filter.process(&reference, nullptr) == false);
 }

@@ -192,6 +192,12 @@ bool WienerHopf::process(IqData *x, IqData *y)
 {
   uint32_t i, j;
 
+  if (x == nullptr || y == nullptr)
+  {
+    std::cerr << "WienerHopf requires non-null input buffers." << std::endl;
+    return false;
+  }
+
   if (x->get_length() < nSamples || y->get_length() < nSamples)
   {
     std::cerr << "WienerHopf requires at least " << nSamples
@@ -203,7 +209,13 @@ bool WienerHopf::process(IqData *x, IqData *y)
   // load data from ring-buffers
   for (i = 0; i < nSamples; i++)
   {
-    dataX[i] = x->at_unchecked((((i - delayMin) % nSamples) + nSamples) % nSamples);
+    const int64_t shiftedIndex = static_cast<int64_t>(i)
+      - static_cast<int64_t>(delayMin);
+    const int64_t wrappedIndex =
+      ((shiftedIndex % static_cast<int64_t>(nSamples))
+      + static_cast<int64_t>(nSamples))
+      % static_cast<int64_t>(nSamples);
+    dataX[i] = x->at_unchecked(static_cast<uint32_t>(wrappedIndex));
     dataY[i] = y->at_unchecked(i);
   }
 

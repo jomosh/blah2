@@ -84,6 +84,11 @@ public:
   /// @return Void.
   ~WienerHopf();
 
+  WienerHopf(const WienerHopf &) = delete;
+  WienerHopf &operator=(const WienerHopf &) = delete;
+  WienerHopf(WienerHopf &&) = delete;
+  WienerHopf &operator=(WienerHopf &&) = delete;
+
   /// @brief Implement the clutter filter.
   /// @param x Reference samples.
   /// @param y Surveillance samples.
