@@ -58,6 +58,6 @@ ADD src src
 ADD test test
 ADD CMakeLists.txt CMakePresets.json Doxyfile /blah2/
 RUN mkdir -p build && cd build && cmake -S . --preset prod-release \
-  -DCMAKE_PREFIX_PATH=$(echo /blah2/lib/vcpkg_installed/*/share) .. \
+  -DCMAKE_PREFIX_PATH="$(echo /blah2/lib/vcpkg_installed/*);$(echo /blah2/lib/vcpkg_installed/*/share)" .. \
   && cd prod-release && make
 RUN chmod +x bin/blah2

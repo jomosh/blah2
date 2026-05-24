@@ -803,10 +803,14 @@ Kraken::LagEstimate Kraken::estimate_window_lag(
         return estimate;
     }
 
-    estimate.valid = true;
-    estimate.lagSamples = (bestIndex < nSamples)
+    const int64_t rawLagSamples = (bestIndex < nSamples)
       ? static_cast<int64_t>(bestIndex)
       : static_cast<int64_t>(bestIndex) - static_cast<int64_t>(fftSize);
+
+    estimate.valid = true;
+    // Cross-correlation reports the opposite sign of the runtime metric/alignment
+    // convention used elsewhere: positive lag means channel 1 lags channel 0.
+    estimate.lagSamples = -rawLagSamples;
     estimate.peakMagnitude = std::sqrt(bestMagnitude);
     return estimate;
 }
