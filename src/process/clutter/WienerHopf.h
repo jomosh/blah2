@@ -30,6 +30,9 @@ private:
   /// @brief Number of samples per CPI.
   uint32_t nSamples;
 
+  /// @brief FFT length used for clutter convolution/filter operations.
+  uint32_t nFilterSamples;
+
   /// @brief True if clutter filter processing is successful.
   bool success;
 

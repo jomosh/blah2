@@ -30,11 +30,28 @@ WienerHopf::WienerHopf(int32_t _delayMin, int32_t _delayMax, uint32_t _nSamples)
     throw std::invalid_argument("WienerHopf requires nBins <= nSamples.");
   }
 
+  if (_nSamples > static_cast<uint32_t>(std::numeric_limits<int>::max()))
+  {
+    throw std::invalid_argument("WienerHopf nSamples exceeds FFTW int length limit.");
+  }
+
+  const uint64_t filterLen64 = static_cast<uint64_t>(binCount)
+    + static_cast<uint64_t>(_nSamples) + 1ULL;
+  if (filterLen64 > static_cast<uint64_t>(std::numeric_limits<uint32_t>::max()))
+  {
+    throw std::invalid_argument("WienerHopf filter length overflows uint32_t.");
+  }
+  if (filterLen64 > static_cast<uint64_t>(std::numeric_limits<int>::max()))
+  {
+    throw std::invalid_argument("WienerHopf filter length exceeds FFTW int length limit.");
+  }
+
   // input
   delayMin = _delayMin;
   delayMax = _delayMax;
   nBins = static_cast<uint32_t>(binCount);
   nSamples = _nSamples;
+  nFilterSamples = static_cast<uint32_t>(filterLen64);
 
   // initialise data
   A = arma::cx_mat(nBins, nBins);
@@ -49,22 +66,22 @@ WienerHopf::WienerHopf(int32_t _delayMin, int32_t _delayMax, uint32_t _nSamples)
   dataOutY = new std::complex<double>[nSamples];
   dataA = new std::complex<double>[nSamples];
   dataB = new std::complex<double>[nSamples];
-  filtX = new std::complex<double>[nBins + nSamples + 1];
-  filtW = new std::complex<double>[nBins + nSamples + 1];
-  filt = new std::complex<double>[nBins + nSamples + 1];
-  fftX = fftw_plan_dft_1d(nSamples, reinterpret_cast<fftw_complex *>(dataX),
+  filtX = new std::complex<double>[nFilterSamples];
+  filtW = new std::complex<double>[nFilterSamples];
+  filt = new std::complex<double>[nFilterSamples];
+  fftX = fftw_plan_dft_1d(static_cast<int>(nSamples), reinterpret_cast<fftw_complex *>(dataX),
                           reinterpret_cast<fftw_complex *>(dataOutX), FFTW_FORWARD, FFTW_ESTIMATE);
-  fftY = fftw_plan_dft_1d(nSamples, reinterpret_cast<fftw_complex *>(dataY),
+  fftY = fftw_plan_dft_1d(static_cast<int>(nSamples), reinterpret_cast<fftw_complex *>(dataY),
                           reinterpret_cast<fftw_complex *>(dataOutY), FFTW_FORWARD, FFTW_ESTIMATE);
-  fftA = fftw_plan_dft_1d(nSamples, reinterpret_cast<fftw_complex *>(dataA),
+  fftA = fftw_plan_dft_1d(static_cast<int>(nSamples), reinterpret_cast<fftw_complex *>(dataA),
                           reinterpret_cast<fftw_complex *>(dataA), FFTW_BACKWARD, FFTW_ESTIMATE);
-  fftB = fftw_plan_dft_1d(nSamples, reinterpret_cast<fftw_complex *>(dataB),
+  fftB = fftw_plan_dft_1d(static_cast<int>(nSamples), reinterpret_cast<fftw_complex *>(dataB),
                           reinterpret_cast<fftw_complex *>(dataB), FFTW_BACKWARD, FFTW_ESTIMATE);
-  fftFiltX = fftw_plan_dft_1d(nBins + nSamples + 1, reinterpret_cast<fftw_complex *>(filtX),
+  fftFiltX = fftw_plan_dft_1d(static_cast<int>(nFilterSamples), reinterpret_cast<fftw_complex *>(filtX),
                               reinterpret_cast<fftw_complex *>(filtX), FFTW_FORWARD, FFTW_ESTIMATE);
-  fftFiltW = fftw_plan_dft_1d(nBins + nSamples + 1, reinterpret_cast<fftw_complex *>(filtW),
+  fftFiltW = fftw_plan_dft_1d(static_cast<int>(nFilterSamples), reinterpret_cast<fftw_complex *>(filtW),
                               reinterpret_cast<fftw_complex *>(filtW), FFTW_FORWARD, FFTW_ESTIMATE);
-  fftFilt = fftw_plan_dft_1d(nBins + nSamples + 1, reinterpret_cast<fftw_complex *>(filt),
+  fftFilt = fftw_plan_dft_1d(static_cast<int>(nFilterSamples), reinterpret_cast<fftw_complex *>(filt),
                              reinterpret_cast<fftw_complex *>(filt), FFTW_BACKWARD, FFTW_ESTIMATE);
 
   if (fftX == nullptr || fftY == nullptr || fftA == nullptr || fftB == nullptr
@@ -255,7 +272,7 @@ bool WienerHopf::process(IqData *x, IqData *y)
   {
     filtX[i] = dataX[i];
   }
-  for (i = nSamples; i < nBins + nSamples + 1; i++)
+  for (i = nSamples; i < nFilterSamples; i++)
   {
     filtX[i] = {0, 0};
   }
@@ -265,7 +282,7 @@ bool WienerHopf::process(IqData *x, IqData *y)
   {
     filtW[i] = w[i];
   }
-  for (i = nBins; i < nBins + nSamples + 1; i++)
+  for (i = nBins; i < nFilterSamples; i++)
   {
     filtW[i] = {0, 0};
   }
@@ -275,7 +292,7 @@ bool WienerHopf::process(IqData *x, IqData *y)
   fftw_execute(fftFiltW);
 
   // compute convolution/filter
-  for (i = 0; i < nBins + nSamples + 1; i++)
+  for (i = 0; i < nFilterSamples; i++)
   {
     filt[i] = (filtW[i] * filtX[i]);
   }
@@ -285,7 +302,7 @@ bool WienerHopf::process(IqData *x, IqData *y)
   y->clear();
   for (i = 0; i < nSamples; i++)
   {
-    y->push_back(dataY[i] - (filt[i] / (double)(nBins + nSamples + 1)));
+    y->push_back(dataY[i] - (filt[i] / (double)nFilterSamples));
   }
 
   return true;

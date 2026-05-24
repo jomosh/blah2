@@ -34,6 +34,18 @@ TEST_CASE("WienerHopfConstructorRejectsBinCountOverflow", "[process][clutter]")
     std::invalid_argument);
 }
 
+TEST_CASE("WienerHopfConstructorRejectsSamplesAboveFftwIntLimit", "[process][clutter]")
+{
+  const uint32_t tooLargeSamples =
+    static_cast<uint32_t>(static_cast<uint64_t>(std::numeric_limits<int>::max()) + 1ULL);
+  CHECK_THROWS_AS(WienerHopf(0, 0, tooLargeSamples), std::invalid_argument);
+}
+
+TEST_CASE("WienerHopfConstructorRejectsFilterLengthUint32Overflow", "[process][clutter]")
+{
+  CHECK_THROWS_AS(WienerHopf(0, 0, std::numeric_limits<uint32_t>::max()), std::invalid_argument);
+}
+
 TEST_CASE("WienerHopfProcessRejectsShortInputs", "[process][clutter]")
 {
   WienerHopf filter(0, 0, 64);
