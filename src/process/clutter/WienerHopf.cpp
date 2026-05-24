@@ -2,15 +2,25 @@
 #include <algorithm>
 #include <complex>
 #include <iostream>
+#include <stdexcept>
 #include <vector>
 
 // constructor
 WienerHopf::WienerHopf(int32_t _delayMin, int32_t _delayMax, uint32_t _nSamples)
 {
+  if (_delayMax < _delayMin)
+  {
+    throw std::invalid_argument("WienerHopf delayMax must be >= delayMin.");
+  }
+  if (_nSamples == 0)
+  {
+    throw std::invalid_argument("WienerHopf nSamples must be > 0.");
+  }
+
   // input
   delayMin = _delayMin;
   delayMax = _delayMax;
-  nBins = delayMax - delayMin;
+  nBins = static_cast<uint32_t>(delayMax - delayMin + 1);
   nSamples = _nSamples;
 
   // initialise data
@@ -47,13 +57,44 @@ WienerHopf::WienerHopf(int32_t _delayMin, int32_t _delayMax, uint32_t _nSamples)
 
 WienerHopf::~WienerHopf()
 {
-  fftw_destroy_plan(fftX);
-  fftw_destroy_plan(fftY);
-  fftw_destroy_plan(fftA);
-  fftw_destroy_plan(fftB);
-  fftw_destroy_plan(fftFiltX);
-  fftw_destroy_plan(fftFiltW);
-  fftw_destroy_plan(fftFilt);
+  if (fftX != nullptr)
+  {
+    fftw_destroy_plan(fftX);
+  }
+  if (fftY != nullptr)
+  {
+    fftw_destroy_plan(fftY);
+  }
+  if (fftA != nullptr)
+  {
+    fftw_destroy_plan(fftA);
+  }
+  if (fftB != nullptr)
+  {
+    fftw_destroy_plan(fftB);
+  }
+  if (fftFiltX != nullptr)
+  {
+    fftw_destroy_plan(fftFiltX);
+  }
+  if (fftFiltW != nullptr)
+  {
+    fftw_destroy_plan(fftFiltW);
+  }
+  if (fftFilt != nullptr)
+  {
+    fftw_destroy_plan(fftFilt);
+  }
+
+  delete[] dataX;
+  delete[] dataY;
+  delete[] dataOutX;
+  delete[] dataOutY;
+  delete[] dataA;
+  delete[] dataB;
+  delete[] filtX;
+  delete[] filtW;
+  delete[] filt;
 }
 
 bool WienerHopf::process(IqData *x, IqData *y)
@@ -91,7 +132,8 @@ bool WienerHopf::process(IqData *x, IqData *y)
   }
   A = arma::toeplitz(a);
 
-  const double diagonalLoading = std::max(1e-12, 1e-6 * std::abs(a[0]));
+  const double diagonalLoading = std::max(1e-12,
+    1e-6 * (nBins > 0 ? std::abs(a[0]) : 0.0));
   for (i = 0; i < nBins; i++)
   {
     A(i, i) += diagonalLoading;

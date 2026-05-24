@@ -496,9 +496,16 @@ unsigned int reset, void *cbContext)
   // write data to file
   if (capture_fg != nullptr && capture_fg->load())
   {
-    saveIqFileLocal->write(reinterpret_cast<char*>(buffer_16_ar), 
+    std::lock_guard<std::mutex> fileLock(saveIqFileMutex);
+    if (!saveIqFileLocal->is_open())
+    {
+      free(buffer_16_ar);
+      return;
+    }
+
+    saveIqFileLocal->write(reinterpret_cast<char*>(buffer_16_ar),
       sizeof(short) * numSamples * 4);
-    
+
     if (!(*saveIqFileLocal))
     {
       std::cout << "Error: stream_b_callback, not enough samples received" << std::endl;

@@ -181,6 +181,19 @@ target_link_libraries(testSource PRIVATE
 set_target_properties(testSource PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_TEST_UNIT_DIR}")
 
+add_executable(testWienerHopf
+  test/unit/process/clutter/TestWienerHopf.cpp
+  src/process/clutter/WienerHopf.cpp
+  src/data/IqData.cpp
+)
+target_link_libraries(testWienerHopf PRIVATE
+  Catch2::Catch2WithMain
+  armadillo
+  fftw3
+)
+set_target_properties(testWienerHopf PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_TEST_UNIT_DIR}")
+
 add_executable(testKraken
   test/unit/capture/TestKraken.cpp
   src/capture/kraken/Kraken.cpp
@@ -237,6 +250,7 @@ add_test(NAME testAmbiguity COMMAND testAmbiguity)
 add_test(NAME testIqData COMMAND testIqData)
 add_test(NAME testTracker COMMAND testTracker)
 add_test(NAME testSource COMMAND testSource)
+add_test(NAME testWienerHopf COMMAND testWienerHopf)
 add_test(NAME testKraken COMMAND testKraken)
 add_test(NAME testDetectionPhaseA COMMAND testDetectionPhaseA)
 add_test(NAME testDetectionPhaseB COMMAND testDetectionPhaseB)

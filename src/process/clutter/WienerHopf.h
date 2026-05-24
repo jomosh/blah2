@@ -13,6 +13,7 @@
 #include <stdint.h>
 #include <fftw3.h>
 #include <armadillo>
+#include <complex>
 
 class WienerHopf
 {
@@ -34,12 +35,26 @@ private:
 
   /// @brief FFTW plans for clutter filter processing.
   /// @{
-  fftw_plan fftX, fftY, fftA, fftB, fftFiltX, fftFiltW, fftFilt;
+  fftw_plan fftX = nullptr;
+  fftw_plan fftY = nullptr;
+  fftw_plan fftA = nullptr;
+  fftw_plan fftB = nullptr;
+  fftw_plan fftFiltX = nullptr;
+  fftw_plan fftFiltW = nullptr;
+  fftw_plan fftFilt = nullptr;
   /// @}
 
   /// @brief FFTW storage for clutter filter processing.
   /// @{
-  std::complex<double> *dataX, *dataY, *dataOutX, *dataOutY, *dataA, *dataB, *filtX, *filtW, *filt;
+  std::complex<double> *dataX = nullptr;
+  std::complex<double> *dataY = nullptr;
+  std::complex<double> *dataOutX = nullptr;
+  std::complex<double> *dataOutY = nullptr;
+  std::complex<double> *dataA = nullptr;
+  std::complex<double> *dataB = nullptr;
+  std::complex<double> *filtX = nullptr;
+  std::complex<double> *filtW = nullptr;
+  std::complex<double> *filt = nullptr;
   /// @}
 
   /// @brief Autocorrelation toeplitz matrix.
