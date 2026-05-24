@@ -209,15 +209,19 @@ bool WienerHopf::process(IqData *x, IqData *y)
   }
 
   // load data from ring-buffers
+  const int64_t startShiftedIndex = -static_cast<int64_t>(delayMin);
+  int64_t wrappedIndex =
+    ((startShiftedIndex % static_cast<int64_t>(nSamples))
+    + static_cast<int64_t>(nSamples))
+    % static_cast<int64_t>(nSamples);
   for (i = 0; i < nSamples; i++)
   {
-    const int64_t shiftedIndex = static_cast<int64_t>(i)
-      - static_cast<int64_t>(delayMin);
-    const int64_t wrappedIndex =
-      ((shiftedIndex % static_cast<int64_t>(nSamples))
-      + static_cast<int64_t>(nSamples))
-      % static_cast<int64_t>(nSamples);
     dataX[i] = x->at_unchecked(static_cast<uint32_t>(wrappedIndex));
+    wrappedIndex++;
+    if (wrappedIndex == static_cast<int64_t>(nSamples))
+    {
+      wrappedIndex = 0;
+    }
     dataY[i] = y->at_unchecked(i);
   }
 
