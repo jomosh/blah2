@@ -66,6 +66,67 @@ WienerHopf::WienerHopf(int32_t _delayMin, int32_t _delayMax, uint32_t _nSamples)
                               reinterpret_cast<fftw_complex *>(filtW), FFTW_FORWARD, FFTW_ESTIMATE);
   fftFilt = fftw_plan_dft_1d(nBins + nSamples + 1, reinterpret_cast<fftw_complex *>(filt),
                              reinterpret_cast<fftw_complex *>(filt), FFTW_BACKWARD, FFTW_ESTIMATE);
+
+  if (fftX == nullptr || fftY == nullptr || fftA == nullptr || fftB == nullptr
+    || fftFiltX == nullptr || fftFiltW == nullptr || fftFilt == nullptr)
+  {
+    if (fftX != nullptr)
+    {
+      fftw_destroy_plan(fftX);
+      fftX = nullptr;
+    }
+    if (fftY != nullptr)
+    {
+      fftw_destroy_plan(fftY);
+      fftY = nullptr;
+    }
+    if (fftA != nullptr)
+    {
+      fftw_destroy_plan(fftA);
+      fftA = nullptr;
+    }
+    if (fftB != nullptr)
+    {
+      fftw_destroy_plan(fftB);
+      fftB = nullptr;
+    }
+    if (fftFiltX != nullptr)
+    {
+      fftw_destroy_plan(fftFiltX);
+      fftFiltX = nullptr;
+    }
+    if (fftFiltW != nullptr)
+    {
+      fftw_destroy_plan(fftFiltW);
+      fftFiltW = nullptr;
+    }
+    if (fftFilt != nullptr)
+    {
+      fftw_destroy_plan(fftFilt);
+      fftFilt = nullptr;
+    }
+
+    delete[] dataX;
+    dataX = nullptr;
+    delete[] dataY;
+    dataY = nullptr;
+    delete[] dataOutX;
+    dataOutX = nullptr;
+    delete[] dataOutY;
+    dataOutY = nullptr;
+    delete[] dataA;
+    dataA = nullptr;
+    delete[] dataB;
+    dataB = nullptr;
+    delete[] filtX;
+    filtX = nullptr;
+    delete[] filtW;
+    filtW = nullptr;
+    delete[] filt;
+    filt = nullptr;
+
+    throw std::runtime_error("WienerHopf failed to create FFTW plans.");
+  }
 }
 
 WienerHopf::~WienerHopf()

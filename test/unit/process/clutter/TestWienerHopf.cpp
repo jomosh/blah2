@@ -7,6 +7,7 @@
 #include "process/clutter/WienerHopf.h"
 #include "data/IqData.h"
 
+#include <limits>
 #include <stdexcept>
 
 TEST_CASE("WienerHopfConstructorRejectsInvalidDelayRange", "[process][clutter]")
@@ -22,6 +23,15 @@ TEST_CASE("WienerHopfConstructorRejectsZeroSamples", "[process][clutter]")
 TEST_CASE("WienerHopfConstructorRejectsBinsLargerThanSamples", "[process][clutter]")
 {
   CHECK_THROWS_AS(WienerHopf(0, 8, 4), std::invalid_argument);
+}
+
+TEST_CASE("WienerHopfConstructorRejectsBinCountOverflow", "[process][clutter]")
+{
+  CHECK_THROWS_AS(
+    WienerHopf(std::numeric_limits<int32_t>::min(),
+      std::numeric_limits<int32_t>::max(),
+      std::numeric_limits<uint32_t>::max()),
+    std::invalid_argument);
 }
 
 TEST_CASE("WienerHopfProcessRejectsShortInputs", "[process][clutter]")
