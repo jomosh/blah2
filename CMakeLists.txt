@@ -11,7 +11,14 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Werror")
 
 find_package(Threads REQUIRED)
 find_package(asio  REQUIRED)
-find_path(RAPIDJSON_INCLUDE_DIRS "rapidjson/allocators.h")
+file(GLOB VCPKG_INSTALLED_HINTS "${PROJECT_SOURCE_DIR}/lib/vcpkg_installed/*")
+find_path(
+  RAPIDJSON_INCLUDE_DIRS
+  "rapidjson/allocators.h"
+  HINTS ${VCPKG_INSTALLED_HINTS}
+  PATH_SUFFIXES include
+  REQUIRED
+)
 find_package(ryml CONFIG REQUIRED)
 find_package(httplib CONFIG REQUIRED)
 find_package(Armadillo CONFIG REQUIRED)
