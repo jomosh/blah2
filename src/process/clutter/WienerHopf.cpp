@@ -3,6 +3,7 @@
 #include <complex>
 #include <iostream>
 #include <limits>
+#include <memory>
 #include <stdexcept>
 #include <vector>
 
@@ -59,91 +60,92 @@ WienerHopf::WienerHopf(int32_t _delayMin, int32_t _delayMax, uint32_t _nSamples)
   b = arma::cx_vec(nBins);
   w = arma::cx_vec(nBins);
 
-  // compute FFTW plans in constructor
-  dataX = new std::complex<double>[nSamples];
-  dataY = new std::complex<double>[nSamples];
-  dataOutX = new std::complex<double>[nSamples];
-  dataOutY = new std::complex<double>[nSamples];
-  dataA = new std::complex<double>[nSamples];
-  dataB = new std::complex<double>[nSamples];
-  filtX = new std::complex<double>[nFilterSamples];
-  filtW = new std::complex<double>[nFilterSamples];
-  filt = new std::complex<double>[nFilterSamples];
-  fftX = fftw_plan_dft_1d(static_cast<int>(nSamples), reinterpret_cast<fftw_complex *>(dataX),
-                          reinterpret_cast<fftw_complex *>(dataOutX), FFTW_FORWARD, FFTW_ESTIMATE);
-  fftY = fftw_plan_dft_1d(static_cast<int>(nSamples), reinterpret_cast<fftw_complex *>(dataY),
-                          reinterpret_cast<fftw_complex *>(dataOutY), FFTW_FORWARD, FFTW_ESTIMATE);
-  fftA = fftw_plan_dft_1d(static_cast<int>(nSamples), reinterpret_cast<fftw_complex *>(dataA),
-                          reinterpret_cast<fftw_complex *>(dataA), FFTW_BACKWARD, FFTW_ESTIMATE);
-  fftB = fftw_plan_dft_1d(static_cast<int>(nSamples), reinterpret_cast<fftw_complex *>(dataB),
-                          reinterpret_cast<fftw_complex *>(dataB), FFTW_BACKWARD, FFTW_ESTIMATE);
-  fftFiltX = fftw_plan_dft_1d(static_cast<int>(nFilterSamples), reinterpret_cast<fftw_complex *>(filtX),
-                              reinterpret_cast<fftw_complex *>(filtX), FFTW_FORWARD, FFTW_ESTIMATE);
-  fftFiltW = fftw_plan_dft_1d(static_cast<int>(nFilterSamples), reinterpret_cast<fftw_complex *>(filtW),
-                              reinterpret_cast<fftw_complex *>(filtW), FFTW_FORWARD, FFTW_ESTIMATE);
-  fftFilt = fftw_plan_dft_1d(static_cast<int>(nFilterSamples), reinterpret_cast<fftw_complex *>(filt),
-                             reinterpret_cast<fftw_complex *>(filt), FFTW_BACKWARD, FFTW_ESTIMATE);
+  // Build allocation/plan state with local RAII buffers first. If any step
+  // throws before ownership transfer, partially allocated buffers are freed.
+  auto dataXLocal = std::make_unique<std::complex<double>[]>(nSamples);
+  auto dataYLocal = std::make_unique<std::complex<double>[]>(nSamples);
+  auto dataOutXLocal = std::make_unique<std::complex<double>[]>(nSamples);
+  auto dataOutYLocal = std::make_unique<std::complex<double>[]>(nSamples);
+  auto dataALocal = std::make_unique<std::complex<double>[]>(nSamples);
+  auto dataBLocal = std::make_unique<std::complex<double>[]>(nSamples);
+  auto filtXLocal = std::make_unique<std::complex<double>[]>(nFilterSamples);
+  auto filtWLocal = std::make_unique<std::complex<double>[]>(nFilterSamples);
+  auto filtLocal = std::make_unique<std::complex<double>[]>(nFilterSamples);
 
-  if (fftX == nullptr || fftY == nullptr || fftA == nullptr || fftB == nullptr
-    || fftFiltX == nullptr || fftFiltW == nullptr || fftFilt == nullptr)
+  fftw_plan fftXLocal = fftw_plan_dft_1d(static_cast<int>(nSamples),
+    reinterpret_cast<fftw_complex *>(dataXLocal.get()),
+    reinterpret_cast<fftw_complex *>(dataOutXLocal.get()), FFTW_FORWARD, FFTW_ESTIMATE);
+  fftw_plan fftYLocal = fftw_plan_dft_1d(static_cast<int>(nSamples),
+    reinterpret_cast<fftw_complex *>(dataYLocal.get()),
+    reinterpret_cast<fftw_complex *>(dataOutYLocal.get()), FFTW_FORWARD, FFTW_ESTIMATE);
+  fftw_plan fftALocal = fftw_plan_dft_1d(static_cast<int>(nSamples),
+    reinterpret_cast<fftw_complex *>(dataALocal.get()),
+    reinterpret_cast<fftw_complex *>(dataALocal.get()), FFTW_BACKWARD, FFTW_ESTIMATE);
+  fftw_plan fftBLocal = fftw_plan_dft_1d(static_cast<int>(nSamples),
+    reinterpret_cast<fftw_complex *>(dataBLocal.get()),
+    reinterpret_cast<fftw_complex *>(dataBLocal.get()), FFTW_BACKWARD, FFTW_ESTIMATE);
+  fftw_plan fftFiltXLocal = fftw_plan_dft_1d(static_cast<int>(nFilterSamples),
+    reinterpret_cast<fftw_complex *>(filtXLocal.get()),
+    reinterpret_cast<fftw_complex *>(filtXLocal.get()), FFTW_FORWARD, FFTW_ESTIMATE);
+  fftw_plan fftFiltWLocal = fftw_plan_dft_1d(static_cast<int>(nFilterSamples),
+    reinterpret_cast<fftw_complex *>(filtWLocal.get()),
+    reinterpret_cast<fftw_complex *>(filtWLocal.get()), FFTW_FORWARD, FFTW_ESTIMATE);
+  fftw_plan fftFiltLocal = fftw_plan_dft_1d(static_cast<int>(nFilterSamples),
+    reinterpret_cast<fftw_complex *>(filtLocal.get()),
+    reinterpret_cast<fftw_complex *>(filtLocal.get()), FFTW_BACKWARD, FFTW_ESTIMATE);
+
+  if (fftXLocal == nullptr || fftYLocal == nullptr || fftALocal == nullptr || fftBLocal == nullptr
+    || fftFiltXLocal == nullptr || fftFiltWLocal == nullptr || fftFiltLocal == nullptr)
   {
-    if (fftX != nullptr)
+    if (fftXLocal != nullptr)
     {
-      fftw_destroy_plan(fftX);
-      fftX = nullptr;
+      fftw_destroy_plan(fftXLocal);
     }
-    if (fftY != nullptr)
+    if (fftYLocal != nullptr)
     {
-      fftw_destroy_plan(fftY);
-      fftY = nullptr;
+      fftw_destroy_plan(fftYLocal);
     }
-    if (fftA != nullptr)
+    if (fftALocal != nullptr)
     {
-      fftw_destroy_plan(fftA);
-      fftA = nullptr;
+      fftw_destroy_plan(fftALocal);
     }
-    if (fftB != nullptr)
+    if (fftBLocal != nullptr)
     {
-      fftw_destroy_plan(fftB);
-      fftB = nullptr;
+      fftw_destroy_plan(fftBLocal);
     }
-    if (fftFiltX != nullptr)
+    if (fftFiltXLocal != nullptr)
     {
-      fftw_destroy_plan(fftFiltX);
-      fftFiltX = nullptr;
+      fftw_destroy_plan(fftFiltXLocal);
     }
-    if (fftFiltW != nullptr)
+    if (fftFiltWLocal != nullptr)
     {
-      fftw_destroy_plan(fftFiltW);
-      fftFiltW = nullptr;
+      fftw_destroy_plan(fftFiltWLocal);
     }
-    if (fftFilt != nullptr)
+    if (fftFiltLocal != nullptr)
     {
-      fftw_destroy_plan(fftFilt);
-      fftFilt = nullptr;
+      fftw_destroy_plan(fftFiltLocal);
     }
-
-    delete[] dataX;
-    dataX = nullptr;
-    delete[] dataY;
-    dataY = nullptr;
-    delete[] dataOutX;
-    dataOutX = nullptr;
-    delete[] dataOutY;
-    dataOutY = nullptr;
-    delete[] dataA;
-    dataA = nullptr;
-    delete[] dataB;
-    dataB = nullptr;
-    delete[] filtX;
-    filtX = nullptr;
-    delete[] filtW;
-    filtW = nullptr;
-    delete[] filt;
-    filt = nullptr;
 
     throw std::runtime_error("WienerHopf failed to create FFTW plans.");
   }
+
+  dataX = dataXLocal.release();
+  dataY = dataYLocal.release();
+  dataOutX = dataOutXLocal.release();
+  dataOutY = dataOutYLocal.release();
+  dataA = dataALocal.release();
+  dataB = dataBLocal.release();
+  filtX = filtXLocal.release();
+  filtW = filtWLocal.release();
+  filt = filtLocal.release();
+
+  fftX = fftXLocal;
+  fftY = fftYLocal;
+  fftA = fftALocal;
+  fftB = fftBLocal;
+  fftFiltX = fftFiltXLocal;
+  fftFiltW = fftFiltWLocal;
+  fftFilt = fftFiltLocal;
 }
 
 WienerHopf::~WienerHopf()
