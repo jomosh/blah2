@@ -19,6 +19,11 @@ TEST_CASE("WienerHopfConstructorRejectsZeroSamples", "[process][clutter]")
   CHECK_THROWS_AS(WienerHopf(0, 0, 0), std::invalid_argument);
 }
 
+TEST_CASE("WienerHopfConstructorRejectsBinsLargerThanSamples", "[process][clutter]")
+{
+  CHECK_THROWS_AS(WienerHopf(0, 8, 4), std::invalid_argument);
+}
+
 TEST_CASE("WienerHopfProcessRejectsShortInputs", "[process][clutter]")
 {
   WienerHopf filter(0, 0, 64);

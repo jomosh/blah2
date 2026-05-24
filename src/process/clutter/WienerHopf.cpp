@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <complex>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 #include <vector>
 
@@ -17,10 +18,22 @@ WienerHopf::WienerHopf(int32_t _delayMin, int32_t _delayMax, uint32_t _nSamples)
     throw std::invalid_argument("WienerHopf nSamples must be > 0.");
   }
 
+  const int64_t binCount = static_cast<int64_t>(_delayMax)
+    - static_cast<int64_t>(_delayMin) + 1;
+  if (binCount <= 0
+    || binCount > static_cast<int64_t>(std::numeric_limits<uint32_t>::max()))
+  {
+    throw std::invalid_argument("WienerHopf delay range produces invalid bin count.");
+  }
+  if (static_cast<uint64_t>(binCount) > static_cast<uint64_t>(_nSamples))
+  {
+    throw std::invalid_argument("WienerHopf requires nBins <= nSamples.");
+  }
+
   // input
   delayMin = _delayMin;
   delayMax = _delayMax;
-  nBins = static_cast<uint32_t>(delayMax - delayMin + 1);
+  nBins = static_cast<uint32_t>(binCount);
   nSamples = _nSamples;
 
   // initialise data
