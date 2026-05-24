@@ -35,6 +35,63 @@ const rapidjson::Value &require_member(const rapidjson::Value &object,
   REQUIRE(member != object.MemberEnd());
   return member->value;
 }
+
+const rapidjson::Value &require_array(const rapidjson::Value &value,
+  const char *context,
+  rapidjson::SizeType minimumSize = 0)
+{
+  INFO("Expected JSON array: " << context);
+  REQUIRE(value.IsArray());
+  INFO("JSON array shorter than expected: " << context);
+  REQUIRE(value.Size() >= minimumSize);
+  return value;
+}
+
+const rapidjson::Value &require_object(const rapidjson::Value &value,
+  const char *context)
+{
+  INFO("Expected JSON object: " << context);
+  REQUIRE(value.IsObject());
+  return value;
+}
+
+const rapidjson::Value &require_index(const rapidjson::Value &array,
+  rapidjson::SizeType index,
+  const char *context)
+{
+  INFO("Missing JSON array element: " << context << "[" << index << "]");
+  REQUIRE(array.IsArray());
+  REQUIRE(index < array.Size());
+  return array[index];
+}
+
+double require_double(const rapidjson::Value &value, const char *context)
+{
+  INFO("Expected JSON number: " << context);
+  REQUIRE(value.IsNumber());
+  return value.GetDouble();
+}
+
+uint64_t require_uint64(const rapidjson::Value &value, const char *context)
+{
+  INFO("Expected JSON uint64: " << context);
+  REQUIRE(value.IsUint64());
+  return value.GetUint64();
+}
+
+unsigned require_uint(const rapidjson::Value &value, const char *context)
+{
+  INFO("Expected JSON uint: " << context);
+  REQUIRE(value.IsUint());
+  return value.GetUint();
+}
+
+std::string require_string(const rapidjson::Value &value, const char *context)
+{
+  INFO("Expected JSON string: " << context);
+  REQUIRE(value.IsString());
+  return value.GetString();
+}
 }
 
 TEST_CASE("DetectionJsonConvertsDelayBinsToKm", "[functional][data][detection]")
@@ -48,21 +105,17 @@ TEST_CASE("DetectionJsonConvertsDelayBinsToKm", "[functional][data][detection]")
 
   REQUIRE_FALSE(document.HasParseError());
   REQUIRE(document.IsObject());
-  const rapidjson::Value &delay = require_member(document, "delay");
-  const rapidjson::Value &doppler = require_member(document, "doppler");
-  const rapidjson::Value &snr = require_member(document, "snr");
+  const rapidjson::Value &delay = require_array(require_member(document, "delay"), "delay", 2);
+  const rapidjson::Value &doppler = require_array(require_member(document, "doppler"), "doppler", 2);
+  const rapidjson::Value &snr = require_array(require_member(document, "snr"), "snr", 2);
   const rapidjson::Value &jsonTimestamp = require_member(document, "timestamp");
-  REQUIRE(delay.IsArray());
-  REQUIRE(doppler.IsArray());
-  REQUIRE(snr.IsArray());
-  REQUIRE(delay.Size() == 2);
-  CHECK(jsonTimestamp.GetUint64() == timestamp);
-  CHECK_THAT(delay[0].GetDouble(), Catch::Matchers::WithinAbs(2.0 * delayScaleKm, 0.01));
-  CHECK_THAT(delay[1].GetDouble(), Catch::Matchers::WithinAbs(4.0 * delayScaleKm, 0.01));
-  CHECK_THAT(doppler[0].GetDouble(), Catch::Matchers::WithinAbs(5.5, 0.01));
-  CHECK_THAT(doppler[1].GetDouble(), Catch::Matchers::WithinAbs(-3.25, 0.01));
-  CHECK_THAT(snr[0].GetDouble(), Catch::Matchers::WithinAbs(12.0, 0.01));
-  CHECK_THAT(snr[1].GetDouble(), Catch::Matchers::WithinAbs(9.5, 0.01));
+  CHECK(require_uint64(jsonTimestamp, "timestamp") == timestamp);
+  CHECK_THAT(require_double(require_index(delay, 0, "delay"), "delay[0]"), Catch::Matchers::WithinAbs(2.0 * delayScaleKm, 0.01));
+  CHECK_THAT(require_double(require_index(delay, 1, "delay"), "delay[1]"), Catch::Matchers::WithinAbs(4.0 * delayScaleKm, 0.01));
+  CHECK_THAT(require_double(require_index(doppler, 0, "doppler"), "doppler[0]"), Catch::Matchers::WithinAbs(5.5, 0.01));
+  CHECK_THAT(require_double(require_index(doppler, 1, "doppler"), "doppler[1]"), Catch::Matchers::WithinAbs(-3.25, 0.01));
+  CHECK_THAT(require_double(require_index(snr, 0, "snr"), "snr[0]"), Catch::Matchers::WithinAbs(12.0, 0.01));
+  CHECK_THAT(require_double(require_index(snr, 1, "snr"), "snr[1]"), Catch::Matchers::WithinAbs(9.5, 0.01));
 }
 
 TEST_CASE("MapJsonCarriesNormalizedMetricsAndAxes", "[functional][data][map]")
@@ -81,33 +134,29 @@ TEST_CASE("MapJsonCarriesNormalizedMetricsAndAxes", "[functional][data][map]")
 
   REQUIRE_FALSE(document.HasParseError());
   REQUIRE(document.IsObject());
-  const rapidjson::Value &data = require_member(document, "data");
-  const rapidjson::Value &delay = require_member(document, "delay");
-  const rapidjson::Value &doppler = require_member(document, "doppler");
+  const rapidjson::Value &data = require_array(require_member(document, "data"), "data", 2);
+  const rapidjson::Value &delay = require_array(require_member(document, "delay"), "delay", 2);
+  const rapidjson::Value &doppler = require_array(require_member(document, "doppler"), "doppler", 2);
   const rapidjson::Value &jsonTimestamp = require_member(document, "timestamp");
   const rapidjson::Value &nRows = require_member(document, "nRows");
   const rapidjson::Value &nCols = require_member(document, "nCols");
   const rapidjson::Value &noisePower = require_member(document, "noisePower");
   const rapidjson::Value &maxPower = require_member(document, "maxPower");
-  REQUIRE(data.IsArray());
-  REQUIRE(data.Size() == 2);
-  REQUIRE(data[0].IsArray());
-  REQUIRE(data[0].Size() == 2);
-  REQUIRE(delay.IsArray());
-  REQUIRE(doppler.IsArray());
-  CHECK(jsonTimestamp.GetUint64() == timestamp);
-  CHECK(nRows.GetUint() == 2);
-  CHECK(nCols.GetUint() == 2);
-  CHECK_THAT(noisePower.GetDouble(), Catch::Matchers::WithinAbs(15.0, 0.01));
-  CHECK_THAT(maxPower.GetDouble(), Catch::Matchers::WithinAbs(15.0, 0.01));
-  CHECK_THAT(delay[0].GetDouble(), Catch::Matchers::WithinAbs(0.0, 0.01));
-  CHECK_THAT(delay[1].GetDouble(), Catch::Matchers::WithinAbs(2.0 * delayScaleKm, 0.01));
-  CHECK_THAT(doppler[0].GetDouble(), Catch::Matchers::WithinAbs(-12.5, 0.01));
-  CHECK_THAT(doppler[1].GetDouble(), Catch::Matchers::WithinAbs(12.5, 0.01));
-  CHECK_THAT(data[0][0].GetDouble(), Catch::Matchers::WithinAbs(-15.0, 0.01));
-  CHECK_THAT(data[0][1].GetDouble(), Catch::Matchers::WithinAbs(-5.0, 0.01));
-  CHECK_THAT(data[1][0].GetDouble(), Catch::Matchers::WithinAbs(5.0, 0.01));
-  CHECK_THAT(data[1][1].GetDouble(), Catch::Matchers::WithinAbs(15.0, 0.01));
+  const rapidjson::Value &firstRow = require_array(require_index(data, 0, "data"), "data[0]", 2);
+  const rapidjson::Value &secondRow = require_array(require_index(data, 1, "data"), "data[1]", 2);
+  CHECK(require_uint64(jsonTimestamp, "timestamp") == timestamp);
+  CHECK(require_uint(nRows, "nRows") == 2);
+  CHECK(require_uint(nCols, "nCols") == 2);
+  CHECK_THAT(require_double(noisePower, "noisePower"), Catch::Matchers::WithinAbs(15.0, 0.01));
+  CHECK_THAT(require_double(maxPower, "maxPower"), Catch::Matchers::WithinAbs(15.0, 0.01));
+  CHECK_THAT(require_double(require_index(delay, 0, "delay"), "delay[0]"), Catch::Matchers::WithinAbs(0.0, 0.01));
+  CHECK_THAT(require_double(require_index(delay, 1, "delay"), "delay[1]"), Catch::Matchers::WithinAbs(2.0 * delayScaleKm, 0.01));
+  CHECK_THAT(require_double(require_index(doppler, 0, "doppler"), "doppler[0]"), Catch::Matchers::WithinAbs(-12.5, 0.01));
+  CHECK_THAT(require_double(require_index(doppler, 1, "doppler"), "doppler[1]"), Catch::Matchers::WithinAbs(12.5, 0.01));
+  CHECK_THAT(require_double(require_index(firstRow, 0, "data[0]"), "data[0][0]"), Catch::Matchers::WithinAbs(-15.0, 0.01));
+  CHECK_THAT(require_double(require_index(firstRow, 1, "data[0]"), "data[0][1]"), Catch::Matchers::WithinAbs(-5.0, 0.01));
+  CHECK_THAT(require_double(require_index(secondRow, 0, "data[1]"), "data[1][0]"), Catch::Matchers::WithinAbs(5.0, 0.01));
+  CHECK_THAT(require_double(require_index(secondRow, 1, "data[1]"), "data[1][1]"), Catch::Matchers::WithinAbs(15.0, 0.01));
 }
 
 TEST_CASE("TrackJsonEmitsPromotedTrackHistory", "[functional][data][track]")
@@ -125,46 +174,41 @@ TEST_CASE("TrackJsonEmitsPromotedTrackHistory", "[functional][data][track]")
 
   REQUIRE_FALSE(document.HasParseError());
   REQUIRE(document.IsObject());
-  const rapidjson::Value &data = require_member(document, "data");
+  const rapidjson::Value &data = require_array(require_member(document, "data"), "data", 1);
   const rapidjson::Value &jsonTimestamp = require_member(document, "timestamp");
   const rapidjson::Value &count = require_member(document, "n");
   const rapidjson::Value &nTentative = require_member(document, "nTentative");
   const rapidjson::Value &nAssociated = require_member(document, "nAssociated");
   const rapidjson::Value &nActive = require_member(document, "nActive");
   const rapidjson::Value &nCoasting = require_member(document, "nCoasting");
-  REQUIRE(data.IsArray());
-  REQUIRE(data.Size() == 1);
-  REQUIRE(data[0].IsObject());
-  const rapidjson::Value &trackEntry = data[0];
+  const rapidjson::Value &trackEntry = require_object(require_index(data, 0, "data"), "data[0]");
   const rapidjson::Value &trackId = require_member(trackEntry, "id");
   const rapidjson::Value &state = require_member(trackEntry, "state");
   const rapidjson::Value &delay = require_member(trackEntry, "delay");
   const rapidjson::Value &doppler = require_member(trackEntry, "doppler");
   const rapidjson::Value &acceleration = require_member(trackEntry, "acceleration");
   const rapidjson::Value &trackCount = require_member(trackEntry, "n");
-  const rapidjson::Value &associatedDelay = require_member(trackEntry, "associated_delay");
-  const rapidjson::Value &associatedDoppler = require_member(trackEntry, "associated_doppler");
-  const rapidjson::Value &associatedState = require_member(trackEntry, "associated_state");
-  REQUIRE(associatedDelay.IsArray());
-  REQUIRE(associatedState.IsArray());
-  CHECK(jsonTimestamp.GetUint64() == timestamp);
-  CHECK(count.GetUint64() == 1);
-  CHECK(nTentative.GetUint64() == 0);
-  CHECK(nAssociated.GetUint64() == 1);
-  CHECK(nActive.GetUint64() == 0);
-  CHECK(nCoasting.GetUint64() == 0);
-  CHECK(std::string(trackId.GetString()) == "0000");
-  CHECK(std::string(state.GetString()) == "ASSOCIATED");
-  CHECK_THAT(delay.GetDouble(), Catch::Matchers::WithinAbs(4.0 * delayScaleKm, 0.01));
-  CHECK_THAT(doppler.GetDouble(), Catch::Matchers::WithinAbs(12.0, 0.01));
-  CHECK_THAT(acceleration.GetDouble(), Catch::Matchers::WithinAbs(0.5, 0.001));
-  CHECK(trackCount.GetUint64() == 2);
-  CHECK_THAT(associatedDelay[0].GetDouble(), Catch::Matchers::WithinAbs(3.0 * delayScaleKm, 0.01));
-  CHECK_THAT(associatedDelay[1].GetDouble(), Catch::Matchers::WithinAbs(4.0 * delayScaleKm, 0.01));
-  CHECK_THAT(associatedDoppler[0].GetDouble(), Catch::Matchers::WithinAbs(9.0, 0.01));
-  CHECK_THAT(associatedDoppler[1].GetDouble(), Catch::Matchers::WithinAbs(12.0, 0.01));
-  CHECK(std::string(associatedState[0].GetString()) == "TENTATIVE");
-  CHECK(std::string(associatedState[1].GetString()) == "ASSOCIATED");
+  const rapidjson::Value &associatedDelay = require_array(require_member(trackEntry, "associated_delay"), "associated_delay", 2);
+  const rapidjson::Value &associatedDoppler = require_array(require_member(trackEntry, "associated_doppler"), "associated_doppler", 2);
+  const rapidjson::Value &associatedState = require_array(require_member(trackEntry, "associated_state"), "associated_state", 2);
+  CHECK(require_uint64(jsonTimestamp, "timestamp") == timestamp);
+  CHECK(require_uint64(count, "n") == 1);
+  CHECK(require_uint64(nTentative, "nTentative") == 0);
+  CHECK(require_uint64(nAssociated, "nAssociated") == 1);
+  CHECK(require_uint64(nActive, "nActive") == 0);
+  CHECK(require_uint64(nCoasting, "nCoasting") == 0);
+  CHECK(require_string(trackId, "id") == "0000");
+  CHECK(require_string(state, "state") == "ASSOCIATED");
+  CHECK_THAT(require_double(delay, "delay"), Catch::Matchers::WithinAbs(4.0 * delayScaleKm, 0.01));
+  CHECK_THAT(require_double(doppler, "doppler"), Catch::Matchers::WithinAbs(12.0, 0.01));
+  CHECK_THAT(require_double(acceleration, "acceleration"), Catch::Matchers::WithinAbs(0.5, 0.001));
+  CHECK(require_uint64(trackCount, "track.n") == 2);
+  CHECK_THAT(require_double(require_index(associatedDelay, 0, "associated_delay"), "associated_delay[0]"), Catch::Matchers::WithinAbs(3.0 * delayScaleKm, 0.01));
+  CHECK_THAT(require_double(require_index(associatedDelay, 1, "associated_delay"), "associated_delay[1]"), Catch::Matchers::WithinAbs(4.0 * delayScaleKm, 0.01));
+  CHECK_THAT(require_double(require_index(associatedDoppler, 0, "associated_doppler"), "associated_doppler[0]"), Catch::Matchers::WithinAbs(9.0, 0.01));
+  CHECK_THAT(require_double(require_index(associatedDoppler, 1, "associated_doppler"), "associated_doppler[1]"), Catch::Matchers::WithinAbs(12.0, 0.01));
+  CHECK(require_string(require_index(associatedState, 0, "associated_state"), "associated_state[0]") == "TENTATIVE");
+  CHECK(require_string(require_index(associatedState, 1, "associated_state"), "associated_state[1]") == "ASSOCIATED");
 }
 
 TEST_CASE("TimingJsonReportsElapsedAndStageDurations", "[functional][data][timing]")
@@ -182,10 +226,10 @@ TEST_CASE("TimingJsonReportsElapsedAndStageDurations", "[functional][data][timin
   const rapidjson::Value &uptimeDays = require_member(document, "uptime_days");
   const rapidjson::Value &captureMs = require_member(document, "capture_ms");
   const rapidjson::Value &processMs = require_member(document, "process_ms");
-  CHECK(timestamp.GetUint64() == 61000);
-  CHECK(nCpi.GetUint64() == 1);
-  CHECK_THAT(uptimeSeconds.GetDouble(), Catch::Matchers::WithinAbs(60.0, 0.01));
-  CHECK_THAT(uptimeDays.GetDouble(), Catch::Matchers::WithinAbs(60.0 / 86400.0, 0.01));
-  CHECK_THAT(captureMs.GetDouble(), Catch::Matchers::WithinAbs(1.25, 0.01));
-  CHECK_THAT(processMs.GetDouble(), Catch::Matchers::WithinAbs(2.5, 0.01));
+  CHECK(require_uint64(timestamp, "timestamp") == 61000);
+  CHECK(require_uint64(nCpi, "nCpi") == 1);
+  CHECK_THAT(require_double(uptimeSeconds, "uptime_s"), Catch::Matchers::WithinAbs(60.0, 0.01));
+  CHECK_THAT(require_double(uptimeDays, "uptime_days"), Catch::Matchers::WithinAbs(60.0 / 86400.0, 0.01));
+  CHECK_THAT(require_double(captureMs, "capture_ms"), Catch::Matchers::WithinAbs(1.25, 0.01));
+  CHECK_THAT(require_double(processMs, "process_ms"), Catch::Matchers::WithinAbs(2.5, 0.01));
 }
