@@ -123,14 +123,18 @@ void Source::flush_blah2_paired_iq_samples_locked()
     return;
   }
 
+  std::lock_guard<std::mutex> lock(saveIqFileMutex);
+  if (!saveIqFile.is_open())
+  {
+    return;
+  }
+
   thread_local std::vector<int16_t> interleavedScratch;
   interleavedScratch.resize(nPaired * 4);
   for (size_t i = 0; i < nPaired; i++)
   {
-    const std::complex<float> reference = pendingSaveSamples[0].front();
-    pendingSaveSamples[0].pop_front();
-    const std::complex<float> surveillance = pendingSaveSamples[1].front();
-    pendingSaveSamples[1].pop_front();
+    const std::complex<float> &reference = pendingSaveSamples[0][i];
+    const std::complex<float> &surveillance = pendingSaveSamples[1][i];
 
     const size_t offset = i * 4;
     interleavedScratch[offset] = clamp_blah2_iq_component(reference.real());
@@ -139,17 +143,18 @@ void Source::flush_blah2_paired_iq_samples_locked()
     interleavedScratch[offset + 3] = clamp_blah2_iq_component(surveillance.imag());
   }
 
-  std::lock_guard<std::mutex> lock(saveIqFileMutex);
-  if (!saveIqFile.is_open())
-  {
-    return;
-  }
-
   saveIqFile.write(reinterpret_cast<const char *>(interleavedScratch.data()),
     static_cast<std::streamsize>(interleavedScratch.size() * sizeof(int16_t)));
   if (!saveIqFile)
   {
     std::cerr << "Error: failed to write Blah2 IQ samples" << std::endl;
+    return;
+  }
+
+  for (size_t i = 0; i < nPaired; i++)
+  {
+    pendingSaveSamples[0].pop_front();
+    pendingSaveSamples[1].pop_front();
   }
 }
 
@@ -197,8 +202,9 @@ std::string Source::open_file()
 
 void Source::close_file()
 {
-  // Lock both mutexes together so pending sample flushes cannot race a close.
-  std::scoped_lock<std::mutex, std::mutex> lock(pendingSaveMutex, saveIqFileMutex);
+  // Keep lock ordering consistent with flush path: pendingSaveMutex then saveIqFileMutex.
+  std::lock_guard<std::mutex> pendingLock(pendingSaveMutex);
+  std::lock_guard<std::mutex> fileLock(saveIqFileMutex);
   clear_blah2_paired_iq_samples_locked();
   if (saveIqFile.is_open())
   {
