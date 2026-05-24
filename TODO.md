@@ -5,12 +5,12 @@
 
 - [X] Expand SDR device support (UHD integration, additional hardware)
 - [X] Add replay/file-based capture modes
-- [ ] Add 2x RTL-SDR sample-time alignment for shared-clock setups without shared trigger (use a noise source or equivalent startup calibration to establish a common trigger after device start)
-- [ ] Optimize IQ sample streaming performance
+- [X] Add 2x RTL-SDR sample-time alignment for shared-clock setups without shared trigger (use a noise source or equivalent startup calibration to establish a common trigger after device start)
+- [X] Optimize IQ sample streaming performance
 
 ## DSP & Processing
 
-- [ ] Enhance clutter filtering algorithms
+- [X] Enhance clutter filtering algorithms
 - [ ] Improve detection/tracking robustness
 - [ ] Optimize ambiguity map computation
 - [X] Add spectrum analysis features
@@ -79,10 +79,41 @@
 - [X] Validate 2x node deployment on one host with independent configs and ports
 - [ ] Add startup preflight checks for occupied ports and SDR device lock conflicts
 - [ ] Add observability endpoints for node health and data freshness
-- [ ] Document multi-node deployment and 3lips integration patterns
+- [X] Document multi-node deployment and 3lips integration patterns
 
-### Acceptance Gates
+### Acceptance Gates (validation goals)
 
 - [ ] Gate A: Headless node mode runs 24h without UI containers and without API schema changes
 - [ ] Gate B: Two nodes run concurrently for 8h on one host with zero port bind/connect conflicts
 - [ ] Gate C: Single-node default workflow remains backward compatible
+
+### Triage On Remaining Unchecked Items
+
+#### Likely implemented, needs validation
+
+- [X] Expand Catch2 unit test coverage
+- [ ] Improve detection/tracking robustness
+- [X] Optimize ambiguity map computation
+- [X] Performance optimize TCP socket handling
+- [X] Add real-time plot refresh optimization
+
+#### Still open
+
+- [ ] Review JSON schema stability for API contract
+- [ ] Improve metadata handling and timestamps
+- [ ] Add configuration hot-reload support
+- [ ] Enhance Plotly visualizations
+- [ ] Implement user controls for filtering/scaling
+- [ ] Improve responsive layout
+- [ ] Add integration tests for end-to-end flows
+- [ ] Improve test fixtures and determinism
+- [ ] Document YAML schema and defaults
+- [ ] Add configuration validation
+- [ ] Support environment variable overrides
+- [ ] Add architecture documentation
+- [ ] Create API endpoint reference
+- [ ] Profile hot paths in DSP pipeline
+- [ ] Optimize memory allocations in tight loops
+- [ ] Benchmark network payload generation
+- [ ] Add startup preflight checks for occupied ports and SDR device lock conflicts
+- [ ] Add observability endpoints for node health and data freshness

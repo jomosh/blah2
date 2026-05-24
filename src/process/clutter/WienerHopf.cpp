@@ -1,4 +1,5 @@
 #include "WienerHopf.h"
+#include <algorithm>
 #include <complex>
 #include <iostream>
 #include <vector>
@@ -89,6 +90,12 @@ bool WienerHopf::process(IqData *x, IqData *y)
     a[i] = std::conj(dataA[i]) / (double)nSamples;
   }
   A = arma::toeplitz(a);
+
+  const double diagonalLoading = std::max(1e-12, 1e-6 * std::abs(a[0]));
+  for (i = 0; i < nBins; i++)
+  {
+    A(i, i) += diagonalLoading;
+  }
 
   // conjugate upper diagonal as arma does not
   for (i = 0; i < nBins; i++)

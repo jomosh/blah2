@@ -117,33 +117,40 @@ void Source::append_blah2_paired_iq_samples(size_t channelIndex, const int8_t *s
 
 void Source::flush_blah2_paired_iq_samples_locked()
 {
-  // Callers already hold pendingSaveMutex, so close_file() cannot interleave
-  // between this open-state check and the eventual write path.
-  {
-    std::lock_guard<std::mutex> lock(saveIqFileMutex);
-    if (!saveIqFile.is_open())
-    {
-      return;
-    }
-  }
-
   const size_t nPaired = std::min(pendingSaveSamples[0].size(), pendingSaveSamples[1].size());
   if (nPaired == 0)
   {
     return;
   }
 
-  std::vector<std::complex<float>> reference(nPaired);
-  std::vector<std::complex<float>> surveillance(nPaired);
+  thread_local std::vector<int16_t> interleavedScratch;
+  interleavedScratch.resize(nPaired * 4);
   for (size_t i = 0; i < nPaired; i++)
   {
-    reference[i] = pendingSaveSamples[0].front();
+    const std::complex<float> reference = pendingSaveSamples[0].front();
     pendingSaveSamples[0].pop_front();
-    surveillance[i] = pendingSaveSamples[1].front();
+    const std::complex<float> surveillance = pendingSaveSamples[1].front();
     pendingSaveSamples[1].pop_front();
+
+    const size_t offset = i * 4;
+    interleavedScratch[offset] = clamp_blah2_iq_component(reference.real());
+    interleavedScratch[offset + 1] = clamp_blah2_iq_component(reference.imag());
+    interleavedScratch[offset + 2] = clamp_blah2_iq_component(surveillance.real());
+    interleavedScratch[offset + 3] = clamp_blah2_iq_component(surveillance.imag());
   }
 
-  write_blah2_iq_samples(reference.data(), surveillance.data(), nPaired);
+  std::lock_guard<std::mutex> lock(saveIqFileMutex);
+  if (!saveIqFile.is_open())
+  {
+    return;
+  }
+
+  saveIqFile.write(reinterpret_cast<const char *>(interleavedScratch.data()),
+    static_cast<std::streamsize>(interleavedScratch.size() * sizeof(int16_t)));
+  if (!saveIqFile)
+  {
+    std::cerr << "Error: failed to write Blah2 IQ samples" << std::endl;
+  }
 }
 
 void Source::clear_blah2_paired_iq_samples_locked()
