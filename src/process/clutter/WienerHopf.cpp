@@ -37,7 +37,7 @@ WienerHopf::WienerHopf(int32_t _delayMin, int32_t _delayMax, uint32_t _nSamples)
   }
 
   const uint64_t filterLen64 = static_cast<uint64_t>(binCount)
-    + static_cast<uint64_t>(_nSamples) + 1ULL;
+    + static_cast<uint64_t>(_nSamples);
   if (filterLen64 > static_cast<uint64_t>(std::numeric_limits<uint32_t>::max()))
   {
     throw std::invalid_argument("WienerHopf filter length overflows uint32_t.");
