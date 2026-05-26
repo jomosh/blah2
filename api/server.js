@@ -121,12 +121,40 @@ app.get('/stash/timing', (req, res) => {
   res.send(stash_timing.get_data_timing());
 });
 
+function is_local_ip(ip) {
+  const addr = ip.startsWith('::ffff:') ? ip.slice(7) : ip;
+  if (addr === '::1') return true;
+  const parts = addr.split('.').map(Number);
+  if (parts.length !== 4 || parts.some(p => !Number.isInteger(p) || p < 0 || p > 255)) return false;
+  if (parts[0] === 127) return true;
+  if (parts[0] === 10) return true;
+  if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
+  if (parts[0] === 192 && parts[1] === 168) return true;
+  return false;
+}
+
 // read state of capture
 app.get('/capture', (req, res) => {
   res.send(capture);
 });
-// toggle state of capture
+// toggle state of capture — localhost and RFC1918 only
 app.get('/capture/toggle', (req, res) => {
+  if (!req.socket.remoteAddress || !is_local_ip(req.socket.remoteAddress)) {
+    res.status(403).end();
+    return;
+  }
+  const origin = req.get('Origin');
+  if (origin) {
+    let originHost;
+    try { originHost = new URL(origin).hostname; } catch (_) {
+      res.status(403).end();
+      return;
+    }
+    if (!is_local_ip(originHost)) {
+      res.status(403).end();
+      return;
+    }
+  }
   capture = !capture;
   res.send('{}');
 });

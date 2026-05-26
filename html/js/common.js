@@ -111,3 +111,34 @@ function build_api_url(path) {
   const normalizedPath = path.startsWith('/') ? path : '/' + path;
   return get_api_base_url() + normalizedPath;
 }
+
+function get_api_forward_params() {
+  const query = new URLSearchParams(window.location.search);
+  const apiBase = query.get('api_base');
+  const apiPort = query.get('api_port');
+  const params = new URLSearchParams();
+  const sanitizedApiBase = sanitize_api_base(apiBase);
+  if (sanitizedApiBase) {
+    params.set('api_base', sanitizedApiBase);
+  } else if (apiPort && /^\d+$/.test(apiPort)) {
+    const port = Number(apiPort);
+    if (port >= 1 && port <= 65535) {
+      params.set('api_port', String(port));
+    }
+  }
+  const str = params.toString();
+  return str ? '?' + str : '';
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  const forwardParams = get_api_forward_params();
+  if (!forwardParams) { return; }
+  var anchors = document.getElementsByTagName('a');
+  for (var i = 0; i < anchors.length; i++) {
+    var rawHref = anchors[i].getAttribute('href');
+    if (!rawHref) { continue; }
+    if (!rawHref.startsWith('/') || rawHref.startsWith('//')) { continue; }
+    if (rawHref.startsWith('/api/') || rawHref.startsWith('/stash/') || rawHref.startsWith('/capture/')) { continue; }
+    anchors[i].href = rawHref + (rawHref.includes('?') ? '&' : '?') + forwardParams.slice(1);
+  }
+});
