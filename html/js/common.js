@@ -117,10 +117,14 @@ function get_api_forward_params() {
   const apiBase = query.get('api_base');
   const apiPort = query.get('api_port');
   const params = new URLSearchParams();
-  if (apiBase) {
+  const sanitizedApiBase = sanitize_api_base(apiBase);
+  if (sanitizedApiBase) {
     params.set('api_base', apiBase);
-  } else if (apiPort) {
-    params.set('api_port', apiPort);
+  } else if (apiPort && /^\d+$/.test(apiPort)) {
+    const port = Number(apiPort);
+    if (port >= 1 && port <= 65535) {
+      params.set('api_port', String(port));
+    }
   }
   const str = params.toString();
   return str ? '?' + str : '';
