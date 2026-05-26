@@ -143,18 +143,6 @@ app.get('/capture/toggle', (req, res) => {
     res.status(403).end();
     return;
   }
-  const origin = req.get('Origin');
-  if (origin) {
-    let originHost;
-    try { originHost = new URL(origin).hostname; } catch (_) {
-      res.status(403).end();
-      return;
-    }
-    if (!is_local_ip(originHost)) {
-      res.status(403).end();
-      return;
-    }
-  }
   capture = !capture;
   res.send('{}');
 });
