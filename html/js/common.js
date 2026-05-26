@@ -111,3 +111,30 @@ function build_api_url(path) {
   const normalizedPath = path.startsWith('/') ? path : '/' + path;
   return get_api_base_url() + normalizedPath;
 }
+
+function get_api_forward_params() {
+  const query = new URLSearchParams(window.location.search);
+  const apiBase = query.get('api_base');
+  const apiPort = query.get('api_port');
+  const params = new URLSearchParams();
+  if (apiBase) {
+    params.set('api_base', apiBase);
+  } else if (apiPort) {
+    params.set('api_port', apiPort);
+  }
+  const str = params.toString();
+  return str ? '?' + str : '';
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  const forwardParams = get_api_forward_params();
+  if (!forwardParams) { return; }
+  var anchors = document.getElementsByTagName('a');
+  for (var i = 0; i < anchors.length; i++) {
+    var rawHref = anchors[i].getAttribute('href');
+    if (!rawHref) { continue; }
+    if (!rawHref.startsWith('/') || rawHref.startsWith('//')) { continue; }
+    if (rawHref.startsWith('/api/') || rawHref.startsWith('/stash/') || rawHref.startsWith('/capture/')) { continue; }
+    anchors[i].href = rawHref + forwardParams;
+  }
+});
