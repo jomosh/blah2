@@ -139,7 +139,7 @@ app.get('/capture', (req, res) => {
 });
 // toggle state of capture — localhost and RFC1918 only
 app.get('/capture/toggle', (req, res) => {
-  if (!is_local_ip(req.socket.remoteAddress)) {
+  if (!req.socket.remoteAddress || !is_local_ip(req.socket.remoteAddress)) {
     res.status(403).end();
     return;
   }

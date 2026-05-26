@@ -139,6 +139,6 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!rawHref) { continue; }
     if (!rawHref.startsWith('/') || rawHref.startsWith('//')) { continue; }
     if (rawHref.startsWith('/api/') || rawHref.startsWith('/stash/') || rawHref.startsWith('/capture/')) { continue; }
-    anchors[i].href = rawHref + forwardParams;
+    anchors[i].href = rawHref + (rawHref.includes('?') ? '&' : '?') + forwardParams.slice(1);
   }
 });
