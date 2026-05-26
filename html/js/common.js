@@ -119,7 +119,7 @@ function get_api_forward_params() {
   const params = new URLSearchParams();
   const sanitizedApiBase = sanitize_api_base(apiBase);
   if (sanitizedApiBase) {
-    params.set('api_base', apiBase);
+    params.set('api_base', sanitizedApiBase);
   } else if (apiPort && /^\d+$/.test(apiPort)) {
     const port = Number(apiPort);
     if (port >= 1 && port <= 65535) {
