@@ -8,7 +8,7 @@ RUN apt-get update && apt-get install -y software-properties-common \
     && apt-get update \
     && DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt-get install -y \
     g++ make cmake git curl zip unzip doxygen graphviz \
-    libfftw3-dev pkg-config gfortran libhackrf-dev \
+    libfftw3-dev pkg-config gfortran \
     libusb-dev libusb-1.0-0-dev \
     ninja-build \
     autoconf automake build-essential ccache cpufrequtils ethtool fort77 \
@@ -24,6 +24,13 @@ RUN apt-get update && apt-get install -y software-properties-common \
     && apt-get autoremove -y \
     && apt-get clean -y \
     && rm -rf /var/lib/apt/lists/*
+
+# build libhackrf from source to match firmware version on host
+RUN git clone --branch v2024.02.1 --depth 1 https://github.com/greatscottgadgets/hackrf /opt/hackrf-src \
+  && cd /opt/hackrf-src/host && mkdir build && cd build \
+  && cmake .. -DINSTALL_UDEV_RULES=OFF -DCMAKE_BUILD_TYPE=Release \
+  && make -j$(nproc) && make install && ldconfig \
+  && rm -rf /opt/hackrf-src
 
 RUN git clone https://github.com/EttusResearch/uhd.git /tmp/uhd \
     && cd /tmp/uhd \
