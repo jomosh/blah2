@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y software-properties-common \
     autoconf automake build-essential ccache cpufrequtils ethtool fort77 \
     gir1.2-gtk-3.0 gobject-introspection gpsd gpsd-clients inetutils-tools \
     libasound2-dev libboost-all-dev libcomedi-dev libcppunit-dev libfftw3-bin libfftw3-doc \
-    libfontconfig1-dev libgmp-dev libgps-dev libgsl-dev liblog4cpp5-dev libncurses5 libncurses5-dev \
+    libfontconfig1-dev libgmp-dev libgps-dev libgsl-dev liblog4cpp5-dev libncurses6 libncurses-dev \
     libpulse-dev libqt5opengl5-dev libqwt-qt5-dev libsdl1.2-dev libtool libudev-dev libusb-dev \
     libxi-dev libxrender-dev libzmq3-dev libzmq5 ncurses-bin \
     python3-cheetah python3-click python3-click-plugins python3-click-threading python3-dev \
