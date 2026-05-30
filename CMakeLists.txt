@@ -21,7 +21,7 @@ find_path(
 )
 find_package(ryml CONFIG REQUIRED)
 find_package(httplib CONFIG REQUIRED)
-find_package(Armadillo CONFIG REQUIRED)
+find_package(Armadillo REQUIRED)
 find_package(Catch2 CONFIG REQUIRED)
 
 set(CMAKE_PREFIX_PATH "/opt/uhd" ${CMAKE_PREFIX_PATH})
