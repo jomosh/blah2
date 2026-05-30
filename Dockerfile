@@ -4,9 +4,7 @@ LABEL org.opencontainers.image.source https://github.com/30hours/blah2
 
 WORKDIR /blah2
 ADD lib lib
-RUN apt-get update && apt-get install -y software-properties-common \
-  && apt-add-repository ppa:ettusresearch/uhd \
-  && apt-get update \
+RUN apt-get update \
   && DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt-get install -y \
   g++ make cmake ninja-build git curl zip unzip doxygen graphviz \
   libfftw3-dev pkg-config gfortran libhackrf-dev \

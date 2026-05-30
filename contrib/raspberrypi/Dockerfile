@@ -31,7 +31,7 @@ RUN git clone https://github.com/EttusResearch/uhd.git /tmp/uhd \
     && cd host \
     && mkdir build \
     && cd build \
-    && cmake -DCMAKE_INSTALL_PREFIX=/usr .. \
+    && cmake -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_CXX_FLAGS="-include cstdint" .. \
     && make -j4 \
     && make install \
     && ldconfig \
