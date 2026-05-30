@@ -1,13 +1,10 @@
-cmake_minimum_required(VERSION 3.8)
-if(COMMAND cmake_policy)
-  cmake_policy(SET CMP0003 NEW)
-endif(COMMAND cmake_policy)
+cmake_minimum_required(VERSION 3.21)
 
 project(blah2)
 include(CMakePrintHelpers)
 include(CTest)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Werror")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Werror -Wno-template-body")
 
 find_package(Threads REQUIRED)
 find_package(asio  REQUIRED)
