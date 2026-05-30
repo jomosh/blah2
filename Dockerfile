@@ -11,6 +11,7 @@ RUN apt-get update \
   libuhd-dev \
   uhd-host \
   libusb-dev libusb-1.0.0-dev \
+  libarmadillo-dev libopenblas-dev liblapack-dev \
   && apt-get autoremove -y \
   && apt-get clean -y \
   && rm -rf /var/lib/apt/lists/*

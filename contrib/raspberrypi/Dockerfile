@@ -21,6 +21,7 @@ RUN apt-get update && apt-get install -y software-properties-common \
     python3-docutils python3-gi python3-gi-cairo python3-gps python3-lxml python3-mako python3-numpy \
     python3-opengl python3-pyqt5 python3-requests python3-scipy python3-setuptools python3-six \
     python3-sphinx python3-yaml python3-zmq python3-ruamel.yaml swig wget \
+    libarmadillo-dev libopenblas-dev liblapack-dev \
     && apt-get autoremove -y \
     && apt-get clean -y \
     && rm -rf /var/lib/apt/lists/*
