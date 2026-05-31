@@ -395,12 +395,19 @@ TEST_CASE("Process_PairedBufferSkewMigratesPeakAcrossDelayBins", "[process]")
 ///        copy of the reference delayed by D samples must produce a peak at
 ///        exactly delay bin D.  This test guards the index expression in
 ///        Ambiguity::process() and will catch any off-by-one regression.
+///
+///        Sign convention: sur[n] = source[n], ref[n] = source[n + D].
+///        This makes the reference D samples ahead of surveillance, so
+///        surveillance is delayed by D relative to reference, and the
+///        cross-correlation IFFT(Y * conj(X)) peaks at lag D.
 TEST_CASE("Process_DelayBinPin", "[process]")
 {
     auto round_hamming = GENERATE(true, false);
 
-    constexpr uint32_t fs = 2'000'000;
-    constexpr uint32_t nSamples = 100'000; // short CPI, 1 Doppler bin
+    // nSamples only needs to be much larger than delayMax so the correlation
+    // is unambiguous.  4096 keeps plan creation and FFT cost minimal.
+    constexpr uint32_t fs = 4096;
+    constexpr uint32_t nSamples = 4096;
     constexpr int32_t delayMin = -5;
     constexpr int32_t delayMax = 10;
 
@@ -414,8 +421,10 @@ TEST_CASE("Process_DelayBinPin", "[process]")
         IqData sur(nSamples);
         for (uint32_t i = 0; i < nSamples; i++)
         {
-            ref.push_back(source[i]);
-            sur.push_back(source[i + static_cast<uint32_t>(D)]);
+            // ref is D samples ahead in the source sequence so that sur is
+            // delayed by D relative to ref, giving a peak at delay bin D.
+            ref.push_back(source[i + static_cast<uint32_t>(D)]);
+            sur.push_back(source[i]);
         }
 
         Ambiguity amb(delayMin, delayMax, 0, 0, fs, nSamples, round_hamming);

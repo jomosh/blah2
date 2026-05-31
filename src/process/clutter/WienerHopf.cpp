@@ -115,9 +115,10 @@ bool WienerHopf::process(IqData *x, IqData *y)
 
   // Tikhonov diagonal loading: keeps A positive-definite when input power is
   // low or the autocorrelation matrix is near-singular (e.g. weak reference
-  // signal). The load is scaled relative to the Frobenius norm so it is
-  // negligible compared to well-conditioned diagonal entries.
-  const double eps = arma::norm(A, "fro") * 1e-6;
+  // signal). Dividing by nBins gives a per-diagonal load that is negligible
+  // compared to each diagonal entry for well-conditioned inputs, while still
+  // stabilising near-singular matrices.
+  const double eps = arma::norm(A, "fro") * 1e-6 / nBins;
   A.diag() += std::complex<double>(eps, 0.0);
 
   // compute weights

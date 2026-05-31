@@ -35,14 +35,15 @@ Each entry has enough context to work in a fresh checkout without re-reading the
   matrix positive-definite without distorting the filter coefficients for well-conditioned
   inputs.  Example:
   ```cpp
-  const double eps = arma::norm(A, "fro") * 1e-6;
+  const double eps = arma::norm(A, "fro") * 1e-6 / nBins;
   A.diag() += std::complex<double>(eps, 0.0);
   // then proceed with arma::chol(A, A) as before
   ```
 - **Effort**: ~3 lines in `WienerHopf.cpp`.
 - **Test**: Add a unit test that feeds pure-noise IQ (near-zero signal) to `WienerHopf::process`
   and asserts the call returns `true` (i.e. does not silently drop the CPI).
-- **Status**: Not implemented.
+- **Status**: Diagonal loading implemented in `WienerHopf.cpp`. Unit test for near-zero
+  reference signal still outstanding.
 
 #### Bug 2 — Ambiguity: map delay bins may be offset by 1 🔴
 - **File**: `src/process/ambiguity/Ambiguity.cpp` (~line 157), `Ambiguity.h` (`@todo` line 7)
@@ -66,7 +67,9 @@ Each entry has enough context to work in a fresh checkout without re-reading the
   3. Clean up the no-op `- 1 + 1` once the delay-pin test is green, to prevent future
      confusion.
 - **Effort**: test writing ~20 lines; code cleanup 1 line.
-- **Status**: Test not yet written; production code not yet changed.
+- **Status**: No-op `- 1 + 1` cleaned up in `Ambiguity.cpp`. Deterministic delay-pin test
+  `Process_DelayBinPin` added to `TestAmbiguity.cpp`. Whether a residual offset exists
+  is now gated on that test going green.
 
 #### Bug 3 — SpectrumAnalyser: center frequency hardcoded to 204.64 MHz 🔴
 - **File**: `src/process/spectrum/SpectrumAnalyser.cpp` line ~35, `SpectrumAnalyser.h`
@@ -84,7 +87,8 @@ Each entry has enough context to work in a fresh checkout without re-reading the
   SpectrumAnalyser *spectrumAnalyser = new SpectrumAnalyser(nSamples, spectrumBandwidth, fc);
   ```
 - **Effort**: ~5 lines across `SpectrumAnalyser.h`, `.cpp`, and `blah2.cpp`.
-- **Status**: Not implemented.
+- **Status**: Implemented. `fc` constructor parameter added; hardcoded literal removed;
+  `blah2.cpp` call site updated.
 
 #### Improvement 4 — CFAR: Doppler window missing on ambiguity map 🟠
 - **File**: `src/process/ambiguity/Ambiguity.cpp` (Doppler FFT section), `Ambiguity.h`
