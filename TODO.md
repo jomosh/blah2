@@ -48,8 +48,13 @@ Each entry has enough context to work in a fresh checkout without re-reading the
 - **Effort**: ~3 lines in `WienerHopf.cpp`.
 - **Test**: Add a unit test that feeds pure-noise IQ (near-zero signal) to `WienerHopf::process`
   and asserts the call returns `true` (i.e. does not silently drop the CPI).
-- **Status**: Diagonal loading with division-by-zero guard implemented in `WienerHopf.cpp`.
-  Unit test for near-zero reference signal still outstanding.
+- **Status**: Diagonal loading and nBins guard implemented in `WienerHopf.cpp`.
+  Unit tests added in `test/unit/process/clutter/TestWienerHopf.cpp`:
+  `WienerHopf_Constructor_InvertedRange_NoCrash` (REQUIRE_NOTHROW on delayMax<delayMin),
+  `WienerHopf_InvertedRange_ProcessReturnsTrue` (1-bin filter returns true on sinusoidal input),
+  `WienerHopf_EqualRange_OneBin_ProcessReturnsTrue` (delayMin==delayMax, 1 tap),
+  `WienerHopf_ZeroReference_ReturnsFalseNoCrash` (zero reference → Cholesky fails gracefully).
+  Target `testWienerHopf` wired into `CMakeLists.txt` and `add_test`.
 
 #### Bug 2 — Ambiguity: map delay bins may be offset by 1 🔴
 - **File**: `src/process/ambiguity/Ambiguity.cpp` (~line 157), `Ambiguity.h` (`@todo` line 7)
@@ -95,7 +100,13 @@ Each entry has enough context to work in a fresh checkout without re-reading the
   ```
 - **Effort**: ~5 lines across `SpectrumAnalyser.h`, `.cpp`, and `blah2.cpp`.
 - **Status**: Implemented. `fc` constructor parameter added; hardcoded literal removed;
-  `blah2.cpp` call site updated.
+  `blah2.cpp` call site updated. Unit tests added in
+  `test/unit/process/spectrum/TestSpectrumAnalyser.cpp`:
+  `SpectrumAnalyser_FrequencyBins_CenterBinAtFc` (GENERATE across 100/204.64/433.92 MHz),
+  `SpectrumAnalyser_FrequencyBins_SpacingEqualsBandwidth` (uniform spacing check),
+  `SpectrumAnalyser_FrequencyBins_AxisSymmetricAroundFc` (fftshift symmetry).
+  `IqData::get_frequency()` const getter added to support the tests.
+  Target `testSpectrumAnalyser` wired into `CMakeLists.txt` and `add_test`.
 
 #### Improvement 4 — CFAR: Doppler window missing on ambiguity map 🟠
 - **File**: `src/process/ambiguity/Ambiguity.cpp` (Doppler FFT section), `Ambiguity.h`

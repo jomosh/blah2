@@ -138,6 +138,11 @@ void IqData::update_frequency(const std::vector<double> &_frequency)
   frequency = _frequency;
 }
 
+const std::vector<double> &IqData::get_frequency() const
+{
+  return frequency;
+}
+
 std::string IqData::to_json(uint64_t timestamp)
 {
   rapidjson::Document document;

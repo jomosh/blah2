@@ -229,6 +229,33 @@ target_link_libraries(testDetectionSweep PRIVATE
 set_target_properties(testDetectionSweep PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_TEST_COMPARISON_DIR}")
 
+add_executable(testWienerHopf
+  test/unit/process/clutter/TestWienerHopf.cpp
+  src/data/IqData.cpp
+  src/process/clutter/WienerHopf.cpp
+  src/process/meta/HammingNumber.cpp
+)
+target_link_libraries(testWienerHopf PRIVATE
+  Catch2::Catch2WithMain
+  armadillo
+  fftw3
+  fftw3_threads
+)
+set_target_properties(testWienerHopf PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_TEST_UNIT_DIR}")
+
+add_executable(testSpectrumAnalyser
+  test/unit/process/spectrum/TestSpectrumAnalyser.cpp
+  src/data/IqData.cpp
+  src/process/spectrum/SpectrumAnalyser.cpp
+)
+target_link_libraries(testSpectrumAnalyser PRIVATE
+  Catch2::Catch2WithMain
+  fftw3
+)
+set_target_properties(testSpectrumAnalyser PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_TEST_UNIT_DIR}")
+
 # TODO: Unsure if will be using CTest.
 add_test(NAME testAmbiguity COMMAND testAmbiguity)
 add_test(NAME testIqData COMMAND testIqData)
@@ -238,5 +265,7 @@ add_test(NAME testKraken COMMAND testKraken)
 add_test(NAME testDetectionPhaseA COMMAND testDetectionPhaseA)
 add_test(NAME testDetectionPhaseB COMMAND testDetectionPhaseB)
 add_test(NAME testCentroid COMMAND testCentroid)
+add_test(NAME testWienerHopf COMMAND testWienerHopf)
+add_test(NAME testSpectrumAnalyser COMMAND testSpectrumAnalyser)
 add_test(NAME testDataContracts COMMAND testDataContracts)
 add_test(NAME testDetectionSweepHelp COMMAND testDetectionSweep --help)

@@ -29,6 +29,9 @@ private:
   /// @brief Number of bins (delayMax - delayMin + 1).
   uint32_t nBins;
 
+  /// @brief Padded FFT size for convolution (next Hamming number >= nBins + nSamples + 1).
+  uint32_t nfilt;
+
   /// @brief Number of samples per CPI.
   uint32_t nSamples;
 
