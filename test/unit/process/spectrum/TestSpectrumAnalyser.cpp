@@ -32,12 +32,12 @@ constexpr uint32_t kCenterIdx = kN / 2;
 constexpr double kBinSpacingKHz = kBandwidth / 1000.0;
 
 /// Fill an IqData buffer with kN zero samples so process() does not early-out.
-IqData make_zero_iqdata()
+IqData* make_zero_iqdata()
 {
-  IqData buf(kN);
+  auto* buf = new IqData(kN);
   for (uint32_t i = 0; i < kN; i++)
   {
-    buf.push_back({0.0, 0.0});
+    buf->push_back({0.0, 0.0});
   }
   return buf;
 }
@@ -50,39 +50,41 @@ TEST_CASE("SpectrumAnalyser_FrequencyBins_CenterBinAtFc", "[spectrum]")
   // Tested at three fc values to catch any hardcoded-literal regression.
   const double fc = GENERATE(100e6, 204640000.0, 433920000.0);
 
-  SpectrumAnalyser analyser(kN, kBandwidth, fc);
-  IqData buf = make_zero_iqdata();
-  analyser.process(&buf);
+    SpectrumAnalyser analyser(kN, kBandwidth, fc);
+    IqData* buf = make_zero_iqdata();
+    analyser.process(buf);
 
-  const auto &freqs = buf.get_frequency();
-  REQUIRE(freqs.size() == kN);
+    const auto &freqs = buf->get_frequency();
+    REQUIRE(freqs.size() == kN);
 
-  const double expectedKHz = fc / 1000.0;
-  INFO("fc=" << fc << " center_bin=" << freqs[kCenterIdx]
-       << " expected=" << expectedKHz);
-  CHECK_THAT(freqs[kCenterIdx],
-             Catch::Matchers::WithinRel(expectedKHz, 1e-9));
+    const double expectedKHz = fc / 1000.0;
+    INFO("fc=" << fc << " center_bin=" << freqs[kCenterIdx]
+      << " expected=" << expectedKHz);
+    CHECK_THAT(freqs[kCenterIdx],
+         Catch::Matchers::WithinRel(expectedKHz, 1e-9));
+    delete buf;
 }
 
 TEST_CASE("SpectrumAnalyser_FrequencyBins_SpacingEqualsBandwidth", "[spectrum]")
 {
   // Consecutive bins must be spaced by bandwidth/1000 kHz throughout the axis.
   constexpr double fc = 100e6;
-  SpectrumAnalyser analyser(kN, kBandwidth, fc);
-  IqData buf = make_zero_iqdata();
-  analyser.process(&buf);
+    SpectrumAnalyser analyser(kN, kBandwidth, fc);
+    IqData* buf = make_zero_iqdata();
+    analyser.process(buf);
 
-  const auto &freqs = buf.get_frequency();
-  REQUIRE(freqs.size() == kN);
+    const auto &freqs = buf->get_frequency();
+    REQUIRE(freqs.size() == kN);
 
-  for (uint32_t i = 1; i < kN; i++)
-  {
-    const double spacing = freqs[i] - freqs[i - 1];
-    INFO("bin " << i << " spacing=" << spacing
-         << " expected=" << kBinSpacingKHz);
-    CHECK_THAT(spacing,
-               Catch::Matchers::WithinRel(kBinSpacingKHz, 1e-9));
-  }
+    for (uint32_t i = 1; i < kN; i++)
+    {
+      const double spacing = freqs[i] - freqs[i - 1];
+      INFO("bin " << i << " spacing=" << spacing
+        << " expected=" << kBinSpacingKHz);
+      CHECK_THAT(spacing,
+        Catch::Matchers::WithinRel(kBinSpacingKHz, 1e-9));
+    }
+    delete buf;
 }
 
 TEST_CASE("SpectrumAnalyser_FrequencyBins_AxisSymmetricAroundFc", "[spectrum]")
@@ -91,10 +93,10 @@ TEST_CASE("SpectrumAnalyser_FrequencyBins_AxisSymmetricAroundFc", "[spectrum]")
   // fc (within floating-point tolerance), confirming the fftshift centering.
   constexpr double fc = 204640000.0;
   SpectrumAnalyser analyser(kN, kBandwidth, fc);
-  IqData buf = make_zero_iqdata();
-  analyser.process(&buf);
+  IqData* buf = make_zero_iqdata();
+  analyser.process(buf);
 
-  const auto &freqs = buf.get_frequency();
+  const auto &freqs = buf->get_frequency();
   REQUIRE(freqs.size() >= kCenterIdx + 1);
 
   const double fcKHz = fc / 1000.0;
@@ -102,4 +104,5 @@ TEST_CASE("SpectrumAnalyser_FrequencyBins_AxisSymmetricAroundFc", "[spectrum]")
   const double lowerOffset = fcKHz - freqs[kCenterIdx - 1];
   INFO("upperOffset=" << upperOffset << " lowerOffset=" << lowerOffset);
   CHECK_THAT(upperOffset, Catch::Matchers::WithinRel(lowerOffset, 1e-9));
+  delete buf;
 }
