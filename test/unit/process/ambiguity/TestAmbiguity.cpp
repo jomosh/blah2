@@ -390,3 +390,40 @@ TEST_CASE("Process_PairedBufferSkewMigratesPeakAcrossDelayBins", "[process]")
     CHECK(skewedPeak.power > alignedPeak.power * 0.95);
     CHECK(skewedZeroDelayPower < skewedPeak.power * 0.1);
 }
+
+/// @brief Pin the delay-bin mapping: a surveillance signal that is a perfect
+///        copy of the reference delayed by D samples must produce a peak at
+///        exactly delay bin D.  This test guards the index expression in
+///        Ambiguity::process() and will catch any off-by-one regression.
+TEST_CASE("Process_DelayBinPin", "[process]")
+{
+    auto round_hamming = GENERATE(true, false);
+
+    constexpr uint32_t fs = 2'000'000;
+    constexpr uint32_t nSamples = 100'000; // short CPI, 1 Doppler bin
+    constexpr int32_t delayMin = -5;
+    constexpr int32_t delayMax = 10;
+
+    const std::vector<std::complex<double>> source =
+      make_deterministic_qpsk_sequence(nSamples + delayMax + 1);
+
+    // Test each positive delay in the map range.
+    for (int32_t D : {0, 1, 3, 5, 10})
+    {
+        IqData ref(nSamples);
+        IqData sur(nSamples);
+        for (uint32_t i = 0; i < nSamples; i++)
+        {
+            ref.push_back(source[i]);
+            sur.push_back(source[i + static_cast<uint32_t>(D)]);
+        }
+
+        Ambiguity amb(delayMin, delayMax, 0, 0, fs, nSamples, round_hamming);
+        auto *map = amb.process(&ref, &sur);
+
+        const MapPeak peak = find_peak_delay_bin(*map);
+        INFO("D=" << D << " round_hamming=" << round_hamming
+             << " peak.delayBin=" << peak.delayBin);
+        CHECK(peak.delayBin == D);
+    }
+}

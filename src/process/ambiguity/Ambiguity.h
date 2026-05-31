@@ -5,6 +5,9 @@
 /// See Fundamentals of Radar Signal Processing (Richards) for more on the pulse-Doppler processing method.
 /// @author 30hours
 /// @todo Ambiguity maps are still offset by 1 bin.
+///       The no-op "- 1 + 1" in the map-write index has been cleaned up.
+///       A deterministic delay-pin test (Process_DelayBinPin) has been added
+///       to TestAmbiguity.cpp to confirm or reveal any remaining offset.
 /// @todo Write a performance test for hamming assisted ambiguity processing.
 /// @todo If delayMin > delayMax = trouble, what's the exception policy?
 

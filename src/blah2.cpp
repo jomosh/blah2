@@ -315,7 +315,7 @@ int main(int argc, char **argv)
 
   // set up process spectrum analyser
   double spectrumBandwidth = 2000;
-  SpectrumAnalyser *spectrumAnalyser = new SpectrumAnalyser(nSamples, spectrumBandwidth);
+  SpectrumAnalyser *spectrumAnalyser = new SpectrumAnalyser(nSamples, spectrumBandwidth, static_cast<double>(fc));
 
   // process options
   bool isClutter, isDetection, isTracker;

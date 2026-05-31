@@ -5,11 +5,12 @@
 #include <math.h>
 
 // constructor
-SpectrumAnalyser::SpectrumAnalyser(uint32_t _n, double _bandwidth)
+SpectrumAnalyser::SpectrumAnalyser(uint32_t _n, double _bandwidth, double _fc)
 {
   // input
   n = _n;
   bandwidth = _bandwidth;
+  fc = _fc;
 
   // compute nfft
   decimation = n/bandwidth;
@@ -32,7 +33,7 @@ SpectrumAnalyser::SpectrumAnalyser(uint32_t _n, double _bandwidth)
   for (uint32_t i = 0; i < nSpectrum; i++)
   {
     const int bin = static_cast<int>(i) - static_cast<int>(nSpectrum) / 2;
-    frequencyBins[i] = ((bin * bandwidth) + offset + 204640000) / 1000;
+    frequencyBins[i] = ((bin * bandwidth) + offset + fc) / 1000;
   }
 }
 

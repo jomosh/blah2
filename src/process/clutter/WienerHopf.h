@@ -5,6 +5,9 @@
 /// Uses <a href="https://en.wikipedia.org/wiki/Cholesky_decomposition">Cholesky decomposition</a> to speed up matrix inversion, as the Toeplitz matrix is positive-definite and Hermitian.
 /// @author 30hours
 /// @todo Fix the segmentation fault from clutter filter numerical instability.
+///       Partially addressed: diagonal loading added before Cholesky to prevent
+///       failure on ill-conditioned inputs. Full fix would add a unit test with
+///       near-zero reference signal.
 
 #ifndef WIENERHOPF_H
 #define WIENERHOPF_H
