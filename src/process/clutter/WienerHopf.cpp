@@ -118,7 +118,9 @@ bool WienerHopf::process(IqData *x, IqData *y)
   // signal). Dividing by nBins gives a per-diagonal load that is negligible
   // compared to each diagonal entry for well-conditioned inputs, while still
   // stabilising near-singular matrices.
-  const double eps = arma::norm(A, "fro") * 1e-6 / nBins;
+  // Guard: nBins should always be > 0 for a valid filter configuration, but
+  // the ternary prevents UB if delayMax == delayMin (nBins = 0 in constructor).
+  const double eps = arma::norm(A, "fro") * 1e-6 / (nBins > 0 ? nBins : 1u);
   A.diag() += std::complex<double>(eps, 0.0);
 
   // compute weights

@@ -39,11 +39,15 @@ Each entry has enough context to work in a fresh checkout without re-reading the
   A.diag() += std::complex<double>(eps, 0.0);
   // then proceed with arma::chol(A, A) as before
   ```
+  **Note on `nBins`**: the constructor sets `nBins = delayMax - delayMin` (no `+1`), while
+  the header documents it as `delayMax - delayMin + 1`.  This pre-existing discrepancy means
+  the matrix is one row/column smaller than the documented size.  The division uses
+  `(nBins > 0 ? nBins : 1u)` to guard the `delayMax == delayMin` edge case.
 - **Effort**: ~3 lines in `WienerHopf.cpp`.
 - **Test**: Add a unit test that feeds pure-noise IQ (near-zero signal) to `WienerHopf::process`
   and asserts the call returns `true` (i.e. does not silently drop the CPI).
-- **Status**: Diagonal loading implemented in `WienerHopf.cpp`. Unit test for near-zero
-  reference signal still outstanding.
+- **Status**: Diagonal loading with division-by-zero guard implemented in `WienerHopf.cpp`.
+  Unit test for near-zero reference signal still outstanding.
 
 #### Bug 2 — Ambiguity: map delay bins may be offset by 1 🔴
 - **File**: `src/process/ambiguity/Ambiguity.cpp` (~line 157), `Ambiguity.h` (`@todo` line 7)
@@ -68,8 +72,9 @@ Each entry has enough context to work in a fresh checkout without re-reading the
      confusion.
 - **Effort**: test writing ~20 lines; code cleanup 1 line.
 - **Status**: No-op `- 1 + 1` cleaned up in `Ambiguity.cpp`. Deterministic delay-pin test
-  `Process_DelayBinPin` added to `TestAmbiguity.cpp`. Whether a residual offset exists
-  is now gated on that test going green.
+  `Process_DelayBinPin` added to `TestAmbiguity.cpp` covering D ∈ {-5,-3,-1,0,1,3,5,10}
+  for both `roundHamming` settings. Whether a residual offset exists is now gated on that
+  test going green.
 
 #### Bug 3 — SpectrumAnalyser: center frequency hardcoded to 204.64 MHz 🔴
 - **File**: `src/process/spectrum/SpectrumAnalyser.cpp` line ~35, `SpectrumAnalyser.h`
