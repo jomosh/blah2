@@ -9,7 +9,19 @@ WienerHopf::WienerHopf(int32_t _delayMin, int32_t _delayMax, uint32_t _nSamples)
   // input
   delayMin = _delayMin;
   delayMax = _delayMax;
-  nBins = delayMax - delayMin;
+
+  // Guard against inverted or degenerate range before any allocation.
+  // delayMax < delayMin would underflow nBins (uint32_t), and
+  // delayMax == delayMin would produce a 1-tap filter with no useful range.
+  if (delayMax < delayMin)
+  {
+    std::cerr << "WienerHopf: delayMax (" << delayMax << ") < delayMin ("
+              << delayMin << "), clamping to delayMax = delayMin" << std::endl;
+    delayMax = delayMin;
+  }
+
+  // nBins covers delayMin..delayMax inclusive, matching Ambiguity::nDelayBins.
+  nBins = static_cast<uint32_t>(delayMax - delayMin) + 1;
   nSamples = _nSamples;
 
   // initialise data

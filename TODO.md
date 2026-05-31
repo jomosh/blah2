@@ -39,10 +39,12 @@ Each entry has enough context to work in a fresh checkout without re-reading the
   A.diag() += std::complex<double>(eps, 0.0);
   // then proceed with arma::chol(A, A) as before
   ```
-  **Note on `nBins`**: the constructor sets `nBins = delayMax - delayMin` (no `+1`), while
-  the header documents it as `delayMax - delayMin + 1`.  This pre-existing discrepancy means
-  the matrix is one row/column smaller than the documented size.  The division uses
-  `(nBins > 0 ? nBins : 1u)` to guard the `delayMax == delayMin` edge case.
+  **Note on `nBins`**: fixed to `delayMax - delayMin + 1` (matching header documentation and
+  `Ambiguity::nDelayBins` for the same range).  The constructor now also guards
+  `delayMax < delayMin` with a clamp-and-log before computing `nBins`, preventing uint32_t
+  underflow and the associated allocation blowup.  The division in the eps formula uses
+  `(nBins > 0 ? nBins : 1u)` as a belt-and-suspenders guard for the
+  `delayMax == delayMin` (1-tap) edge case.
 - **Effort**: ~3 lines in `WienerHopf.cpp`.
 - **Test**: Add a unit test that feeds pure-noise IQ (near-zero signal) to `WienerHopf::process`
   and asserts the call returns `true` (i.e. does not silently drop the CPI).
