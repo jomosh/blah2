@@ -56,6 +56,17 @@ WienerHopf::WienerHopf(int32_t _delayMin, int32_t _delayMax, uint32_t _nSamples,
   nBins = static_cast<uint32_t>(delayMax - delayMin) + 1;
   nSamples = _nSamples;
 
+  // dataA/dataB are sized to nSamples, and later loops index them up to nBins.
+  // Clamp oversized delay windows to the CPI length to avoid out-of-bounds
+  // reads when delayMax - delayMin + 1 > nSamples.
+  if (nBins > nSamples)
+  {
+    std::cerr << "WienerHopf: delay window bins (" << nBins
+              << ") exceed nSamples (" << nSamples
+              << "), clamping nBins to nSamples" << std::endl;
+    nBins = nSamples;
+  }
+
   // Keep the exact linear-convolution size when it already has FFTW-friendly
   // factors.  Otherwise, round up to the nearest fast size to avoid the
   // pathological slow plans seen with unfactorable lengths.

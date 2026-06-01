@@ -104,6 +104,21 @@ TEST_CASE("WienerHopf_CustomDiagonalLoadScale_ProcessReturnsTrue", "[clutter]")
   CHECK(filter.process(&ref, &sur) == true);
 }
 
+TEST_CASE("WienerHopf_DelayWindowLargerThanCpi_ClampedProcessReturnsTrue", "[clutter]")
+{
+  // Guard against OOB in autocorrelation/cross-correlation indexing when
+  // delayMax - delayMin + 1 > nSamples.
+  constexpr uint32_t nSamples = 256;
+  WienerHopf filter(-300, 300, nSamples);
+
+  IqData ref(nSamples);
+  IqData sur(nSamples);
+  fill_sinusoid(ref, nSamples, 0.07);
+  fill_sinusoid(sur, nSamples, 0.13);
+
+  CHECK(filter.process(&ref, &sur) == true);
+}
+
 // ---------------------------------------------------------------------------
 // Stability: near-singular reference
 // ---------------------------------------------------------------------------
