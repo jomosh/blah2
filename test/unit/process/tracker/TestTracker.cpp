@@ -116,8 +116,13 @@ TEST_CASE("Process update preserves previous Doppler for acceleration", "[proces
 ///
 ///   Track 0 predicted at delay=10, doppler=5.0.
 ///   Track 1 predicted at delay=10, doppler=5.2.
-///   Detection A: delay=10.5, doppler=5.0.  (cost T0→A=0.167, T1→A=0.179)
-///   Detection B: delay=10.1, doppler=5.2.  (cost T0→B=0.075, T1→B=0.033)
+///   Detection A: delay=10.5, doppler=5.0.  (cost T0→A≈0.167, T1→A≈0.179)
+///   Detection B: delay=10.1, doppler=5.2.  (cost T0→B≈0.075, T1→B≈0.033)
+///
+/// Note: costs above are approximate; the Doppler-driven delay prediction
+/// shifts predicted positions slightly from the initial values, so the actual
+/// runtime costs differ by a small amount.  The optimal pairing T0→A, T1→B
+/// is unchanged under either cost set.
 ///
 /// Both detections are inside both tracks' gates.
 ///

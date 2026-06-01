@@ -180,6 +180,16 @@ std::unique_ptr<Detection> CfarDetector1D::process(Map<std::complex<double>> *x)
   std::vector<double> doppler;
   std::vector<double> snr;
 
+  // First delay bin whose delay value meets the exclusion gate.  Bins before
+  // this index are zeroed in the prefix sum and must not be counted as
+  // training cells for neighbouring CUTs.  x->delay[] is constant across all
+  // Doppler rows so this is computed once outside the Doppler loop.
+  int firstValidIdx = 0;
+  while (firstValidIdx < nDelayBins && x->delay[firstValidIdx] < minDelay)
+  {
+    ++firstValidIdx;
+  }
+
   // loop over every cell
   for (int i = 0; i < nDopplerBins; i++)
   { 
@@ -187,15 +197,6 @@ std::unique_ptr<Detection> CfarDetector1D::process(Map<std::complex<double>> *x)
     if (std::abs(x->doppler[i]) < minDoppler)
     {
       continue;
-    }
-
-    // First delay bin whose delay value meets the exclusion gate.  Bins
-    // before this index are zeroed in the prefix sum and must not be counted
-    // as training cells for neighbouring CUTs.
-    int firstValidIdx = 0;
-    while (firstValidIdx < nDelayBins && x->delay[firstValidIdx] < minDelay)
-    {
-      ++firstValidIdx;
     }
 
     prefixEnergy[0] = 0.0;

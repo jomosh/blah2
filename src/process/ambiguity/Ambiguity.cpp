@@ -75,7 +75,7 @@ Ambiguity::Ambiguity(int32_t _delayMin, int32_t _delayMax,
 
   if (dopplerMiddle != 0)
   {
-    const double phaseStep = 2.0 * M_PI * dopplerMiddle / fs;
+    const double phaseStep = 2.0 * std::numbers::pi * dopplerMiddle / fs;
     const std::complex<double> phaseInc = std::polar(1.0, phaseStep);
     std::complex<double> phasor = {1.0, 0.0};
     for (size_t k = 0; k < dopplerPhase.size(); k++)
