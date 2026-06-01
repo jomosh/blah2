@@ -4,6 +4,31 @@
 #include <iostream>
 #include <vector>
 
+namespace
+{
+// True when n factors only into 2, 3 and 5 (5-smooth / Hamming number).
+bool is_hamming_5_smooth(uint32_t n)
+{
+  if (n == 0)
+  {
+    return false;
+  }
+  while (n % 2 == 0)
+  {
+    n /= 2;
+  }
+  while (n % 3 == 0)
+  {
+    n /= 3;
+  }
+  while (n % 5 == 0)
+  {
+    n /= 5;
+  }
+  return n == 1;
+}
+}
+
 // constructor
 WienerHopf::WienerHopf(int32_t _delayMin, int32_t _delayMax, uint32_t _nSamples)
 {
@@ -25,11 +50,11 @@ WienerHopf::WienerHopf(int32_t _delayMin, int32_t _delayMax, uint32_t _nSamples)
   nBins = static_cast<uint32_t>(delayMax - delayMin) + 1;
   nSamples = _nSamples;
 
-  // Round the convolution FFT size up to the next 5-smooth Hamming number so
-  // FFTW always operates on a highly-composite size.  Without this, a 1-bin
-  // change in nBins can push the plan size onto a poorly-factored number and
-  // cause a 3-4x throughput regression (matching the Ambiguity.cpp pattern).
-  nfilt = next_hamming(nBins + nSamples + 1);
+  // Keep the exact linear-convolution size when it is already 5-smooth.
+  // next_hamming() returns the next value strictly larger than input, so
+  // calling it unconditionally inflates FFT size and adds avoidable CPI cost.
+  const uint32_t rawNfilt = nBins + nSamples + 1;
+  nfilt = is_hamming_5_smooth(rawNfilt) ? rawNfilt : next_hamming(rawNfilt);
 
   // initialise data
   A = arma::cx_mat(nBins, nBins);
