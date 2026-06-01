@@ -35,11 +35,6 @@ Building the code using the following instructions;
 - Install docker and docker-compose on the host machine.
 - Clone this repository to some directory.
 - Install SDRplay API to run service on host.
-- Edit the `config/config.yml` for desired processing parameters. The
-	`process.clutter.diagonalLoadScale` value controls the relative Tikhonov load
-	used before Wiener-Hopf Cholesky. Lower values are closer to the raw
-	least-squares solution; higher values are more numerically robust but can
-	soften clutter cancellation slightly.
 - Run the docker-compose command.
 
 ```bash
