@@ -148,7 +148,7 @@ Each entry has enough context to work in a fresh checkout without re-reading the
   applied before Doppler FFT only, not to the range-correlation axis (which uses `fftZi`).
 - **Effort**: ~10 lines (constructor fill + element-wise multiply in `process()`).
 - **Config impact**: None; the window type could be a future config option.
-- **Status**: Implemented. Pre-computed Hann window stored in `Ambiguity::dopplerWindow` (filled in constructor, zero-division guard for nDopplerBins==1). Applied element-wise in the Doppler loop before `fftw_execute(fftDoppler)`. New Catch2 tests in `test/unit/process/ambiguity/TestAmbiguity.cpp`: sidelobe suppression ≥15 dB verified, single-bin passthrough verified.
+- **Status**: Implemented. Pre-computed Hann window stored in `Ambiguity::dopplerWindow` (filled in constructor, zero-division guard for `nDopplerBins==1`). Applied element-wise in the Doppler loop before `fftw_execute(fftDoppler)`. All uses of `M_PI` removed: both the Hann window formula and the `dopplerPhase` step computation now use `std::numbers::pi` (C++20); `<math.h>` replaced with `<numbers>`. New Catch2 tests in `test/unit/process/ambiguity/TestAmbiguity.cpp`: sidelobe suppression ≥15 dB verified, single-bin passthrough verified.
 
 #### Improvement 5 — CFAR: minDelay/minDoppler not excluded from training cells ✅
 - **File**: `src/process/detection/CfarDetector1D.cpp`, `CfarDetector1D.h` (`@todo` line 6)
@@ -161,7 +161,7 @@ Each entry has enough context to work in a fresh checkout without re-reading the
   each Doppler slice.  Alternatively, track an "excluded" flag per cell so training-cell
   counts adjust accordingly (avoid under-counting valid training cells near the boundary).
 - **Effort**: Medium — needs careful prefix-sum adjustment.
-- **Status**: Implemented. Excluded cells contribute `0.0` to the prefix-sum array in `CfarDetector1D::process()`, preventing clutter in the exclusion zone from inflating CFAR thresholds for neighbouring bins. New Catch2 tests in `test/unit/process/detection/TestDetectionPhaseA.cpp`: excluded-zone clutter does not raise threshold for valid targets, no detection produced inside exclusion zone.
+- **Status**: Implemented. Excluded cells contribute `0.0` to the prefix-sum array in `CfarDetector1D::process()`, preventing clutter in the exclusion zone from inflating CFAR thresholds for neighbouring bins. Leading-window bounds (`leadingStart`, `leadingEnd`) are clamped to `firstValidIdx` so excluded cells are excluded from both the energy sum and the training-cell count `nLeading`. `firstValidIdx` is computed once per `process()` call (above the Doppler loop) since `x->delay[]` is constant across Doppler rows. New Catch2 tests in `test/unit/process/detection/TestDetectionPhaseA.cpp`: excluded-zone clutter does not raise threshold for valid targets, no detection produced inside exclusion zone.
 
 #### Improvement 6 — Tracker: greedy nearest-neighbour association ✅
 - **File**: `src/process/tracker/Tracker.cpp` (~line 75–96), `Tracker.h` (`@todo` lines 7–9)
@@ -173,7 +173,7 @@ Each entry has enough context to work in a fresh checkout without re-reading the
   `lap` (header-only C++11) or `dlib::hungarian`.  Only the association step changes; the
   gate, M-of-N logic, and state machine remain the same.
 - **Effort**: Medium — ~50 lines replacing the inner association loop.
-- **Status**: Implemented. Self-contained O(n³) Kuhn-Munkres (Hungarian) algorithm added as a static function in the anonymous namespace of `Tracker.cpp`. `update()` refactored into five phases: predict, build cost matrix, assign, apply associations, remove inactive (backwards loop for index stability). New Catch2 tests in `test/unit/process/tracker/TestTracker.cpp`: two-track optimal assignment verified, single-track nearest-detection selection verified. All 6 tracker test cases pass.
+- **Status**: Implemented. Self-contained O(n³) Kuhn-Munkres (Hungarian) algorithm added as a static function in the anonymous namespace of `Tracker.cpp` (`#include <algorithm>` added for `std::max`). `update()` refactored into five phases: predict, build cost matrix, assign, apply associations, remove inactive (backwards loop for index stability). New Catch2 tests in `test/unit/process/tracker/TestTracker.cpp`: two-track globally-optimal assignment verified with per-track Doppler assertions that distinguish Hungarian from greedy (a greedy algorithm would swap the Doppler assignments and fail the checks); single-track nearest-detection selection verified. All 6 tracker test cases pass.
 
 #### Improvement 7 — Tracker: no track smoothing (α-β filter) 🟡
 - **File**: `src/process/tracker/Tracker.cpp/.h`, `src/data/Track.h` (`@todo` line 13)
