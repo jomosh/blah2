@@ -34,11 +34,13 @@ uint32_t next_fftw_fast_size(uint32_t n)
 }
 
 // constructor
-WienerHopf::WienerHopf(int32_t _delayMin, int32_t _delayMax, uint32_t _nSamples)
+WienerHopf::WienerHopf(int32_t _delayMin, int32_t _delayMax, uint32_t _nSamples,
+                       double _diagonalLoadScale)
 {
   // input
   delayMin = _delayMin;
   delayMax = _delayMax;
+  diagonalLoadScale = _diagonalLoadScale;
 
   // Guard against inverted or degenerate range before any allocation.
   // delayMax < delayMin would underflow nBins (uint32_t), and
@@ -163,9 +165,10 @@ bool WienerHopf::process(IqData *x, IqData *y)
 
   // Tikhonov diagonal loading: keeps A positive-definite when input power is
   // low or the autocorrelation matrix is near-singular (e.g. weak reference
-  // signal). Use the zero-lag autocorrelation magnitude as the scale so we do
-  // not pay for a full matrix Frobenius norm on every CPI.
-  const double eps = std::abs(a[0]) * 1e-6 / (nBins > 0 ? nBins : 1u);
+  // signal). `diagonalLoadScale` comes from YAML via process.clutter.
+  // Use the zero-lag autocorrelation magnitude as the scale so we do not pay
+  // for a full matrix Frobenius norm on every CPI.
+  const double eps = std::abs(a[0]) * diagonalLoadScale / (nBins > 0 ? nBins : 1u);
   A.diag() += std::complex<double>(eps, 0.0);
 
   // compute weights

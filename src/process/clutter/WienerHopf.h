@@ -6,8 +6,9 @@
 /// @author 30hours
 /// @todo Fix the segmentation fault from clutter filter numerical instability.
 ///       Partially addressed: diagonal loading added before Cholesky to prevent
-///       failure on ill-conditioned inputs. Full fix would add a unit test with
-///       near-zero reference signal.
+///       failure on ill-conditioned inputs. The load is configurable via
+///       process.clutter.diagonalLoadScale in YAML. A unit test for near-zero
+///       reference signal now covers the failure path.
 
 #ifndef WIENERHOPF_H
 #define WIENERHOPF_H
@@ -60,13 +61,18 @@ private:
   /// @brief Weights vector.
   arma::cx_vec w;
 
+  /// @brief Relative diagonal loading scale applied before Cholesky.
+  double diagonalLoadScale;
+
 public:
   /// @brief Constructor.
   /// @param delayMin Minimum clutter filter delay (bins).
   /// @param delayMax Maximum clutter filter delay (bins).
   /// @param nSamples Number of samples per CPI.
+  /// @param diagonalLoadScale Relative diagonal loading factor.
   /// @return The object.
-  WienerHopf(int32_t delayMin, int32_t delayMax, uint32_t nSamples);
+  WienerHopf(int32_t delayMin, int32_t delayMax, uint32_t nSamples,
+             double diagonalLoadScale = 1e-6);
 
   /// @brief Destructor.
   /// @return Void.

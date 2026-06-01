@@ -89,6 +89,21 @@ TEST_CASE("WienerHopf_EqualRange_OneBin_ProcessReturnsTrue", "[clutter]")
   CHECK(filter.process(&ref, &sur) == true);
 }
 
+TEST_CASE("WienerHopf_CustomDiagonalLoadScale_ProcessReturnsTrue", "[clutter]")
+{
+  // The YAML-controlled diagonal load scale must propagate into the filter
+  // constructor without changing the basic ability to process a CPI.
+  constexpr uint32_t nSamples = 512;
+  WienerHopf filter(-8, 8, nSamples, 1e-4);
+
+  IqData ref(nSamples);
+  IqData sur(nSamples);
+  fill_sinusoid(ref, nSamples, 0.09);
+  fill_sinusoid(sur, nSamples, 0.11);
+
+  CHECK(filter.process(&ref, &sur) == true);
+}
+
 // ---------------------------------------------------------------------------
 // Stability: near-singular reference
 // ---------------------------------------------------------------------------
