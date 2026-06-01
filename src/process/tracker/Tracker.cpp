@@ -1,5 +1,6 @@
 #include "Tracker.h"
 #include <iostream>
+#include <algorithm>
 #include <limits>
 #include <cmath>
 #include <vector>

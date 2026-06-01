@@ -111,16 +111,24 @@ TEST_CASE("Process update preserves previous Doppler for acceleration", "[proces
 /// @brief Hungarian assignment must produce the globally optimal matching.
 ///
 /// Scenario: two tracks and two detections where a greedy nearest-neighbour
-/// search would produce a sub-optimal result.
+/// search produces a sub-optimal result that differs from the Hungarian
+/// optimum.
 ///
-///   Track 0 at delay=10, doppler=5.
-///   Track 1 at delay=10, doppler=5.2.
-///   Detection A at delay=10.5, doppler=5.    (close to track 0)
-///   Detection B at delay=10.1, doppler=5.2.  (close to track 1)
+///   Track 0 predicted at delay=10, doppler=5.0.
+///   Track 1 predicted at delay=10, doppler=5.2.
+///   Detection A: delay=10.5, doppler=5.0.  (cost T0→A=0.167, T1→A=0.179)
+///   Detection B: delay=10.1, doppler=5.2.  (cost T0→B=0.075, T1→B=0.033)
 ///
-/// Both detections fall inside both tracks' gates.  A greedy first-match
-/// search might deprive Track 1 of its best match, leaving it to coast.
-/// With the Hungarian algorithm both tracks are updated optimally.
+/// Both detections are inside both tracks' gates.
+///
+/// Greedy (T0 first, nearest-unassigned): T0 picks B (cost 0.075), T1 is
+/// forced to take A (cost 0.179).  Total = 0.254.
+///
+/// Hungarian optimal: T0→A (cost 0.167) + T1→B (cost 0.033) = 0.200.
+///
+/// The per-track Doppler assertions verify the globally optimal assignment;
+/// a greedy algorithm would produce the wrong pairing and the checks would
+/// fail.
 TEST_CASE("Hungarian_BothTracksAssignedOptimally", "[process][tracker][hungarian]")
 {
   // m=1, n=1 so each detection immediately promotes a track.
@@ -137,11 +145,13 @@ TEST_CASE("Hungarian_BothTracksAssignedOptimally", "[process][tracker][hungarian
   Tracker tracker(m, n, nDelete, cpi, maxAccInit, rangeRes, lambda);
 
   // CPI 0: initiate two tracks.
+  // Track index 0: delay=10, doppler=5.0.  Track index 1: delay=10, doppler=5.2.
   Detection initDetections({10.0, 10.0}, {5.0, 5.2}, {0.0, 0.0});
   auto trackAfterInit = tracker.process(&initDetections, 0);
   REQUIRE(trackAfterInit->get_n() == 2);
 
-  // CPI 1: two detections, each within both tracks' gates.
+  // CPI 1: Detection A (index 0) at (10.5, 5.0), Detection B (index 1) at (10.1, 5.2).
+  // Both fall inside both tracks' gates.
   Detection cpi1({10.5, 10.1}, {5.0, 5.2}, {1.0, 1.0});
   auto trackAfterCpi1 = tracker.process(&cpi1, 1000);
 
@@ -149,6 +159,13 @@ TEST_CASE("Hungarian_BothTracksAssignedOptimally", "[process][tracker][hungarian
   REQUIRE(trackAfterCpi1->get_n() == 2);
   CHECK(trackAfterCpi1->get_nInactive(0) == 0);
   CHECK(trackAfterCpi1->get_nInactive(1) == 0);
+
+  // Verify the globally optimal pairing: T0→A and T1→B.
+  // A greedy algorithm would assign T0→B and T1→A, swapping the Dopplers.
+  CHECK_THAT(trackAfterCpi1->get_current(0).get_doppler().front(),
+             Catch::Matchers::WithinAbs(5.0, 0.01));   // T0 updated to A (doppler=5.0)
+  CHECK_THAT(trackAfterCpi1->get_current(1).get_doppler().front(),
+             Catch::Matchers::WithinAbs(5.2, 0.01));   // T1 updated to B (doppler=5.2)
 }
 
 /// @brief With one track and two in-gate detections, the closer detection is

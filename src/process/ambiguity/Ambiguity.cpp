@@ -4,7 +4,7 @@
 #include <deque>
 #include <vector>
 #include <numeric>
-#include <math.h>
+#include <numbers>
 #include <chrono>
 #include <cmath>
 
@@ -112,7 +112,7 @@ Ambiguity::Ambiguity(int32_t _delayMin, int32_t _delayMax,
   {
     for (uint16_t j = 0; j < nDopplerBins; j++)
     {
-      dopplerWindow[j] = 0.5 * (1.0 - std::cos(2.0 * M_PI * j / (nDopplerBins - 1)));
+      dopplerWindow[j] = 0.5 * (1.0 - std::cos(2.0 * std::numbers::pi * j / (nDopplerBins - 1)));
     }
   }
 

@@ -189,6 +189,15 @@ std::unique_ptr<Detection> CfarDetector1D::process(Map<std::complex<double>> *x)
       continue;
     }
 
+    // First delay bin whose delay value meets the exclusion gate.  Bins
+    // before this index are zeroed in the prefix sum and must not be counted
+    // as training cells for neighbouring CUTs.
+    int firstValidIdx = 0;
+    while (firstValidIdx < nDelayBins && x->delay[firstValidIdx] < minDelay)
+    {
+      ++firstValidIdx;
+    }
+
     prefixEnergy[0] = 0.0;
     for (int j = 0; j < nDelayBins; j++)
     {
@@ -218,8 +227,8 @@ std::unique_ptr<Detection> CfarDetector1D::process(Map<std::complex<double>> *x)
         continue;
       }
 
-      const int leadingStart = std::max(0, j - guard - train);
-      const int leadingEnd = std::max(0, std::min(nDelayBins, j - guard));
+      const int leadingStart = std::max(firstValidIdx, j - guard - train);
+      const int leadingEnd   = std::max(firstValidIdx, std::min(nDelayBins, j - guard));
       const int trailingStart = std::min(nDelayBins, j + guard + 1);
       const int trailingEnd = std::min(nDelayBins, j + guard + train + 1);
 
