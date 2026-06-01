@@ -31,29 +31,45 @@ Each entry has enough context to work in a fresh checkout without re-reading the
   spurious detections per CPI and a potential cascade of tentative-track explosions in the
   tracker (see Bug 8 below).
 - **Fix**: Add diagonal loading (Tikhonov regularisation) immediately before the `arma::chol`
-  call.  A relative load of `ε = ‖A‖_F × 10⁻⁶ / nBins` on each diagonal element keeps the
-  matrix positive-definite without distorting the filter coefficients for well-conditioned
-  inputs.  Example:
+  call.  The current implementation uses
+  `ε = |a[0]| * diagonalLoadScale / nBins`, where `a[0]` is the zero-lag autocorrelation
+  and `diagonalLoadScale` is configurable from YAML (`process.clutter.diagonalLoadScale`).
+  This keeps the matrix positive-definite while avoiding a full-matrix norm in the CPI loop.
+  Example:
   ```cpp
-  const double eps = arma::norm(A, "fro") * 1e-6 / nBins;
+  const double eps = std::abs(a[0]) * diagonalLoadScale / nBins;
   A.diag() += std::complex<double>(eps, 0.0);
   // then proceed with arma::chol(A, A) as before
   ```
   **Note on `nBins`**: fixed to `delayMax - delayMin + 1` (matching header documentation and
   `Ambiguity::nDelayBins` for the same range).  The constructor now also guards
   `delayMax < delayMin` with a clamp-and-log before computing `nBins`, preventing uint32_t
-  underflow and the associated allocation blowup.  The division in the eps formula uses
-  `(nBins > 0 ? nBins : 1u)` as a belt-and-suspenders guard for the
-  `delayMax == delayMin` (1-tap) edge case.
+  underflow and the associated allocation blowup. Constructor now also clamps
+  `nBins` to `nSamples` when `delayMax - delayMin + 1 > nSamples`, preventing
+  out-of-bounds reads of `dataA`/`dataB` in `process()`.
 - **Effort**: ~3 lines in `WienerHopf.cpp`.
-- **Test**: Add a unit test that feeds pure-noise IQ (near-zero signal) to `WienerHopf::process`
-  and asserts the call returns `true` (i.e. does not silently drop the CPI).
-- **Status**: Diagonal loading and nBins guard implemented in `WienerHopf.cpp`.
+- **Test**: Validate three classes of behavior in unit tests:
+  1. Constructor/process safety guards (`delayMax < delayMin`, `delayMin == delayMax`,
+     `delay window > CPI length`).
+  2. Near-zero reference failure path is graceful (`process()` returns `false`, no crash).
+  3. Quantitative clutter suppression and target retention (SIR improves materially).
+- **Status**: Implemented and expanded.
+  Additional updates completed in this context:
+  - `process.clutter.diagonalLoadScale` added to YAML and wired through `blah2.cpp` into
+    `WienerHopf` (default `1e-6`, validated non-negative finite).
+  - `nfilt` selection changed to nearest FFTW-fast size (small-prime factors) to avoid
+    pathological FFT lengths.
+  - Oversized delay-window guard added: `nBins` clamped to `nSamples`.
+  - CPI regression improved from ~5400 ms to ~1650-1750 ms after performance fixes;
+    still above pre-regression ~1500 ms baseline.
   Unit tests added in `test/unit/process/clutter/TestWienerHopf.cpp`:
   `WienerHopf_Constructor_InvertedRange_NoCrash` (REQUIRE_NOTHROW on delayMax<delayMin),
   `WienerHopf_InvertedRange_ProcessReturnsTrue` (1-bin filter returns true on sinusoidal input),
   `WienerHopf_EqualRange_OneBin_ProcessReturnsTrue` (delayMin==delayMax, 1 tap),
-  `WienerHopf_ZeroReference_ReturnsFalseNoCrash` (zero reference → Cholesky fails gracefully).
+  `WienerHopf_CustomDiagonalLoadScale_ProcessReturnsTrue`,
+  `WienerHopf_DelayWindowLargerThanCpi_ClampedProcessReturnsTrue`,
+  `WienerHopf_ZeroReference_ReturnsFalseNoCrash` (zero reference → Cholesky fails gracefully),
+  `WienerHopf_ClutterSuppressionAndTargetRetention` (quantitative DSP regression guard).
   Target `testWienerHopf` wired into `CMakeLists.txt` and `add_test`.
 
 #### Bug 2 — Ambiguity: map delay bins may be offset by 1 🔴
@@ -80,8 +96,9 @@ Each entry has enough context to work in a fresh checkout without re-reading the
 - **Effort**: test writing ~20 lines; code cleanup 1 line.
 - **Status**: No-op `- 1 + 1` cleaned up in `Ambiguity.cpp`. Deterministic delay-pin test
   `Process_DelayBinPin` added to `TestAmbiguity.cpp` covering D ∈ {-5,-3,-1,0,1,3,5,10}
-  for both `roundHamming` settings. Whether a residual offset exists is now gated on that
-  test going green.
+  for both `roundHamming` settings. Source-buffer sizing in this test now uses
+  `nSamples + max(abs(delayMin), abs(delayMax)) + 1` to remain safe if delay bounds are
+  edited independently. Whether a residual offset exists is now gated on that test going green.
 
 #### Bug 3 — SpectrumAnalyser: center frequency hardcoded to 204.64 MHz 🔴
 - **File**: `src/process/spectrum/SpectrumAnalyser.cpp` line ~35, `SpectrumAnalyser.h`
@@ -107,6 +124,16 @@ Each entry has enough context to work in a fresh checkout without re-reading the
   `SpectrumAnalyser_FrequencyBins_AxisSymmetricAroundFc` (fftshift symmetry).
   `IqData::get_frequency()` const getter added to support the tests.
   Target `testSpectrumAnalyser` wired into `CMakeLists.txt` and `add_test`.
+
+### Session Progress Update (2026-06-01)
+
+- Completed: Bug 1, Bug 2, Bug 3 implementations and targeted unit coverage.
+- Completed: Clutter performance triage and mitigation for WienerHopf FFT sizing regression.
+- Completed: YAML-configurable diagonal loading with inline and README guidance.
+- Completed: Safety guard for `nBins > nSamples` to prevent OOB reads.
+- Pending validation on target machine:
+  - Re-run full unit suite and replay workflow in Docker with current branch.
+  - Confirm CPI gap closure from current ~1650-1750 ms toward ~1500 ms baseline.
 
 #### Improvement 4 — CFAR: Doppler window missing on ambiguity map 🟠
 - **File**: `src/process/ambiguity/Ambiguity.cpp` (Doppler FFT section), `Ambiguity.h`
