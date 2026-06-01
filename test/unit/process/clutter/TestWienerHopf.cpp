@@ -7,12 +7,18 @@
 /// @author 30hours
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 
 #include "process/clutter/WienerHopf.h"
 #include "data/IqData.h"
 
 #include <complex>
 #include <cmath>
+
+namespace
+{
+constexpr double kPi = 3.14159265358979323846;
+}
 
 namespace
 {
@@ -25,6 +31,19 @@ void fill_sinusoid(IqData &buf, uint32_t nSamples, double freqNorm)
     buf.push_back({std::cos(2.0 * M_PI * freqNorm * static_cast<double>(i)),
                    std::sin(2.0 * M_PI * freqNorm * static_cast<double>(i))});
   }
+}
+
+/// Estimate complex-tone amplitude at a normalised frequency using coherent
+/// projection (DFT at an arbitrary bin location).
+double estimate_tone_amplitude(const IqData &buf, uint32_t nSamples, double freqNorm)
+{
+  std::complex<double> acc{0.0, 0.0};
+  for (uint32_t i = 0; i < nSamples; i++)
+  {
+    const double phase = -2.0 * kPi * freqNorm * static_cast<double>(i);
+    acc += buf.at_unchecked(i) * std::polar(1.0, phase);
+  }
+  return std::abs(acc) / static_cast<double>(nSamples);
 }
 
 } // namespace
@@ -92,4 +111,70 @@ TEST_CASE("WienerHopf_ZeroReference_ReturnsFalseNoCrash", "[clutter]")
   fill_sinusoid(sur, nSamples, 0.1);
 
   CHECK(filter.process(&ref, &sur) == false);
+}
+
+// ---------------------------------------------------------------------------
+// Quantitative DSP behavior
+// ---------------------------------------------------------------------------
+
+TEST_CASE("WienerHopf_ClutterSuppressionAndTargetRetention", "[clutter]")
+{
+  // Quantitative regression guard:
+  // - reference contains clutter only
+  // - surveillance contains delayed clutter + weaker target tone
+  // We expect WienerHopf to significantly suppress the clutter component while
+  // retaining most target energy.
+  // Exercise both nfilt sizing paths introduced in WienerHopf:
+  // - 3990: rawNfilt is FFTW-fast already (no round-up expected)
+  // - 4000: rawNfilt requires round-up to a nearby FFTW-fast size
+  const uint32_t nSamples = GENERATE(3990u, 4000u);
+  constexpr int32_t delayMin = -20;
+  constexpr int32_t delayMax = 20;
+
+  // Bin-aligned normalised frequencies minimise leakage in projection.
+  constexpr uint32_t clutterBin = 64;
+  constexpr uint32_t targetBin = 257;
+  const double clutterFreq = static_cast<double>(clutterBin) / static_cast<double>(nSamples);
+  const double targetFreq = static_cast<double>(targetBin) / static_cast<double>(nSamples);
+
+  constexpr double clutterAmp = 1.0;
+  constexpr double targetAmp = 0.25;
+  constexpr int32_t clutterDelay = 5;
+
+  IqData ref(nSamples);
+  IqData sur(nSamples);
+
+  for (uint32_t i = 0; i < nSamples; i++)
+  {
+    const double n = static_cast<double>(i);
+    const std::complex<double> clutterRef = std::polar(clutterAmp, 2.0 * kPi * clutterFreq * n);
+    const std::complex<double> clutterSur =
+      std::polar(clutterAmp, 2.0 * kPi * clutterFreq * (n - static_cast<double>(clutterDelay)));
+    const std::complex<double> targetSur = std::polar(targetAmp, 2.0 * kPi * targetFreq * n);
+
+    ref.push_back(clutterRef);
+    sur.push_back(clutterSur + targetSur);
+  }
+
+  const double clutterBefore = estimate_tone_amplitude(sur, nSamples, clutterFreq);
+  const double targetBefore = estimate_tone_amplitude(sur, nSamples, targetFreq);
+
+  WienerHopf filter(delayMin, delayMax, nSamples);
+  REQUIRE(filter.process(&ref, &sur) == true);
+
+  const double clutterAfter = estimate_tone_amplitude(sur, nSamples, clutterFreq);
+  const double targetAfter = estimate_tone_amplitude(sur, nSamples, targetFreq);
+
+  INFO("nSamples=" << nSamples);
+
+  // Require strong clutter suppression (at least ~14 dB).
+  CHECK(clutterAfter < clutterBefore * 0.2);
+
+  // Require target not to be excessively attenuated (<= ~6 dB loss).
+  CHECK(targetAfter > targetBefore * 0.5);
+
+  // Net SIR should improve substantially.
+  const double sirBefore = targetBefore / clutterBefore;
+  const double sirAfter = targetAfter / clutterAfter;
+  CHECK(sirAfter > sirBefore * 3.0);
 }

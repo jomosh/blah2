@@ -1,31 +1,35 @@
 #include "WienerHopf.h"
-#include "process/meta/HammingNumber.h"
 #include <complex>
 #include <iostream>
 #include <vector>
 
 namespace
 {
-// True when n factors only into 2, 3 and 5 (5-smooth / Hamming number).
-bool is_hamming_5_smooth(uint32_t n)
+// FFTW is fastest when sizes factor into small primes.
+// Accept 2,3,5,7,11,13 (all explicitly called out as efficient by FFTW docs).
+bool is_fftw_fast_size(uint32_t n)
 {
   if (n == 0)
   {
     return false;
   }
-  while (n % 2 == 0)
+  for (const uint32_t p : {2u, 3u, 5u, 7u, 11u, 13u})
   {
-    n /= 2;
-  }
-  while (n % 3 == 0)
-  {
-    n /= 3;
-  }
-  while (n % 5 == 0)
-  {
-    n /= 5;
+    while (n % p == 0)
+    {
+      n /= p;
+    }
   }
   return n == 1;
+}
+
+uint32_t next_fftw_fast_size(uint32_t n)
+{
+  while (!is_fftw_fast_size(n))
+  {
+    n++;
+  }
+  return n;
 }
 }
 
@@ -50,11 +54,11 @@ WienerHopf::WienerHopf(int32_t _delayMin, int32_t _delayMax, uint32_t _nSamples)
   nBins = static_cast<uint32_t>(delayMax - delayMin) + 1;
   nSamples = _nSamples;
 
-  // Keep the exact linear-convolution size when it is already 5-smooth.
-  // next_hamming() returns the next value strictly larger than input, so
-  // calling it unconditionally inflates FFT size and adds avoidable CPI cost.
+  // Keep the exact linear-convolution size when it already has FFTW-friendly
+  // factors.  Otherwise, round up to the nearest fast size to avoid the
+  // pathological slow plans seen with unfactorable lengths.
   const uint32_t rawNfilt = nBins + nSamples + 1;
-  nfilt = is_hamming_5_smooth(rawNfilt) ? rawNfilt : next_hamming(rawNfilt);
+  nfilt = next_fftw_fast_size(rawNfilt);
 
   // initialise data
   A = arma::cx_mat(nBins, nBins);
