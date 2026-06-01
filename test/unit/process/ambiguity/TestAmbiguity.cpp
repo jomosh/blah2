@@ -11,6 +11,7 @@
 
 #include "process/ambiguity/Ambiguity.h"
 
+#include <algorithm>
 #include <random>
 #include <iostream>
 #include <filesystem>
@@ -413,9 +414,16 @@ TEST_CASE("Process_DelayBinPin", "[process]")
     constexpr int32_t delayMin = -5;
     constexpr int32_t delayMax = 10;
 
-    // Source length must cover nSamples + max(delayMax, abs(delayMin)).
+    // Source length must cover nSamples + max(abs(delayMin), abs(delayMax))
+    // so i + refOffset and i + surOffset are always in range even if bounds
+    // are edited independently.
+    const uint32_t absDelayMin =
+      (delayMin < 0) ? static_cast<uint32_t>(-delayMin) : static_cast<uint32_t>(delayMin);
+    const uint32_t absDelayMax =
+      (delayMax < 0) ? static_cast<uint32_t>(-delayMax) : static_cast<uint32_t>(delayMax);
+    const uint32_t maxDelayAbs = std::max(absDelayMin, absDelayMax);
     const std::vector<std::complex<double>> source =
-      make_deterministic_qpsk_sequence(nSamples + delayMax + 1);
+      make_deterministic_qpsk_sequence(nSamples + maxDelayAbs + 1);
 
     // Covers both negative delays (within delayMin) and positive delays.
     for (int32_t D : {-5, -3, -1, 0, 1, 3, 5, 10})
