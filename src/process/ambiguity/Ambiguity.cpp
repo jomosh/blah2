@@ -151,10 +151,16 @@ Map<std::complex<double>> *Ambiguity::process(IqData *x, IqData *y)
       dataCorr[j + nDelayBins] = dataZi[j];
     }
 
-    // write current correlation slice directly to map row
+    // write current correlation slice directly to map row.
+    // Index derivation: dataCorr[nDelayBins + lag] holds the correlation at
+    // delay `lag` samples.  For bin j, lag = delayMin + j, so the correct
+    // index is nDelayBins + delayMin + j.  The previous expression contained
+    // a no-op "- 1 + 1" left from an unresolved debugging attempt; that has
+    // been removed.  A deterministic delay-pin test in TestAmbiguity.cpp
+    // guards this mapping.
     for (uint16_t j = 0; j < nDelayBins; j++)
     {
-      map->data[i][j] = dataCorr[nDelayBins + delayMin + j - 1 + 1];
+      map->data[i][j] = dataCorr[nDelayBins + delayMin + j];
     }
   }
 

@@ -41,6 +41,9 @@ private:
   /// @brief Resolution of spectrum (Hz).
   double resolution;
 
+  /// @brief Center frequency of the receiver (Hz), from config capture.fc.
+  double fc;
+
   /// @brief Reusable spectrum output buffer.
   std::vector<std::complex<double>> spectrumBuffer;
 
@@ -51,8 +54,9 @@ public:
   /// @brief Constructor.
   /// @param n Number of samples on input.
   /// @param bandwidth Minimum bandwidth of frequency bin (Hz).
+  /// @param fc Center frequency of the receiver (Hz).
   /// @return The object.
-  SpectrumAnalyser(uint32_t n, double bandwidth);
+  SpectrumAnalyser(uint32_t n, double bandwidth, double fc);
 
   /// @brief Destructor.
   /// @return Void.

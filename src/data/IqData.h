@@ -127,6 +127,10 @@ public:
   /// @return Void.
   void update_frequency(const std::vector<double> &frequency);
 
+  /// @brief Getter for frequency bins written by SpectrumAnalyser.
+  /// @return Const reference to frequency vector (kHz).
+  const std::vector<double> &get_frequency() const;
+
   /// @brief Generate JSON of the signal and metadata.
   /// @param timestamp Current time (POSIX ms).
   /// @return JSON string.

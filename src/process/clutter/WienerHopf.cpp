@@ -3,14 +3,75 @@
 #include <iostream>
 #include <vector>
 
+namespace
+{
+// FFTW is fastest when sizes factor into small primes.
+// Accept 2,3,5,7,11,13 (all explicitly called out as efficient by FFTW docs).
+bool is_fftw_fast_size(uint32_t n)
+{
+  if (n == 0)
+  {
+    return false;
+  }
+  for (const uint32_t p : {2u, 3u, 5u, 7u, 11u, 13u})
+  {
+    while (n % p == 0)
+    {
+      n /= p;
+    }
+  }
+  return n == 1;
+}
+
+uint32_t next_fftw_fast_size(uint32_t n)
+{
+  while (!is_fftw_fast_size(n))
+  {
+    n++;
+  }
+  return n;
+}
+}
+
 // constructor
-WienerHopf::WienerHopf(int32_t _delayMin, int32_t _delayMax, uint32_t _nSamples)
+WienerHopf::WienerHopf(int32_t _delayMin, int32_t _delayMax, uint32_t _nSamples,
+                       double _diagonalLoadScale)
 {
   // input
   delayMin = _delayMin;
   delayMax = _delayMax;
-  nBins = delayMax - delayMin;
+  diagonalLoadScale = _diagonalLoadScale;
+
+  // Guard against inverted or degenerate range before any allocation.
+  // delayMax < delayMin would underflow nBins (uint32_t), and
+  // delayMax == delayMin would produce a 1-tap filter with no useful range.
+  if (delayMax < delayMin)
+  {
+    std::cerr << "WienerHopf: delayMax (" << delayMax << ") < delayMin ("
+              << delayMin << "), clamping to delayMax = delayMin" << std::endl;
+    delayMax = delayMin;
+  }
+
+  // nBins covers delayMin..delayMax inclusive, matching Ambiguity::nDelayBins.
+  nBins = static_cast<uint32_t>(delayMax - delayMin) + 1;
   nSamples = _nSamples;
+
+  // dataA/dataB are sized to nSamples, and later loops index them up to nBins.
+  // Clamp oversized delay windows to the CPI length to avoid out-of-bounds
+  // reads when delayMax - delayMin + 1 > nSamples.
+  if (nBins > nSamples)
+  {
+    std::cerr << "WienerHopf: delay window bins (" << nBins
+              << ") exceed nSamples (" << nSamples
+              << "), clamping nBins to nSamples" << std::endl;
+    nBins = nSamples;
+  }
+
+  // Keep the exact linear-convolution size when it already has FFTW-friendly
+  // factors.  Otherwise, round up to the nearest fast size to avoid the
+  // pathological slow plans seen with unfactorable lengths.
+  const uint32_t rawNfilt = nBins + nSamples + 1;
+  nfilt = next_fftw_fast_size(rawNfilt);
 
   // initialise data
   A = arma::cx_mat(nBins, nBins);
@@ -25,9 +86,9 @@ WienerHopf::WienerHopf(int32_t _delayMin, int32_t _delayMax, uint32_t _nSamples)
   dataOutY = new std::complex<double>[nSamples];
   dataA = new std::complex<double>[nSamples];
   dataB = new std::complex<double>[nSamples];
-  filtX = new std::complex<double>[nBins + nSamples + 1];
-  filtW = new std::complex<double>[nBins + nSamples + 1];
-  filt = new std::complex<double>[nBins + nSamples + 1];
+  filtX = new std::complex<double>[nfilt];
+  filtW = new std::complex<double>[nfilt];
+  filt = new std::complex<double>[nfilt];
   fftX = fftw_plan_dft_1d(nSamples, reinterpret_cast<fftw_complex *>(dataX),
                           reinterpret_cast<fftw_complex *>(dataOutX), FFTW_FORWARD, FFTW_ESTIMATE);
   fftY = fftw_plan_dft_1d(nSamples, reinterpret_cast<fftw_complex *>(dataY),
@@ -36,11 +97,11 @@ WienerHopf::WienerHopf(int32_t _delayMin, int32_t _delayMax, uint32_t _nSamples)
                           reinterpret_cast<fftw_complex *>(dataA), FFTW_BACKWARD, FFTW_ESTIMATE);
   fftB = fftw_plan_dft_1d(nSamples, reinterpret_cast<fftw_complex *>(dataB),
                           reinterpret_cast<fftw_complex *>(dataB), FFTW_BACKWARD, FFTW_ESTIMATE);
-  fftFiltX = fftw_plan_dft_1d(nBins + nSamples + 1, reinterpret_cast<fftw_complex *>(filtX),
+  fftFiltX = fftw_plan_dft_1d(nfilt, reinterpret_cast<fftw_complex *>(filtX),
                               reinterpret_cast<fftw_complex *>(filtX), FFTW_FORWARD, FFTW_ESTIMATE);
-  fftFiltW = fftw_plan_dft_1d(nBins + nSamples + 1, reinterpret_cast<fftw_complex *>(filtW),
+  fftFiltW = fftw_plan_dft_1d(nfilt, reinterpret_cast<fftw_complex *>(filtW),
                               reinterpret_cast<fftw_complex *>(filtW), FFTW_FORWARD, FFTW_ESTIMATE);
-  fftFilt = fftw_plan_dft_1d(nBins + nSamples + 1, reinterpret_cast<fftw_complex *>(filt),
+  fftFilt = fftw_plan_dft_1d(nfilt, reinterpret_cast<fftw_complex *>(filt),
                              reinterpret_cast<fftw_complex *>(filt), FFTW_BACKWARD, FFTW_ESTIMATE);
 }
 
@@ -113,6 +174,14 @@ bool WienerHopf::process(IqData *x, IqData *y)
     b[i] = dataB[i] / (double)nSamples;
   }
 
+  // Tikhonov diagonal loading: keeps A positive-definite when input power is
+  // low or the autocorrelation matrix is near-singular (e.g. weak reference
+  // signal). `diagonalLoadScale` comes from YAML via process.clutter.
+  // Use the zero-lag autocorrelation magnitude as the scale so we do not pay
+  // for a full matrix Frobenius norm on every CPI.
+  const double eps = std::abs(a[0]) * diagonalLoadScale / (nBins > 0 ? nBins : 1u);
+  A.diag() += std::complex<double>(eps, 0.0);
+
   // compute weights
   success = arma::chol(A, A);
   if (!success)
@@ -132,7 +201,7 @@ bool WienerHopf::process(IqData *x, IqData *y)
   {
     filtX[i] = dataX[i];
   }
-  for (i = nSamples; i < nBins + nSamples + 1; i++)
+  for (i = nSamples; i < nfilt; i++)
   {
     filtX[i] = {0, 0};
   }
@@ -142,7 +211,7 @@ bool WienerHopf::process(IqData *x, IqData *y)
   {
     filtW[i] = w[i];
   }
-  for (i = nBins; i < nBins + nSamples + 1; i++)
+  for (i = nBins; i < nfilt; i++)
   {
     filtW[i] = {0, 0};
   }
@@ -152,7 +221,7 @@ bool WienerHopf::process(IqData *x, IqData *y)
   fftw_execute(fftFiltW);
 
   // compute convolution/filter
-  for (i = 0; i < nBins + nSamples + 1; i++)
+  for (i = 0; i < nfilt; i++)
   {
     filt[i] = (filtW[i] * filtX[i]);
   }
@@ -162,7 +231,7 @@ bool WienerHopf::process(IqData *x, IqData *y)
   y->clear();
   for (i = 0; i < nSamples; i++)
   {
-    y->push_back(dataY[i] - (filt[i] / (double)(nBins + nSamples + 1)));
+    y->push_back(dataY[i] - (filt[i] / (double)nfilt));
   }
 
   return true;

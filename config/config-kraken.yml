@@ -33,6 +33,10 @@ process:
     enable: true
     delayMin: -10
     delayMax: 400
+    # Relative diagonal loading applied before Wiener-Hopf Cholesky.
+    # Higher values improve numerical robustness but can slightly soften
+    # clutter cancellation.
+    diagonalLoadScale: 0.000001
   detection:
     enable: true
     pfa: 0.00001

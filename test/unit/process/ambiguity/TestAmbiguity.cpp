@@ -11,6 +11,7 @@
 
 #include "process/ambiguity/Ambiguity.h"
 
+#include <algorithm>
 #include <random>
 #include <iostream>
 #include <filesystem>
@@ -389,4 +390,60 @@ TEST_CASE("Process_PairedBufferSkewMigratesPeakAcrossDelayBins", "[process]")
     CHECK(std::abs(skewedPeak.delayBin) == 1);
     CHECK(skewedPeak.power > alignedPeak.power * 0.95);
     CHECK(skewedZeroDelayPower < skewedPeak.power * 0.1);
+}
+
+/// @brief Pin the delay-bin mapping: a surveillance signal that is delayed by
+///        D samples relative to the reference must produce a peak at exactly
+///        delay bin D, for both positive and negative D.
+///        This test guards the index expression in Ambiguity::process() and
+///        will catch any off-by-one or sign regression.
+///
+///        Construction for a given D:
+///          refOffset = max(0,  D),  surOffset = max(0, -D)
+///          ref[i] = source[i + refOffset],  sur[i] = source[i + surOffset]
+///        This keeps all source indices non-negative while ensuring
+///        sur is delayed by exactly D samples relative to ref.
+TEST_CASE("Process_DelayBinPin", "[process]")
+{
+    auto round_hamming = GENERATE(true, false);
+
+    // nSamples only needs to be much larger than the maximum tested |D| so the
+    // correlation is unambiguous.  4096 keeps plan creation and FFT cost minimal.
+    constexpr uint32_t fs = 4096;
+    constexpr uint32_t nSamples = 4096;
+    constexpr int32_t delayMin = -5;
+    constexpr int32_t delayMax = 10;
+
+    // Source length must cover nSamples + max(abs(delayMin), abs(delayMax))
+    // so i + refOffset and i + surOffset are always in range even if bounds
+    // are edited independently.
+    const uint32_t absDelayMin =
+      (delayMin < 0) ? static_cast<uint32_t>(-delayMin) : static_cast<uint32_t>(delayMin);
+    const uint32_t absDelayMax =
+      (delayMax < 0) ? static_cast<uint32_t>(-delayMax) : static_cast<uint32_t>(delayMax);
+    const uint32_t maxDelayAbs = std::max(absDelayMin, absDelayMax);
+    const std::vector<std::complex<double>> source =
+      make_deterministic_qpsk_sequence(nSamples + maxDelayAbs + 1);
+
+    // Covers both negative delays (within delayMin) and positive delays.
+    for (int32_t D : {-5, -3, -1, 0, 1, 3, 5, 10})
+    {
+        IqData ref(nSamples);
+        IqData sur(nSamples);
+        const uint32_t refOffset = (D > 0) ? static_cast<uint32_t>(D) : 0u;
+        const uint32_t surOffset = (D < 0) ? static_cast<uint32_t>(-D) : 0u;
+        for (uint32_t i = 0; i < nSamples; i++)
+        {
+            ref.push_back(source[i + refOffset]);
+            sur.push_back(source[i + surOffset]);
+        }
+
+        Ambiguity amb(delayMin, delayMax, 0, 0, fs, nSamples, round_hamming);
+        auto *map = amb.process(&ref, &sur);
+
+        const MapPeak peak = find_peak_delay_bin(*map);
+        INFO("D=" << D << " round_hamming=" << round_hamming
+             << " peak.delayBin=" << peak.delayBin);
+        CHECK(peak.delayBin == D);
+    }
 }

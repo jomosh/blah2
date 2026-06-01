@@ -208,9 +208,21 @@ int main(int argc, char **argv)
 
   // set up process clutter
   int32_t delayMinClutter, delayMaxClutter;
+  double diagonalLoadScale = 1e-6;
   tree["process"]["clutter"]["delayMin"] >> delayMinClutter;
   tree["process"]["clutter"]["delayMax"] >> delayMaxClutter;
-  WienerHopf *filter = new WienerHopf(delayMinClutter, delayMaxClutter, nSamples);
+  auto diagonalLoadNode = tree["process"]["clutter"]["diagonalLoadScale"];
+  if (diagonalLoadNode.valid())
+  {
+    diagonalLoadNode >> diagonalLoadScale;
+  }
+  if (!std::isfinite(diagonalLoadScale) || diagonalLoadScale < 0.0)
+  {
+    std::cerr << "Invalid process.clutter.diagonalLoadScale config: must be a finite non-negative value" << "\n";
+    return -1;
+  }
+  WienerHopf *filter = new WienerHopf(delayMinClutter, delayMaxClutter, nSamples,
+    diagonalLoadScale);
 
   // set up process detection
   double pfa, minDoppler;
@@ -315,7 +327,7 @@ int main(int argc, char **argv)
 
   // set up process spectrum analyser
   double spectrumBandwidth = 2000;
-  SpectrumAnalyser *spectrumAnalyser = new SpectrumAnalyser(nSamples, spectrumBandwidth);
+  SpectrumAnalyser *spectrumAnalyser = new SpectrumAnalyser(nSamples, spectrumBandwidth, static_cast<double>(fc));
 
   // process options
   bool isClutter, isDetection, isTracker;

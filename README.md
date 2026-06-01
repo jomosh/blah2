@@ -35,7 +35,6 @@ Building the code using the following instructions;
 - Install docker and docker-compose on the host machine.
 - Clone this repository to some directory.
 - Install SDRplay API to run service on host.
-- Edit the `config/config.yml` for desired processing parameters.
 - Run the docker-compose command.
 
 ```bash
