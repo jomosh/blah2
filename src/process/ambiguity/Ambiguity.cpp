@@ -101,6 +101,21 @@ Ambiguity::Ambiguity(int32_t _delayMin, int32_t _delayMax,
   fftDoppler = fftw_plan_dft_1d(nDopplerBins, reinterpret_cast<fftw_complex *>(dataDoppler.data()),
                                 reinterpret_cast<fftw_complex *>(dataDoppler.data()), FFTW_FORWARD, FFTW_ESTIMATE);
 
+  // Pre-compute symmetric Hann window for the Doppler FFT (one allocation,
+  // zero per-CPI overhead).  For nDopplerBins==1 the window is trivially 1.
+  dopplerWindow.resize(nDopplerBins);
+  if (nDopplerBins == 1)
+  {
+    dopplerWindow[0] = 1.0;
+  }
+  else
+  {
+    for (uint16_t j = 0; j < nDopplerBins; j++)
+    {
+      dopplerWindow[j] = 0.5 * (1.0 - std::cos(2.0 * M_PI * j / (nDopplerBins - 1)));
+    }
+  }
+
 }
 
 Ambiguity::~Ambiguity()
@@ -164,12 +179,15 @@ Map<std::complex<double>> *Ambiguity::process(IqData *x, IqData *y)
     }
   }
 
-  // doppler processing
+  // doppler processing — apply pre-computed Hann window before the Doppler
+  // FFT to suppress −13 dB rectangular-window sidelobes down to −31.5 dB.
+  // The window is multiplied element-wise into dataDoppler (one scalar
+  // multiply per bin, same cost as the assignment that was here before).
   for (uint16_t i = 0; i < nDelayBins; i++)
   {
     for (uint16_t j = 0; j < nDopplerBins; j++)
     {
-      dataDoppler[j] = map->data[j][i];
+      dataDoppler[j] = map->data[j][i] * dopplerWindow[j];
     }
 
     fftw_execute(fftDoppler);

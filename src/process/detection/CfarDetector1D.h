@@ -3,7 +3,9 @@
 /// @brief A class to implement a 1D CFAR detector.
 /// @details Converts an AmbiguityMap to DetectionData. 1D CFAR operates across delay, to minimise detections from the zero-Doppler line.
 /// @author 30hours
-/// @todo Actually implement the min delay and Doppler.
+/// @note minDelay and minDoppler are applied both as detection gates and as
+///       training-cell exclusion masks so that excluded cells do not inflate
+///       the CFAR threshold for neighbouring bins.
 
 #ifndef CFARDETECTOR1D_H
 #define CFARDETECTOR1D_H

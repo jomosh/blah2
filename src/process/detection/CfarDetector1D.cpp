@@ -201,7 +201,13 @@ std::unique_ptr<Detection> CfarDetector1D::process(Map<std::complex<double>> *x)
       {
         mapRowSnr[j] = -std::numeric_limits<double>::infinity();
       }
-      prefixEnergy[j + 1] = prefixEnergy[j] + mapRowSquare[j];
+      // Cells inside the delay exclusion zone must not contribute to the
+      // training-cell power sum used by neighbouring CUTs.  Previously they
+      // were included here and only skipped as CUTs in the inner loop below,
+      // which inflated thresholds just outside the exclusion boundary and
+      // suppressed valid short-range targets.
+      const double trainValue = (x->delay[j] >= minDelay) ? mapRowSquare[j] : 0.0;
+      prefixEnergy[j + 1] = prefixEnergy[j] + trainValue;
     }
 
     for (int j = 0; j < nDelayBins; j++)

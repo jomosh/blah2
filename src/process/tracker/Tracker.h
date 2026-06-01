@@ -4,7 +4,10 @@
 /// @details Key functions are update, initiate, smooth and remove.
 /// @details Update before initiate to avoid duplicate tracks.
 /// @author 30hours
-/// @todo Add smoothing capability.
+/// @note Track-to-detection association uses the Hungarian (Kuhn-Munkres)
+///       algorithm for globally optimal one-to-one assignment in the
+///       normalised delay-Doppler cost space.
+/// @todo Add smoothing capability (α-β filter on delay/Doppler axes).
 /// @todo Fix units up.
 /// @todo I don't think I callback the true CPI time from ambiguity.
 

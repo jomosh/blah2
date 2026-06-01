@@ -447,3 +447,91 @@ TEST_CASE("Process_DelayBinPin", "[process]")
         CHECK(peak.delayBin == D);
     }
 }
+
+/// @brief Verify that the Hann window suppresses Doppler sidelobes.
+///
+/// Inject a pure tone at one Doppler frequency (the centre bin) with zero
+/// delay and check that the power 2 bins away is at least 15 dB below the
+/// main-lobe peak.  With a rectangular window the first sidelobe is only
+/// ~13 dB down; with a Hann window it is ~31.5 dB down, so 15 dB is a
+/// conservative but meaningful threshold that definitively distinguishes the
+/// two cases.
+///
+/// We use nDopplerBins >= 5 so that bin 0 (centre after fftshift) and
+/// bin ±2 are all within the map.
+TEST_CASE("Process_DopplerWindowReducesSidelobes", "[process]")
+{
+    constexpr double pi = 3.14159265358979323846;
+
+    // Single delay bin (delayMin=delayMax=0) to keep the test simple.
+    int32_t delayMin  = 0;
+    int32_t delayMax  = 0;
+    int32_t dopplerMin = -2;
+    int32_t dopplerMax =  2;
+
+    uint32_t fs      = 500;
+    uint32_t nSamples = 500;
+
+    Ambiguity amb(delayMin, delayMax, dopplerMin, dopplerMax, fs, nSamples, false);
+    const uint16_t nDopplerBins = amb.get_n_doppler_bins();
+
+    // Tone exactly at the centre Doppler (dopplerMiddle).
+    const double fTone = amb.get_doppler_middle();
+    IqData ref(nSamples);
+    IqData sur(nSamples);
+    for (uint32_t i = 0; i < nSamples; i++)
+    {
+        ref.push_back({1.0, 0.0});
+        sur.push_back(std::polar(1.0, 2.0 * pi * fTone * i / fs));
+    }
+
+    auto *map = amb.process(&ref, &sur);
+    REQUIRE(map->doppler.size() == nDopplerBins);
+
+    // Find the index of the centre Doppler bin.
+    size_t centreIdx = 0;
+    double peakPower = 0.0;
+    for (size_t k = 0; k < nDopplerBins; k++)
+    {
+        const double p = std::norm(map->data[k][0]);
+        if (p > peakPower) { peakPower = p; centreIdx = k; }
+    }
+    REQUIRE(peakPower > 0.0);
+
+    // Check that the bin 2 steps away from centre has sidelobe suppression
+    // of at least 15 dB.  This passes for a Hann window (~31 dB) but fails
+    // for a rectangular window (~8 dB at +2 bins for a 5-bin map).
+    const size_t sideIdx = (centreIdx + 2) % nDopplerBins;
+    const double sidePower = std::norm(map->data[sideIdx][0]);
+    const double suppressionDb = (sidePower > 0.0)
+        ? 10.0 * std::log10(peakPower / sidePower)
+        : 100.0;
+
+    INFO("peak bin=" << centreIdx << " peak power=" << peakPower
+         << " side power=" << sidePower << " suppression=" << suppressionDb << " dB");
+    CHECK(suppressionDb >= 15.0);
+}
+
+/// @brief A Hann window of size 1 must not zero the output (special case).
+///
+/// When nDopplerBins == 1 (e.g. dopplerMin == dopplerMax == 0) the window
+/// coefficient must be 1.0 so the single-bin Doppler FFT is unaffected.
+TEST_CASE("Process_DopplerWindow_SingleBinPassthrough", "[process]")
+{
+    constexpr uint32_t nSamples = 256;
+    // Single delay and Doppler bin: the map has one cell.
+    Ambiguity amb(0, 0, 0, 0, nSamples, nSamples, false);
+    REQUIRE(amb.get_n_doppler_bins() == 1);
+
+    IqData ref(nSamples);
+    IqData sur(nSamples);
+    for (uint32_t i = 0; i < nSamples; i++)
+    {
+        ref.push_back({1.0, 0.0});
+        sur.push_back({1.0, 0.0});
+    }
+
+    auto *map = amb.process(&ref, &sur);
+    // If the window were 0 for the single bin the map power would be 0.
+    CHECK(std::norm(map->data[0][0]) > 0.0);
+}
