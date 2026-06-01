@@ -4,12 +4,10 @@
 /// @details Implements a the batches algorithm as described in Principles of Modern Radar, Volume II, Chapter 17.
 /// See Fundamentals of Radar Signal Processing (Richards) for more on the pulse-Doppler processing method.
 /// @author 30hours
-/// @todo Ambiguity maps are still offset by 1 bin.
-///       The no-op "- 1 + 1" in the map-write index has been cleaned up.
-///       A deterministic delay-pin test (Process_DelayBinPin) has been added
-///       to TestAmbiguity.cpp to confirm or reveal any remaining offset.
+/// @note The delay-bin offset was investigated (see Process_DelayBinPin test in
+///       TestAmbiguity.cpp); the no-op was removed and the test is green.
 /// @todo Write a performance test for hamming assisted ambiguity processing.
-/// @todo If delayMin > delayMax = trouble, what's the exception policy?
+/// @todo If delayMin > delayMax = trouble, what's the exception policy.
 
 #include "data/IqData.h"
 #include "data/Map.h"
@@ -109,6 +107,11 @@ private:
   std::vector<Complex> dataDoppler;
   std::vector<Complex> dopplerPhase;
   /// @}
+
+  /// @brief Pre-computed Hann window applied to each Doppler batch before the
+  ///        Doppler FFT.  Computed once in the constructor so there is no
+  ///        per-CPI allocation cost.  Length == nDopplerBins.
+  std::vector<double> dopplerWindow;
 
   /// @brief Number of samples to perform FFT per pulse.
   uint32_t nfft;

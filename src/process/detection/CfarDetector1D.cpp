@@ -180,6 +180,16 @@ std::unique_ptr<Detection> CfarDetector1D::process(Map<std::complex<double>> *x)
   std::vector<double> doppler;
   std::vector<double> snr;
 
+  // First delay bin whose delay value meets the exclusion gate.  Bins before
+  // this index are zeroed in the prefix sum and must not be counted as
+  // training cells for neighbouring CUTs.  x->delay[] is constant across all
+  // Doppler rows so this is computed once outside the Doppler loop.
+  int firstValidIdx = 0;
+  while (firstValidIdx < nDelayBins && x->delay[firstValidIdx] < minDelay)
+  {
+    ++firstValidIdx;
+  }
+
   // loop over every cell
   for (int i = 0; i < nDopplerBins; i++)
   { 
@@ -201,7 +211,13 @@ std::unique_ptr<Detection> CfarDetector1D::process(Map<std::complex<double>> *x)
       {
         mapRowSnr[j] = -std::numeric_limits<double>::infinity();
       }
-      prefixEnergy[j + 1] = prefixEnergy[j] + mapRowSquare[j];
+      // Cells inside the delay exclusion zone must not contribute to the
+      // training-cell power sum used by neighbouring CUTs.  Previously they
+      // were included here and only skipped as CUTs in the inner loop below,
+      // which inflated thresholds just outside the exclusion boundary and
+      // suppressed valid short-range targets.
+      const double trainValue = (x->delay[j] >= minDelay) ? mapRowSquare[j] : 0.0;
+      prefixEnergy[j + 1] = prefixEnergy[j] + trainValue;
     }
 
     for (int j = 0; j < nDelayBins; j++)
@@ -212,8 +228,8 @@ std::unique_ptr<Detection> CfarDetector1D::process(Map<std::complex<double>> *x)
         continue;
       }
 
-      const int leadingStart = std::max(0, j - guard - train);
-      const int leadingEnd = std::max(0, std::min(nDelayBins, j - guard));
+      const int leadingStart = std::max(firstValidIdx, j - guard - train);
+      const int leadingEnd   = std::max(firstValidIdx, std::min(nDelayBins, j - guard));
       const int trailingStart = std::min(nDelayBins, j + guard + 1);
       const int trailingEnd = std::min(nDelayBins, j + guard + train + 1);
 
