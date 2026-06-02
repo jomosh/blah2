@@ -1,0 +1,80 @@
+# blah2 — Cline Project Rules
+
+blah2 is a real-time radar pipeline: C++20 processor (`src/`) → Node.js API bridge (`api/`) → plain JS/HTML UI (`html/`).
+
+## Data Flow
+
+```
+Capture -> IqData queue -> ambiguity/clutter/detection/tracker -> JSON over TCP -> API/stash -> Plotly pages
+```
+
+## Stack Constraints
+
+- **C++20 + CMake** with `-Wall -Werror`, strict presets (`dev-release`, `test-all-unix-release`)
+- **Node.js/Express** — no framework rewrites, no databases, no extra middleware
+- **Plain JS/jQuery/Plotly** — no SPA frameworks, no build systems
+- **Docker Compose** with host networking, optional web service blocks, per-node configs
+- **YAML** under `config/` is the runtime source of truth
+
+## Core Guardrails
+
+1. **Smallest compatible change.** Never rename public routes, config keys, file formats, or major class names unless explicitly required.
+2. **Preserve stack choices.** No new frameworks or heavy dependencies without explicit request.
+3. **Hot-path awareness.** Capture callbacks, DSP loops, serialization, sockets, stash polling, and frontend refresh loops are performance-sensitive. Avoid copies, blocking work, and verbose logging.
+4. **Config-driven.** If behavior changes, update `config/*.yml` and every consuming layer.
+5. **End-to-end tracing.** JSON/REST/route changes must be traced across C++, `api/server.js`, stash modules, and frontend consumers — land them together.
+
+## Build Commands
+
+```bash
+cmake --preset dev-release
+cmake --build --preset dev-release
+ctest --preset test-all-unix-release
+```
+
+## Coding Conventions
+
+### C++ (`src/`)
+
+- **Naming:** PascalCase classes/files, snake_case methods, camelCase fields, uppercase include guards
+- **Docs:** Doxygen `@file`, `@class`, `@brief`, `@param`, `@return` on public headers
+- **Placement:** New modules in nearest domain folder (`src/capture/`, `src/process/<domain>/`, `src/data/`, `src/process/utility/`). `src/blah2.cpp` is for orchestration/config wiring only.
+- **Ownership:** Prefer `std::unique_ptr` for new boundaries; keep compat with legacy raw-pointer APIs
+- **Serialization:** `rapidjson::Document` + allocator-backed arrays + function-local `thread_local static rapidjson::StringBuffer`. NEVER store `StringBuffer` as a value member in copyable classes.
+- **Validation:** Validate YAML params at the owning boundary before threads/constructors
+- **CMake:** Update `CMakeLists.txt` when adding new source or test files
+
+### Node.js (`api/`)
+
+- Route families: `/api/*`, `/stash/*`, `/capture` — do not rename
+- Newline-delimited TCP framing; respect frame boundaries
+- Stash modules poll `/api/timestamp` first (100 ms cadence); fetch heavy payload only on change
+- Responses: simple JSON/text, `no-cache` + CORS headers
+
+### Frontend (`html/`)
+
+- Plain HTML + jQuery + Plotly; small scripts, direct endpoint calls, minimal state
+- API URLs through `html/js/common.js` helpers (preserve `api_base`, `api_port`, localhost, IPv6)
+- Polling at ~100 ms; prefer incremental Plotly updates
+
+### Testing (`test/`)
+
+- Catch2 unit tests mirror `src/` layout; `CHECK_THAT(... WithinAbs(...))` for floats
+- `test/comparison/TestDetectionSweep.cpp` for detector/tracker tuning with replay data
+- Wire new targets into CMake presets; keep them runnable via CTest
+
+## Repo-Specific Footguns
+
+- **`rapidjson::StringBuffer`** — never a value member in copyable classes. Use `thread_local static`.
+- **Hardcoded literals** — check for hardcoded frequencies, ports, paths. Should be YAML-driven.
+- **Wiener-Hopf Cholesky** — can fail on weak reference signal; use `process.clutter.diagonalLoadScale` (default `1e-6`).
+- **CFAR exclusion zones** — zones contribute 0.0 to prefix-sum (not just post-threshold deletion).
+- **Tracker** — uses Hungarian global assignment, not greedy nearest-neighbour.
+- **Docker containers** — no fixed names (multi-instance support).
+
+## Detailed References
+
+For full guides, checklists, config reference, detection sweep docs, and task backlog, read:
+
+- **`.github/deepseek.md`** — Complete project context for AI assistance
+- **`TODO.md`** — Current task backlog with implementation status and effort estimates
