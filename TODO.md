@@ -222,6 +222,354 @@ Each entry has enough context to work in a fresh checkout without re-reading the
 - **Effort**: Small (constructor change + wisdom file path in config).
 - **Status**: Not implemented.
 
+#### Improvement 11 — Track-Before-Detect (TBD): multi-frame energy integration for sub-noise-floor targets 🟡
+- **File**: `src/process/tracker/Tracker.cpp/.h`, `src/process/detection/CfarDetector1D.cpp/.h`,
+  `src/data/Detection.h`, `src/blah2.cpp`, `config/config.yml`
+- **Root cause**: CFAR thresholds are set by PFA (default `1e-5`) to keep false-alarm rates
+  low.  This inherently rejects targets whose ambiguity-map power is below the local noise
+  estimate × threshold scale factor.  Real targets follow physically-consistent trajectories
+  (smooth range/Doppler evolution constrained by kinematics); noise peaks are spatially and
+  temporally random.  The tracker already maintains kinematic state but only operates on
+  CFAR-detected peaks — weak targets that never cross the CFAR threshold are invisible to it.
+- **Approach**: Introduce a "candidate" track class that operates at a lower effective
+  threshold and uses multi-frame non-coherent energy integration along hypothesised
+  trajectories to confirm tracks.
+  1. Add a `detection.pfaCandidate` config key (e.g., `1e-2`) to run a second CFAR pass at
+     a higher PFA, producing candidate detections below the primary threshold.
+  2. Add a `Detection::isCandidate` flag so the tracker can distinguish primary from
+     candidate detections.
+  3. Introduce a new track state `CANDIDATE` (alongside existing `TENTATIVE`, `ACTIVE`,
+     `COAST`, `INACTIVE`).  Candidate tracks are initiated from candidate detections and
+     accumulate raw ambiguity-map power along their kinematic trajectory across consecutive
+     CPIs.
+  4. The Kalman filter predicts where the candidate should appear in the next CPI; the
+     raw map value at the predicted bin is read and accumulated into an energy buffer.
+     No Hungarian association is needed for candidates — the kinematic prediction alone
+     provides the bin index (one candidate → one predicted cell).
+  5. A candidate is promoted to `TENTATIVE` → `ACTIVE` when its accumulated energy crosses
+     a configurable `energyThreshold`.  This exploits the fact that real targets produce
+     consistent energy at the same range-Doppler cell across frames, while false alarms
+     are randomly distributed.
+  6. M-of-N logic already exists for tentative→active confirmation; it is reused with
+     separate `mCandidate`/`nCandidate` parameters for the candidate→tentative transition.
+  7. When `process.tracker.tbd.enable: false`, the pipeline is unchanged (backward compat).
+- **Constraint — raw map access**: The tracker currently receives `Detection` objects from
+  CFAR, not raw map data.  Candidate energy integration requires the tracker to read the
+  raw range-Doppler map at predicted bin positions.  Two options:
+  - (a) Pass the raw `Map` pointer to the tracker's `update()` method (simpler, couples
+    tracker to Map).
+  - (b) Have the detection stage tag each candidate detection with its raw map power at
+    emission time (cleaner, keeps tracker agnostic to Map).
+  Option (b) is preferred as it preserves separation of concerns.
+- **Performance**: Candidates add O(N_candidates) per CPI, where N_candidates is bounded by
+  the higher-PFA CFAR output.  Typical N_candidates is 2–10× primary detections.  The main
+  cost is the Kalman predict step + energy accumulation for each candidate track object.
+  A `maxCandidates` config cap guards against explosion.
+- **Config**:
+  ```yaml
+  process:
+    detection:
+      pfa: 1e-5            # primary CFAR PFA (unchanged)
+      pfaCandidate: 0      # secondary PFA for TBD candidates; 0 = disabled
+    tracker:
+      enable: true
+      tbd:
+        enable: false       # off by default
+        mCandidate: 5       # M-of-N for candidate → tentative confirmation
+        nCandidate: 8
+        energyThreshold: 0.0  # if >0, accumulated raw-map energy threshold for promotion
+        maxCandidates: 50     # cap to prevent explosion under heavy false alarms
+  ```
+- **Effort**: Medium-High (~150–200 lines). New candidate-track state machine, raw-map
+  energy accumulation, config wiring, Catch2 tests with synthetic weak-target trajectories.
+- **Status**: Not implemented.
+
+#### Improvement 12 — Two-pass CFAR: primary + secondary threshold with tracker persistence confirmation 🟡
+- **File**: `src/process/detection/CfarDetector1D.cpp/.h`, `src/data/Detection.h`,
+  `src/process/tracker/Tracker.cpp/.h`, `src/blah2.cpp`, `config/config.yml`
+- **Root cause**: A single CFAR pass at low PFA rejects targets that are consistently present
+  but just below the threshold.  A second pass at a higher PFA produces many false alarms,
+  but real targets appear repeatedly at the same range-Doppler cell across CPIs while
+  false alarms are randomly distributed.  The tracker's existing M-of-N logic can exploit
+  this temporal persistence to separate real weak targets from noise.
+- **Approach**:
+  1. Add `detection.pfaSecondary` config key (e.g., `1e-3` or `1e-2`).  When >0, a second
+     CFAR pass is run using the higher PFA.
+  2. The second pass reuses the same prefix-sum precomputation as the primary pass; only the
+     threshold-comparison loop is repeated with a different scale factor.  Cost is negligible
+     (<1% CPI increase).
+  3. Detections from the second pass are tagged with `isSecondary: true` in the `Detection`
+     struct.  Primary detections (lower PFA) are treated as now — eligible for immediate
+     track association.
+  4. Secondary detections enter the tracker with a `CANDIDATE` flag (see Proposal 11 for
+     the candidate state machine).  The tracker accepts them only if they persist across
+     `mCandidate` of `nCandidate` CPIs.  Candidates that do not persist are dropped.
+  5. Unlike full TBD (Proposal 11), this approach does *not* accumulate raw map energy —
+     it relies purely on detection persistence.  It is simpler to implement and can be a
+     stepping stone to full TBD.
+  6. When `pfaSecondary: 0`, the second pass is disabled (backward compat).
+- **Performance**: The second CFAR thresholding loop is O(nDelayBins × nDopplerBins) with
+  a simple scalar comparison per bin — negligible.  Tracker overhead depends on the number
+  of secondary detections; a configurable `maxSecondaryDetections` cap is recommended.
+- **Config**:
+  ```yaml
+  process:
+    detection:
+      pfa: 1e-5
+      pfaSecondary: 0       # higher PFA for secondary pass; 0 = disabled
+      maxSecondaryDetections: 100  # cap secondary detections per CPI
+  ```
+- **Relationship to Proposal 11**: This is a subset of TBD — persistence-only confirmation
+  without energy integration.  It is the recommended first step; if detection yield is still
+  insufficient, full TBD with energy accumulation can be added on top.
+- **Effort**: Low-Medium (~60–80 lines). Second threshold scale factor, second detection
+  collection loop, `Detection::isSecondary` flag, tracker M-of-N reuse for candidates,
+  config wiring, Catch2 tests.
+- **Status**: Not implemented.
+
+#### Improvement 13 — Non-coherent multi-frame map accumulation (persistence map) before CFAR 🟡
+- **File**: New `src/process/detection/MapAccumulator.cpp/.h` (or extend
+  `src/process/ambiguity/Ambiguity.cpp`), `src/blah2.cpp`, `config/config.yml`
+- **Root cause**: After coherent integration (CAF), a weak target may sit at 3–8 dB SNR in
+  the range-Doppler map — too low for a CFAR PFA of 1e-5 without excessive false alarms.
+  Non-coherently averaging the *magnitude* of consecutive maps over K frames reduces the
+  noise variance by √K (gain = 5·log₁₀(K) dB), pulling a persistent weak target above
+  the effective noise floor while suppressing random noise peaks.
+- **Approach**:
+  1. Add a new processing stage `MapAccumulator` (or extend `Ambiguity`) that sits between
+     the ambiguity map output and the CFAR detector input.
+  2. Maintain a circular buffer of the K most recent *magnitude* (not complex) range-Doppler
+     maps.  On each new map, compute the element-wise mean or median of the buffer and
+     output the averaged map to CFAR.
+  3. **EMA mode** (recommended): Use an exponential moving average with configurable α:
+     `mapAvg[i] = α × mapNew[i] + (1−α) × mapAvg[i]`.  This gives continuous noise
+     reduction without a hard K-frame lag and can be tuned with a single parameter.
+     α = 0.1 means the effective window is ~1/α = 10 frames (~5 dB noise reduction).
+  4. **Window mode**: Simple sliding-window mean over K frames.  Produces a sharper
+     transition but introduces K-frame latency before weak targets become visible.
+  5. **Median mode**: Element-wise median over K frames.  More robust to impulsive
+     interference but higher compute cost (requires sorting per cell).
+  6. Key trade-off: non-coherent averaging smears fast-moving targets because their
+     range-Doppler cell changes between frames.  For targets moving ≤ a few m/s, the
+     smearing over K=10–30 frames is acceptable.  For fast targets, use a smaller K or
+     consider Doppler-compensated accumulation (Proposal 11 TBD handles this better).
+  7. The existing `Ambiguity::compute_()` already performs a limited form of averaging via
+     `mapWindow` and `nAverage`, but that averages the *complex* accumulator before
+     magnitude extraction — coherent averaging that loses energy when phase drifts between
+     CPIs.  Non-coherent averaging of the magnitude map captures energy that coherent
+     averaging discards.
+- **Performance**: O(nRangeBin × nDopBin) per CPI for the averaging step.  With typical
+  600×200 = 120k cells, this is ~0.5 MFLOP — negligible (<0.1% CPI increase).
+  Memory: K × 120k × sizeof(float) = ~9.6 MB for K=20, well within budget.
+- **Config**:
+  ```yaml
+  process:
+    mapAccumulator:
+      enable: false
+      mode: "ema"           # "ema" | "window" | "median"
+      emaAlpha: 0.1         # α for EMA mode (0 < α ≤ 1; smaller = more averaging)
+      windowSize: 20        # K for "window" or "median" modes
+  ```
+- **Relationship to Proposal 11 (TBD)**: Multi-frame accumulation is a pre-detection
+  technique (operates on the map before CFAR); TBD is a post-detection technique (operates
+  on candidate tracks after CFAR).  They are complementary: accumulation can pull targets
+  above the CFAR threshold so they appear as primaries; TBD catches the remaining targets
+  still below even the accumulated noise floor.
+- **Effort**: Low-Medium (~50–80 lines new code, config wiring, Catch2 test with synthetic
+  weak-target injection at known range-Doppler cell).
+- **Status**: Not implemented.
+
+## Signal-Specific Waveform Reconstruction for PBR
+
+### Concept & Motivation
+
+Passive bistatic radar (PBR) works by correlating a reference channel (direct-path
+illuminator signal) against a surveillance channel (target echoes).  When the
+illuminator signal is *below the thermal noise floor* — as is the case with GNSS
+(approximately −25 to −30 dB SNR in a 2 MHz bandwidth), Inmarsat, and distant DVB-T/DAB
+transmitters — the noisy reference raises the ambiguity-map noise floor and degrades
+or prevents detection.
+
+**This is *not* full demodulation.**  We do not need to decode payload data
+(navigation messages, MPEG transport streams, audio).  What we need is **waveform
+reconstruction**: regenerating the clean transmitted waveform so it can serve as a
+high-SNR reference for the existing cross-ambiguity processing chain.
+
+The reconstructed waveform is produced by a **background thread** (same pattern as the
+existing ADS-B ingestion thread in `blah2.cpp`) and consumed inside the CPI loop via a
+thread-safe buffer.  The Wiener-Hopf → ambiguity → CFAR → centroid → tracker pipeline
+is **unchanged**.
+
+### Processing Gain Budget
+
+blah2's default config (0.75 s CPI, 2 MHz bandwidth) provides ~61.8 dB of
+time-bandwidth integration gain from the ambiguity processing alone.  Adding
+waveform-specific processing gain from the reconstruction stage (e.g. ~30 dB code
+correlation gain for GPS C/A) pushes the total processing gain to ~90+ dB, pulling
+signals from ~30 dB *below* the noise floor to ~60 dB *above* it in the final ambiguity
+map.  The limiting factor becomes the **surveillance-channel echo SNR** (fixed by the
+bistatic radar equation), not the reference quality.
+
+### Reference vs. Surveillance — Where Reconstruction Helps
+
+| Scenario | Reference SNR (typical) | Impact of Reconstruction |
+|---|---|---|
+| DVB-T (near tower, <30 km) | +40 to +60 dB | Minor (cleaner ambiguity baseline, ~1–3 dB clutter improvement).  Primarily mitigates SFN multipath artefacts. |
+| DVB-T (distant, >80 km) | 0 to +10 dB | Significant.  Reference noise floor drops, enabling detection that a direct-path reference would miss. |
+| GNSS (any range) | −25 to −30 dB | **Critical.**  Without reconstruction the reference noise dominates and detections are impossible. |
+| Inmarsat (L-band) | −10 to +10 dB | Significant.  Enables reliable reference at modest dish sizes. |
+| FM Radio | +50 to +70 dB | Negligible.  Direct reference is already nearly perfect. |
+
+### Architecture
+
+```
+Reference IQ ──► Waveform Recon (background thread) ──► cleanRef buffer ──►
+                                                                           │
+Surveillance IQ ──────────────────────────────────────────► WienerHopf ──► Ambiguity ──► ...
+```
+
+A new abstract base class `WaveformReconstructor` in `src/process/waveform/` defines
+the interface.  Concrete implementations live in domain subdirectories
+(`src/process/waveform/dvbt/`, `src/process/waveform/inmarsat/`, etc.).  Reconstruction
+runs in a detached `std::thread` at configurable cadence and writes to a
+`thread-safe` ring buffer that the main CPI loop picks up.
+
+New YAML section:
+```yaml
+process:
+  waveform:
+    enable: false
+    type: "dvbt"   # dvbt | dab | inmarsat | gnss-gps-l1
+    dvbt:
+      bandwidth: 8e6       # 8 MHz (6/7/8 supported)
+      mode: "8k"           # 2k | 4k | 8k
+      constellation: "qam64"
+      codeRate: "2/3"      # auto-detect or hard-set
+    dab:
+      mode: 1              # transmission mode I/II/III/IV
+    inmarsat:
+      satellite: "4f3"     # satellite identifier for frequency lookup
+      channel: "psmc"      # PSMCh/PSMCi type
+      baudRate: 600
+      frequency: 1546050000
+    gnss:
+      system: "gps-l1"     # gps-l1 | galileo-e1 | glonass-l1
+      maxSatellites: 12
+```
+
+### Phased Implementation Plan
+
+#### Phase 1 — DVB-T & DAB (Proof of Concept) 🟢
+
+*Priority:* Highest.  DVB-T/DAB provide strong terrestrial reference signals in most
+deployment scenarios (tens of kW ERP), the OFDM structure is simple to synchronise to,
+and constellation demodulation/remodulation (QPSK/16-QAM/64-QAM) is well-documented.
+SFN multipath mitigation via clean reconstruction is a tangible benefit even when the
+reference is already strong.
+
+- **DVB-T waveform chain:** Timing synchronisation (Schmidl-Cox or CP correlation) →
+  fractional/coarse frequency offset correction → FFT per OFDM symbol → channel
+  estimation from scattered/continual pilots → equalisation → constellation demap →
+  remodulate clean symbols → IFFT → output as IQ stream.
+- **DAB waveform chain:** Null symbol detection → PRS-based fine sync → OFDM
+  demodulation → DQPSK demap → frequency deinterleaver → time deinterleaver →
+  remodulate clean → IFFT.
+- **New files:**
+  - `src/process/waveform/WaveformReconstructor.h` — abstract interface
+  - `src/process/waveform/WaveformReconstructor.cpp`
+  - `src/process/waveform/dvbt/DvbtReconstructor.h/.cpp`
+  - `src/process/waveform/dab/DabReconstructor.h/.cpp`
+- **Config:** `process.waveform.enable`, `process.waveform.type`, `*.dvbt.*`, `*.dab.*`
+- **Compute budget:** ~15–20% of one core for DVB-T 8K mode (FFT every ~1 ms +
+  pilot processing + remod).  Easily fits alongside the CPI loop.
+- **Effort:** Medium (150–250 lines new C++, new config keys, background thread
+  wiring, Catch2 tests).
+
+#### Phase 2 — Inmarsat (GEO Satellite) 🟡
+
+*Priority:* Medium.  Inmarsat satellites are geostationary, eliminating Doppler
+complexity.  Their L-band downlinks (1.5 GHz band) can be received with modest RHCP
+patch antennas or small dishes, giving a stable, predictable reference.  Inmarsat uses
+narrowband channels (600–1200 baud BPSK/QPSK), so the reconstruction compute cost is
+negligible.
+
+- **Waveform chain:** Carrier frequency acquisition (FFT-based or PLL) → symbol timing
+  recovery (Gardner or early-late) → frame sync on known Unique Word patterns →
+  remodulate clean symbols with correct timing → output as IQ stream.
+- **Frequency plan:** Inmarsat-4/5/6 satellites provide global L-band coverage.
+  Relevant channels: PSMCh (600 bps), PSMCi (1200 bps), navigation channels.  Multiple
+  satellites visible simultaneously for multistatic geometry.
+- **New files:** `src/process/waveform/inmarsat/InmarsatReconstructor.h/.cpp`
+- **Config:** `process.waveform.inmarsat.*`
+- **Compute budget:** <1% of one core (narrowband, low symbol rate).
+- **Effort:** Medium (100–150 lines new C++, config extension, tests).
+
+#### Phase 3 — GNSS (GPS L1 C/A, Galileo E1) 🟡
+
+*Priority:* Medium-high once DVB-T/Inmarsat are validated.  GNSS enables true
+multistatic PBR with 8–12 simultaneous transmitters (one per visible satellite),
+providing RCS diversity and improved track continuity.  However, tracking 12+
+satellites simultaneously + correlating each as a separate ambiguity-map reference adds
+compute cost.
+
+- **Waveform chain (per satellite):** Code-phase acquisition (parallel code-phase
+  search via FFT correlation) → carrier tracking (Costas PLL) → code tracking (DLL) →
+  regenerate PRN spreading code chips → output as IQ stream.  One channel per
+  satellite; all channels summed for a single composite reference, or kept separate
+  for per-satellite ambiguity maps.
+- **Processing gain:** GPS L1 C/A: code despreading ~30 dB + CPI integration ~62 dB =
+  ~92 dB total.  Galileo E1 BOC(1,1) offers similar performance.
+- **New files:** `src/process/waveform/gnss/GnssReconstructor.h/.cpp`
+- **Config:** `process.waveform.gnss.*`
+- **Compute budget:** 12-channel GPS L1: ~5–10% of one core.  If running per-satellite
+  ambiguity maps (12× the maps), compute becomes significant; consider a shared
+  composite map or limiting to M strongest satellites.
+- **Effort:** High (200–400 lines new C++, careful PRN code phase/pseudorange
+  alignment, per-satellite pipeline design).
+
+#### Phase 4 — DVB-S2 (GEO Broadcast) 🔴
+
+*Priority:* Low.  Requires a steerable dish with LNB, APSK carrier recovery, and FEC
+framing knowledge.  Defer until Phases 1–3 prove the reconstruction architecture.
+- **Effort:** High (unknown, significant DVB-S2 framing complexity).
+
+### Performance Budget for the CPI Loop
+
+The reconstruction runs **outside** the CPI hot path (background thread).  The only CPI
+cost is a mutex-guarded copy of the latest clean reference buffer into the main thread,
+which is O(1) with a ring buffer and negligible latency (<10 μs).
+
+### Config-Driven Behaviour
+
+- `process.waveform.enable` — master on/off (default `false` for backward compat)
+- `process.waveform.type` — selects the reconstructor factory
+- Sub-keys per type (see YAML sketch above)
+- When `enable: false`, the existing capture IQ path is used unchanged
+
+### Testing Strategy
+
+- **Unit tests:** Inject a synthetic DVB-T OFDM frame (known pilots + random symbols)
+  into `DvbtReconstructor`, assert remodulated output matches clean symbols within
+  acceptable EVM (<1% for high SNR input).  Repeat for DAB, Inmarsat, GNSS.
+- **Integration test:** Record a live DVB-T capture as `.iq` replay file, configure
+  blah2 to use the reconstructor, run through the full pipeline, compare detection
+  metrics (hit rate, false-positive rate) against direct-reference baseline.
+- **Performance test:** Assert reconstruction thread CPU utilisation stays within a
+  configurable budget (e.g. <20% of one core) on representative hardware.
+
+### References & Design Notes
+
+- The Wiener-Hopf clutter filter benefits from a cleaner reference: the Toeplitz
+  autocorrelation matrix is better-conditioned, improving cancellation depth (estimated
+  3–5 dB improvement for DVB-T at medium range).
+- The existing ambiguity processing chain (`Ambiguity.cpp`, `WienerHopf.cpp`,
+  `CfarDetector1D.cpp`) is **not modified**.  The reconstructed reference is injected
+  as a drop-in replacement for the raw reference-channel IQ data.
+- The background-thread + thread-safe-buffer pattern follows the existing ADS-B
+  ingestion implementation in `blah2.cpp` (lines 299–326).
+- Waveform-specific FFTW plans (OFDM demodulation) can reuse the project's existing
+  FFTW infrastructure and wisdom-file pattern.
+
 ## Data & Serialization
 
 - [ ] Review JSON schema stability for API contract
@@ -259,6 +607,43 @@ Each entry has enough context to work in a fresh checkout without re-reading the
 - [ ] Add architecture documentation
 - [ ] Create API endpoint reference
 - [X] Document deployment steps
+- [ ] Add "Tuning for Weak Targets" section to user guide
+  **Status:** Not Started (Easy — documentation only)
+  Document how to maximise processing gain through config tuning for sub-noise-floor target
+  detection.  The ambiguity function already implements a matched filter (optimal for known
+  waveform in white Gaussian noise), and many integration-gain parameters are exposed in YAML
+  but are not documented with their detection-sensitivity implications:
+  - **`capture.fs` (sample rate / bandwidth):** wider bandwidth → more independent samples →
+    higher time-bandwidth product → more integration gain.  However, wider bandwidth also
+    increases noise power linearly (kTB term).  The net SNR improvement from increasing
+    bandwidth alone is 0 dB (signal and noise scale equally), but the *post-CPI*
+    signal-to-noise ratio improves as 10·log₁₀(N_independent_samples) because the CAF
+    correlates across the whole band.  Users should match bandwidth to the illuminator's
+    occupied bandwidth (e.g., ~8 MHz for DVB-T, ~1.5 MHz for DAB, ~200 kHz for FM).
+  - **`process.data.cpi` (coherent processing interval):** longer CPI → more coherent
+    integration → gain ∝ 10·log₁₀(CPI × fs).  Limited by target coherence time:
+    CPI ≤ λ / (2·a_max), where λ is wavelength and a_max is max target acceleration.
+    A target accelerating at 10 m/s² at 600 MHz (λ = 0.5 m) decorrelates after ~0.16 s.
+    For typical aircraft (≤2 m/s²), a CPI of 0.75 s is reasonable.
+  - **`process.ambiguity.dopplerMin`/`dopplerMax` (Doppler window):** wider Doppler window →
+    more Doppler bins, each with fewer correlation samples (nCorr = nSamples / nDopplerBins).
+    The CAF processing gain per bin is ∝ nCorr, so there is a direct trade-off between
+    Doppler coverage and per-bin SNR.  Only open the Doppler window as wide as needed for
+    expected target velocities.
+  - **`process.ambiguity.delayMin`/`delayMax` (range window):** wider delay window → more
+    range bins.  Does not directly affect per-bin SNR (fixed CPI), but the total number of
+    range-Doppler cells increases, which affects CFAR threshold scaling.
+  - **Bistatic radar equation:** the document should explain the full gain budget from antenna
+    to CFAR output: transmit EIRP → free-space path loss (reference & surveillance paths) →
+    target RCS → antenna gain → receiver noise figure → CPI integration gain → CFAR
+    threshold.  This helps users understand which losses dominate and whether a weak target
+    is recoverable or fundamentally below the thermal floor.
+  - **`process.detection.pfa`:** reducing PFA (e.g., 1e-4 → 1e-3) lowers the CFAR threshold
+    and captures weaker targets at the cost of more false alarms.  The tracker's M-of-N
+    logic filters transient false alarms.  Document the PFA vs detection-probability trade-off
+    for a given per-cell SNR (standard Marcum Q-function curves for CA-CFAR).
+  - **Document location:** new file `doc/tuning-guide.md`, linked from `README.md` and the
+    main `doc/` index.  Update `.github/deepseek.md` to reference it.
 
 ## Performance & Real-Time
 
