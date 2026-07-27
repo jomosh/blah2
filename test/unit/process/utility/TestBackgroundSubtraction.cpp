@@ -6,6 +6,7 @@
 #include "data/Map.h"
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <catch2/catch_approx.hpp>
 #include <complex>
 #include <vector>
 #include <cmath>
@@ -162,7 +163,7 @@ TEST_CASE("BackgroundSubtraction: phase is preserved", "[BackgroundSubtraction]"
   BackgroundSubtraction bs(alpha, warmupCpis, nDoppler, nDelay);
 
   auto map = make_map(nDoppler, nDelay);
-  const double angle = std::numbers::pi / 4.0; // 45°
+  const double angle = std::acos(-1.0) / 4.0; // 45°
   map.data[0][0] = Complex(10.0 * std::cos(angle), 10.0 * std::sin(angle));
 
   // Warmup
