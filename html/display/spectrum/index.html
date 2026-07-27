@@ -16,11 +16,40 @@
 </head>
 <body>
   <div style="height: 100vh; width: 95vw" class="container-fluid">
-    <div style="height: 100vh; width: 95vw" class="row d-flex">
+    <div class="d-flex justify-content-center gap-2 py-2">
+      <button class="btn btn-sm btn-primary" id="btn-spectrum-ref">Reference</button>
+      <button class="btn btn-sm btn-outline-secondary" id="btn-spectrum-surv">Surveillance</button>
+      <button class="btn btn-sm btn-outline-secondary" id="btn-spectrum-both">Both</button>
+    </div>
+    <div style="height: calc(100vh - 50px); width: 95vw" class="row d-flex">
       <div class="justify-content-center" id="data"></div>
     </div>
 </body>
 <script>
+// Toggle button handlers
+document.addEventListener('DOMContentLoaded', function() {
+  document.getElementById('btn-spectrum-ref').addEventListener('click', function() {
+    viewMode = 'ref';
+    nRows = 3; // force re-create
+    this.className = 'btn btn-sm btn-primary';
+    document.getElementById('btn-spectrum-surv').className = 'btn btn-sm btn-outline-secondary';
+    document.getElementById('btn-spectrum-both').className = 'btn btn-sm btn-outline-secondary';
+  });
+  document.getElementById('btn-spectrum-surv').addEventListener('click', function() {
+    viewMode = 'surv';
+    nRows = 3;
+    this.className = 'btn btn-sm btn-primary';
+    document.getElementById('btn-spectrum-ref').className = 'btn btn-sm btn-outline-secondary';
+    document.getElementById('btn-spectrum-both').className = 'btn btn-sm btn-outline-secondary';
+  });
+  document.getElementById('btn-spectrum-both').addEventListener('click', function() {
+    viewMode = 'both';
+    nRows = 3;
+    this.className = 'btn btn-sm btn-primary';
+    document.getElementById('btn-spectrum-ref').className = 'btn btn-sm btn-outline-secondary';
+    document.getElementById('btn-spectrum-surv').className = 'btn btn-sm btn-outline-secondary';
+  });
+});
 </script>
 <script src="../../js/common.js"></script>
 <script src="../../js/plot_spectrum.js"></script>

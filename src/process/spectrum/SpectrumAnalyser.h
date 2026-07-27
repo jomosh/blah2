@@ -44,11 +44,17 @@ private:
   /// @brief Center frequency of the receiver (Hz), from config capture.fc.
   double fc;
 
-  /// @brief Reusable spectrum output buffer.
+  /// @brief Reusable spectrum output buffer (reference).
   std::vector<std::complex<double>> spectrumBuffer;
+
+  /// @brief Reusable spectrum output buffer (surveillance).
+  std::vector<std::complex<double>> spectrumBufferSurv;
 
   /// @brief Cached frequency bins (kHz).
   std::vector<double> frequencyBins;
+
+  /// @brief Decimation factor for IQ constellation samples.
+  uint32_t iq_decimation;
 
 public:
   /// @brief Constructor.
@@ -62,10 +68,11 @@ public:
   /// @return Void.
   ~SpectrumAnalyser();
 
-  /// @brief Process spectrum data.
+  /// @brief Process spectrum data for both channels and extract decimated IQ.
   /// @param x Reference samples.
+  /// @param y Surveillance samples.
   /// @return Void.
-  void process(IqData *x);
+  void process(IqData *x, IqData *y);
 };
 
 #endif

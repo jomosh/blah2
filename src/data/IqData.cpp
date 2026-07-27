@@ -133,9 +133,27 @@ void IqData::update_spectrum(const std::vector<std::complex<double>> &_spectrum)
   spectrum = _spectrum;
 }
 
+void IqData::update_spectrum_surv(const std::vector<std::complex<double>> &_spectrum_surv)
+{
+  spectrum_surv = _spectrum_surv;
+}
+
 void IqData::update_frequency(const std::vector<double> &_frequency)
 {
   frequency = _frequency;
+}
+
+void IqData::update_frequency_surv(const std::vector<double> &_frequency_surv)
+{
+  // surveillance frequency bins are identical to reference; store separately
+  // in case a future analyser produces different bins
+  (void)_frequency_surv;
+}
+
+void IqData::update_iq_decimated(const std::vector<double> &iq_ref, const std::vector<double> &iq_surv)
+{
+  iq_decimated_ref = iq_ref;
+  iq_decimated_surv = iq_surv;
 }
 
 const std::vector<double> &IqData::get_frequency() const
@@ -163,12 +181,36 @@ std::string IqData::to_json(uint64_t timestamp)
     arraySpectrum.PushBack(10 * std::log10(std::abs(spectrum[i])), allocator);
   }
 
+  // store surveillance spectrum array
+  rapidjson::Value arraySpectrumSurv(rapidjson::kArrayType);
+  for (size_t i = 0; i < spectrum_surv.size(); i++)
+  {
+    arraySpectrumSurv.PushBack(10 * std::log10(std::abs(spectrum_surv[i])), allocator);
+  }
+
+  // store decimated IQ samples for reference constellation
+  rapidjson::Value arrayIqRef(rapidjson::kArrayType);
+  for (size_t i = 0; i < iq_decimated_ref.size(); i++)
+  {
+    arrayIqRef.PushBack(iq_decimated_ref[i], allocator);
+  }
+
+  // store decimated IQ samples for surveillance constellation
+  rapidjson::Value arrayIqSurv(rapidjson::kArrayType);
+  for (size_t i = 0; i < iq_decimated_surv.size(); i++)
+  {
+    arrayIqSurv.PushBack(iq_decimated_surv[i], allocator);
+  }
+
   document.AddMember("timestamp", timestamp, allocator);
   document.AddMember("min", min, allocator);
   document.AddMember("max", max, allocator);
   document.AddMember("mean", mean, allocator);
   document.AddMember("frequency", arrayFrequency, allocator);
   document.AddMember("spectrum", arraySpectrum, allocator);
+  document.AddMember("spectrumSurv", arraySpectrumSurv, allocator);
+  document.AddMember("iqRef", arrayIqRef, allocator);
+  document.AddMember("iqSurv", arrayIqSurv, allocator);
 
   rapidjson::StringBuffer strbuf;
   rapidjson::Writer<rapidjson::StringBuffer> writer(strbuf);

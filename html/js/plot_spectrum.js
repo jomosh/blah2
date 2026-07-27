@@ -2,6 +2,7 @@ var timestamp = -1;
 var nRows = 3;
 var range_x = [];
 var range_y = [];
+var viewMode = 'ref'; // 'ref', 'surv', 'both'
 
 // setup API
 var urlTimestamp = build_api_url('/api/timestamp');
@@ -14,7 +15,7 @@ var layout = {
     l: 50,
     r: 50,
     b: 50,
-    t: 10,
+    t: 30,
     pad: 0
   },
   hoverlabel: {
@@ -50,7 +51,7 @@ var layout = {
 var config = {
   responsive: true,
   displayModeBar: false
-}
+};
 
 // setup plotly data
 var data = [
@@ -70,43 +71,77 @@ var intervalId = window.setInterval(function () {
   // check if timestamp is updated
   $.get(urlTimestamp, function () { })
 
-    .done(function (data) {
-      if (timestamp != data) {
-        timestamp = data;
+    .done(function (timestampResp) {
+      if (timestamp != timestampResp) {
+        timestamp = timestampResp;
 
-        // get new map data
+        // get new spectrum data
         $.getJSON(urlMap, function () { })
           .done(function (data) {
 
-            // case draw new plot
-            if (data.nRows != nRows) {
-              nRows = data.nRows;
-              // timestamp posix to js
-              for (i = 0; i < data.timestamp.length; i++)
-              {
-                data.timestamp[i] = new Date(data.timestamp[i]);
+            // convert frequency from kHz to MHz for display
+            var freqMhz = null;
+            if (data.frequency && data.frequency.length > 0) {
+              freqMhz = [];
+              for (var i = 0; i < data.frequency.length; i++) {
+                freqMhz.push(data.frequency[i] / 1000);
               }
+            }
+
+            // timestamp posix to js
+            for (var i = 0; i < data.timestamp.length; i++) {
+              data.timestamp[i] = new Date(data.timestamp[i]);
+            }
+
+            // pick the spectrum based on view mode
+            var spectrumZ;
+            if (viewMode === 'surv' && data.spectrumSurv && data.spectrumSurv.length > 0) {
+              spectrumZ = data.spectrumSurv;
+            } else if (viewMode === 'both' && data.spectrumSurv && data.spectrumSurv.length > 0) {
+              // interleave: each row becomes two rows (ref then surv)
+              spectrumZ = [];
+              var timestampsBoth = [];
+              var suffix = '';
+              for (var j = 0; j < data.spectrum.length && j < data.spectrumSurv.length; j++) {
+                spectrumZ.push(data.spectrum[j]);
+                spectrumZ.push(data.spectrumSurv[j]);
+                // duplicate timestamp with suffix
+                var t = new Date(data.timestamp[j].getTime());
+                timestampsBoth.push(data.timestamp[j].toISOString().replace('T', ' ').slice(0, 19) + ' Ref');
+                timestampsBoth.push(data.timestamp[j].toISOString().replace('T', ' ').slice(0, 19) + ' Surv');
+              }
+              data.timestamp = timestampsBoth;
+            } else {
+              spectrumZ = data.spectrum;
+            }
+
+            // Get number of rows
+            var currentRows = Array.isArray(spectrumZ) ? spectrumZ.length : 0;
+
+            // case draw new plot
+            if (currentRows !== nRows) {
+              nRows = currentRows;
               var trace1 = {
                   y: data.timestamp,
-                  z: data.spectrum,
+                  z: spectrumZ,
                   colorscale: 'Jet',
                   zauto: false,
                   type: 'heatmap'
               };
-              
-              var data_trace = [trace1];
-              Plotly.newPlot('data', data_trace, layout, config);
+
+              var titleText = 'Reference Spectrum';
+              if (viewMode === 'surv') titleText = 'Surveillance Spectrum';
+              else if (viewMode === 'both') titleText = 'Spectrum (Ref + Surv interleaved)';
+
+              var newLayout = $.extend(true, {}, layout);
+              // Don't add a title element since original doesn't have one
+              Plotly.newPlot('data', [trace1], newLayout, config);
             }
             // case update plot
             else {
-              // timestamp posix to js
-              for (i = 0; i < data.timestamp.length; i++)
-              {
-                data.timestamp[i] = new Date(data.timestamp[i]);
-              }
               var trace_update = {
                 y: [data.timestamp],
-                z: [data.spectrum]
+                z: [spectrumZ]
               };
               Plotly.update('data', trace_update);
             }

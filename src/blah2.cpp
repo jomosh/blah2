@@ -398,7 +398,7 @@ int main(int argc, char **argv)
           timing_helper(timing_name, timing_time, time, "extract_buffer");
           
           // spectrum
-          spectrumAnalyser->process(x);
+          spectrumAnalyser->process(x, y);
           timing_helper(timing_name, timing_time, time, "spectrum");
           
           // clutter filter
