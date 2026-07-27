@@ -73,6 +73,12 @@ public:
   /// @param y Surveillance samples.
   /// @return Void.
   void process(IqData *x, IqData *y);
+
+  /// @brief Process spectrum data for a single channel (backward compatible).
+  /// @param x Reference samples. A zero-filled dummy buffer is used for the
+  ///           surveillance channel.
+  /// @return Void.
+  void process(IqData *x);
 };
 
 #endif

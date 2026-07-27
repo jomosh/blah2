@@ -17,7 +17,7 @@ SpectrumAnalyser::SpectrumAnalyser(uint32_t _n, double _bandwidth, double _fc)
   nSpectrum = n/decimation;
   nfft = nSpectrum*decimation;
 
-  // compute FFTW plans in constructor (one for reference, one for surveillance)
+  // compute FFTW plans in constructor
   dataX = new std::complex<double>[nfft];
   fftX = fftw_plan_dft_1d(nfft, reinterpret_cast<fftw_complex *>(dataX),
                            reinterpret_cast<fftw_complex *>(dataX), FFTW_FORWARD, FFTW_ESTIMATE);
@@ -107,4 +107,16 @@ void SpectrumAnalyser::process(IqData *x, IqData *y)
   x->update_iq_decimated(iq_ref, iq_surv);
 
   return;
+}
+
+void SpectrumAnalyser::process(IqData *x)
+{
+  // Backward-compatible single-channel overload:
+  // create a zero-filled dummy buffer for the surveillance channel.
+  IqData dummy(nfft);
+  for (uint32_t i = 0; i < nfft; i++)
+  {
+    dummy.push_back({0.0, 0.0});
+  }
+  process(x, &dummy);
 }
