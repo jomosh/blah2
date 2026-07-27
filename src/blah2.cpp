@@ -211,6 +211,8 @@ int main(int argc, char **argv)
   bool isBackgroundSubtraction = false;
   double bgAlpha = 0.01;
   uint64_t bgWarmupCpis = 20;
+  double bgGateThresholdDb = 3.0;
+  double bgSuppressionDb = 30.0;
   auto bgNode = tree["process"]["backgroundSubtraction"];
   if (bgNode.valid())
   {
@@ -229,18 +231,41 @@ int main(int argc, char **argv)
     {
       warmupNode >> bgWarmupCpis;
     }
+    auto gateNode = bgNode["gateThresholdDb"];
+    if (gateNode.valid())
+    {
+      gateNode >> bgGateThresholdDb;
+    }
+    auto suppressionNode = bgNode["suppressionDb"];
+    if (suppressionNode.valid())
+    {
+      suppressionNode >> bgSuppressionDb;
+    }
   }
   if (!std::isfinite(bgAlpha) || bgAlpha <= 0.0 || bgAlpha > 1.0)
   {
     std::cerr << "Invalid process.backgroundSubtraction.alpha config: must be finite in (0, 1]" << "\n";
     return -1;
   }
+  if (!std::isfinite(bgGateThresholdDb) || bgGateThresholdDb <= 0.0)
+  {
+    std::cerr << "Invalid process.backgroundSubtraction.gateThresholdDb config: must be finite positive" << "\n";
+    return -1;
+  }
+  if (!std::isfinite(bgSuppressionDb) || bgSuppressionDb < 0.0)
+  {
+    std::cerr << "Invalid process.backgroundSubtraction.suppressionDb config: must be finite non-negative" << "\n";
+    return -1;
+  }
+  const double bgGateThreshold = std::pow(10.0, bgGateThresholdDb / 10.0);
+  const double bgSuppressionFactor = std::pow(10.0, -bgSuppressionDb / 10.0);
   BackgroundSubtraction *backgroundSubtraction = nullptr;
   if (isBackgroundSubtraction)
   {
     backgroundSubtraction = new BackgroundSubtraction(
       bgAlpha, bgWarmupCpis,
-      ambiguity->get_n_doppler_bins(), ambiguity->get_n_delay_bins());
+      ambiguity->get_n_doppler_bins(), ambiguity->get_n_delay_bins(),
+      bgGateThreshold, bgSuppressionFactor);
   }
 
   // set up process clutter

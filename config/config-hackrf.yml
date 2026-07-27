@@ -24,6 +24,8 @@ process:
     enable: false
     alpha: 0.01
     warmupCpis: 20
+    gateThresholdDb: 3.0
+    suppressionDb: 30.0
   ambiguity:
     delayMin: -10
     delayMax: 400

@@ -37,6 +37,10 @@ double magSq(Complex c)
 {
   return std::norm(c);
 }
+
+// Default gating parameters: 3 dB gate threshold (~2.0 linear), -30 dB suppression (0.001)
+constexpr double kGateThreshold = 2.0;
+constexpr double kSuppressionFactor = 0.001;
 }
 
 TEST_CASE("BackgroundSubtraction: warmup phase does not modify map", "[BackgroundSubtraction]")
@@ -50,7 +54,8 @@ TEST_CASE("BackgroundSubtraction: warmup phase does not modify map", "[Backgroun
 
   const double alpha = 0.1;
   const uint64_t warmupCpis = 3;
-  BackgroundSubtraction bs(alpha, warmupCpis, nDoppler, nDelay);
+  BackgroundSubtraction bs(alpha, warmupCpis, nDoppler, nDelay,
+                           kGateThreshold, kSuppressionFactor);
 
   // Run warmup CPIs — map should remain unchanged
   for (uint64_t k = 0; k < warmupCpis; k++)
@@ -62,7 +67,7 @@ TEST_CASE("BackgroundSubtraction: warmup phase does not modify map", "[Backgroun
   REQUIRE(magSq(map.data[1][2]) == Catch::Approx(100.0));
 }
 
-TEST_CASE("BackgroundSubtraction: stationary peak is suppressed after warmup", "[BackgroundSubtraction]")
+TEST_CASE("BackgroundSubtraction: stationary peak is gated after warmup", "[BackgroundSubtraction]")
 {
   const uint16_t nDoppler = 3;
   const uint16_t nDelay = 4;
@@ -73,24 +78,27 @@ TEST_CASE("BackgroundSubtraction: stationary peak is suppressed after warmup", "
 
   const double alpha = 1.0; // jump straight to full value
   const uint64_t warmupCpis = 1;
-  BackgroundSubtraction bs(alpha, warmupCpis, nDoppler, nDelay);
+  BackgroundSubtraction bs(alpha, warmupCpis, nDoppler, nDelay,
+                           kGateThreshold, kSuppressionFactor);
 
-  // Warmup pass — accumulate but no subtraction
+  // Warmup pass — accumulate background, no gating
   bs.process(&map);
   REQUIRE(magSq(map.data[1][2]) == Catch::Approx(100.0));
 
-  // Second CPI — alpha=1 means background = current, so residual = 0
+  // Second CPI — oldBg=100, magSq=100, 100 < 2.0*100 → GATED
+  // suppressed to 100 * (0.001)^2 = 0.0001
   bs.process(&map);
-  REQUIRE(magSq(map.data[1][2]) == Catch::Approx(0.0));
+  REQUIRE(magSq(map.data[1][2]) == Catch::Approx(0.0001));
 }
 
-TEST_CASE("BackgroundSubtraction: moving peak survives background subtraction", "[BackgroundSubtraction]")
+TEST_CASE("BackgroundSubtraction: moving peak survives gating", "[BackgroundSubtraction]")
 {
   const uint16_t nDoppler = 4;
   const uint16_t nDelay = 5;
   const double alpha = 0.5;
   const uint64_t warmupCpis = 2;
-  BackgroundSubtraction bs(alpha, warmupCpis, nDoppler, nDelay);
+  BackgroundSubtraction bs(alpha, warmupCpis, nDoppler, nDelay,
+                           kGateThreshold, kSuppressionFactor);
 
   // CPI 1: peak at (0, 0)
   auto map1 = make_map(nDoppler, nDelay);
@@ -104,68 +112,100 @@ TEST_CASE("BackgroundSubtraction: moving peak survives background subtraction", 
   bs.process(&map2); // warmup 2 — no change
   REQUIRE(magSq(map2.data[0][0]) == Catch::Approx(100.0));
 
+  // After warmup CPI 2: bg(0,0)=50, bg(2,3)=0
   // CPI 3: peak MOVES to (2, 3) — new position
   auto map3 = make_map(nDoppler, nDelay);
   map3.data[2][3] = Complex(10.0, 0.0);
-  bs.process(&map3); // active: subtract OLD background (before this CPI)
+  bs.process(&map3); // active: gate check
 
-  // After warmup CPI 2: bg(0,0)=50, bg(2,3)=0
-  // CPI 3 active: subtract OLD bg before updating.
-  //   (2,3): magSq=100, oldBg=0, residual=100, bg_new=0.5*0+0.5*100=50
-  //   (0,0): magSq=0, oldBg=50, residual=max(0,0-50)=0, bg_new=0.5*50+0.5*0=25
-  // Moving peak at (2,3) survives at full power (100).
+  // (2,3): magSq=100, oldBg=0 → 100 < 2*0 is false → NOT gated, passes through at full power
+  // (0,0): magSq=0, oldBg=50 → 0 < 2*50 is true → gated, but 0*suppression = 0
   REQUIRE(magSq(map3.data[2][3]) == Catch::Approx(100.0));
   REQUIRE(magSq(map3.data[0][0]) == Catch::Approx(0.0));
 
-  // CPI 4: peak stays at (2, 3) — becomes stationary, gets suppressed
+  // CPI 4: peak stays at (2, 3) — becomes stationary
   auto map4 = make_map(nDoppler, nDelay);
   map4.data[2][3] = Complex(10.0, 0.0);
   bs.process(&map4);
-  // (2,3): magSq=100, oldBg=50, residual=50, bg_new=0.5*50+0.5*100=75
-  REQUIRE(magSq(map4.data[2][3]) == Catch::Approx(50.0));
+  // (2,3): magSq=100, oldBg=50 (from CPI 3 update) → 100 < 2*50 is false → NOT gated
+  // This is the expected trade-off: a target that lands and stays in a bin
+  // will take multiple CPIs before the background converges enough to gate it.
+  // With alpha=0.5 and gateThreshold=2.0, after CPI 3 bg=50, so 100 < 100 is false.
+  REQUIRE(magSq(map4.data[2][3]) == Catch::Approx(100.0));
+
+  // CPI 5: peak STILL at (2, 3) — background continues converging
+  auto map5 = make_map(nDoppler, nDelay);
+  map5.data[2][3] = Complex(10.0, 0.0);
+  bs.process(&map5);
+  // (2,3): oldBg=75 (0.5*50+0.5*100=75) → 100 < 2*75=150 → true → GATED
+  // suppressed to 100 * (0.001)^2 = 0.0001
+  REQUIRE(magSq(map5.data[2][3]) == Catch::Approx(0.0001));
 }
 
-TEST_CASE("BackgroundSubtraction: default-constructed background is all zeros", "[BackgroundSubtraction]")
+TEST_CASE("BackgroundSubtraction: noise cell below background is gated", "[BackgroundSubtraction]")
 {
-  const uint16_t nDoppler = 2;
-  const uint16_t nDelay = 2;
-  const double alpha = 0.1;
-  const uint64_t warmupCpis = 0; // no warmup
+  const uint16_t nDoppler = 1;
+  const uint16_t nDelay = 1;
+  const double alpha = 1.0; // instant convergence
+  const uint64_t warmupCpis = 1;
+  BackgroundSubtraction bs(alpha, warmupCpis, nDoppler, nDelay,
+                           kGateThreshold, kSuppressionFactor);
 
-  BackgroundSubtraction bs(alpha, warmupCpis, nDoppler, nDelay);
+  // CPI 1: warmup — background converges to noise level (10.0 → magSq=100)
+  auto map1 = make_map(nDoppler, nDelay);
+  map1.data[0][0] = Complex(10.0, 0.0);
+  bs.process(&map1);
+  REQUIRE(magSq(map1.data[0][0]) == Catch::Approx(100.0));
 
-  auto map = make_map(nDoppler, nDelay);
-  map.data[0][0] = Complex(5.0, 0.0);
-
-  // With warmupCpis=0: nCpi=1 > 0, so we enter the active branch immediately.
-  // oldBg=0 (freshly initialized), residual = max(0, 25 - 0) = 25 — no suppression
-  // on the first CPI because the background model is empty.
-  // background updates to 0.9*0 + 0.1*25 = 2.5 for the next CPI.
-  bs.process(&map);
-
-  const double expectedMagSq = 25.0;
-  REQUIRE(magSq(map.data[0][0]) == Catch::Approx(expectedMagSq));
+  // CPI 2: same noise level — matches background → gated
+  auto map2 = make_map(nDoppler, nDelay);
+  map2.data[0][0] = Complex(10.0, 0.0);
+  bs.process(&map2);
+  // oldBg=100, magSq=100, 100 < 2*100 → true → GATED
+  REQUIRE(magSq(map2.data[0][0]) == Catch::Approx(0.0001).margin(1e-6));
 }
 
-TEST_CASE("BackgroundSubtraction: phase is preserved", "[BackgroundSubtraction]")
+TEST_CASE("BackgroundSubtraction: transient signal above threshold passes through", "[BackgroundSubtraction]")
+{
+  const uint16_t nDoppler = 1;
+  const uint16_t nDelay = 1;
+  const double alpha = 1.0;
+  const uint64_t warmupCpis = 1;
+  BackgroundSubtraction bs(alpha, warmupCpis, nDoppler, nDelay,
+                           4.0 /* 6 dB gate */, kSuppressionFactor);
+
+  // Warmup with noise level (5.0 → magSq=25)
+  auto map1 = make_map(nDoppler, nDelay);
+  map1.data[0][0] = Complex(5.0, 0.0);
+  bs.process(&map1);
+
+  // Strong signal arrives: 15.0 → magSq=225
+  auto map2 = make_map(nDoppler, nDelay);
+  map2.data[0][0] = Complex(15.0, 0.0);
+  bs.process(&map2);
+  // oldBg=25, magSq=225, 225 < 4*25=100 is FALSE → passes through
+  REQUIRE(magSq(map2.data[0][0]) == Catch::Approx(225.0));
+}
+
+TEST_CASE("BackgroundSubtraction: phase is preserved when not gated", "[BackgroundSubtraction]")
 {
   const uint16_t nDoppler = 1;
   const uint16_t nDelay = 1;
   const double alpha = 0.5;
   const uint64_t warmupCpis = 1;
-
-  BackgroundSubtraction bs(alpha, warmupCpis, nDoppler, nDelay);
+  BackgroundSubtraction bs(alpha, warmupCpis, nDoppler, nDelay,
+                           kGateThreshold, kSuppressionFactor);
 
   auto map = make_map(nDoppler, nDelay);
   const double angle = std::acos(-1.0) / 4.0; // 45°
   map.data[0][0] = Complex(10.0 * std::cos(angle), 10.0 * std::sin(angle));
 
-  // Warmup
+  // Warmup — no change
   bs.process(&map);
   double phaseAfterWarmup = std::arg(map.data[0][0]);
   REQUIRE(phaseAfterWarmup == Catch::Approx(angle).margin(1e-9));
 
-  // Active: alpha=0.5, background=50, residual=50, newMag=sqrt(50)≈7.07
+  // Active: oldBg=50, magSq=100, 100 < 2*50=100 → false (not gated, passes through)
   bs.process(&map);
   double phaseAfterActive = std::arg(map.data[0][0]);
   REQUIRE(phaseAfterActive == Catch::Approx(angle).margin(1e-9));
