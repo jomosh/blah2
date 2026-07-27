@@ -60,6 +60,7 @@ add_executable(blah2
   src/process/spectrum/SpectrumAnalyser.cpp
   src/process/meta/HammingNumber.cpp
   src/process/utility/Socket.cpp
+  src/process/utility/BackgroundSubtraction.cpp
   src/data/IqData.cpp
   src/data/Map.cpp
   src/data/Detection.cpp
@@ -256,6 +257,17 @@ target_link_libraries(testSpectrumAnalyser PRIVATE
 set_target_properties(testSpectrumAnalyser PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_TEST_UNIT_DIR}")
 
+add_executable(testBackgroundSubtraction
+  test/unit/process/utility/TestBackgroundSubtraction.cpp
+  src/data/Map.cpp
+  src/process/utility/BackgroundSubtraction.cpp
+)
+target_link_libraries(testBackgroundSubtraction PRIVATE
+  Catch2::Catch2WithMain
+)
+set_target_properties(testBackgroundSubtraction PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_TEST_UNIT_DIR}")
+
 # TODO: Unsure if will be using CTest.
 add_test(NAME testAmbiguity COMMAND testAmbiguity)
 add_test(NAME testIqData COMMAND testIqData)
@@ -269,3 +281,4 @@ add_test(NAME testWienerHopf COMMAND testWienerHopf)
 add_test(NAME testSpectrumAnalyser COMMAND testSpectrumAnalyser)
 add_test(NAME testDataContracts COMMAND testDataContracts)
 add_test(NAME testDetectionSweepHelp COMMAND testDetectionSweep --help)
+add_test(NAME testBackgroundSubtraction COMMAND testBackgroundSubtraction)

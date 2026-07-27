@@ -327,56 +327,44 @@ Each entry has enough context to work in a fresh checkout without re-reading the
   config wiring, Catch2 tests.
 - **Status**: Not implemented.
 
-#### Improvement 13 — Non-coherent multi-frame map accumulation (persistence map) before CFAR 🟡
-- **File**: New `src/process/detection/MapAccumulator.cpp/.h` (or extend
-  `src/process/ambiguity/Ambiguity.cpp`), `src/blah2.cpp`, `config/config.yml`
-- **Root cause**: After coherent integration (CAF), a weak target may sit at 3–8 dB SNR in
-  the range-Doppler map — too low for a CFAR PFA of 1e-5 without excessive false alarms.
-  Non-coherently averaging the *magnitude* of consecutive maps over K frames reduces the
-  noise variance by √K (gain = 5·log₁₀(K) dB), pulling a persistent weak target above
-  the effective noise floor while suppressing random noise peaks.
-- **Approach**:
-  1. Add a new processing stage `MapAccumulator` (or extend `Ambiguity`) that sits between
-     the ambiguity map output and the CFAR detector input.
-  2. Maintain a circular buffer of the K most recent *magnitude* (not complex) range-Doppler
-     maps.  On each new map, compute the element-wise mean or median of the buffer and
-     output the averaged map to CFAR.
-  3. **EMA mode** (recommended): Use an exponential moving average with configurable α:
-     `mapAvg[i] = α × mapNew[i] + (1−α) × mapAvg[i]`.  This gives continuous noise
-     reduction without a hard K-frame lag and can be tuned with a single parameter.
-     α = 0.1 means the effective window is ~1/α = 10 frames (~5 dB noise reduction).
-  4. **Window mode**: Simple sliding-window mean over K frames.  Produces a sharper
-     transition but introduces K-frame latency before weak targets become visible.
-  5. **Median mode**: Element-wise median over K frames.  More robust to impulsive
-     interference but higher compute cost (requires sorting per cell).
-  6. Key trade-off: non-coherent averaging smears fast-moving targets because their
-     range-Doppler cell changes between frames.  For targets moving ≤ a few m/s, the
-     smearing over K=10–30 frames is acceptable.  For fast targets, use a smaller K or
-     consider Doppler-compensated accumulation (Proposal 11 TBD handles this better).
-  7. The existing `Ambiguity::compute_()` already performs a limited form of averaging via
-     `mapWindow` and `nAverage`, but that averages the *complex* accumulator before
-     magnitude extraction — coherent averaging that loses energy when phase drifts between
-     CPIs.  Non-coherent averaging of the magnitude map captures energy that coherent
-     averaging discards.
-- **Performance**: O(nRangeBin × nDopBin) per CPI for the averaging step.  With typical
-  600×200 = 120k cells, this is ~0.5 MFLOP — negligible (<0.1% CPI increase).
-  Memory: K × 120k × sizeof(float) = ~9.6 MB for K=20, well within budget.
+#### Improvement 13a — EMA background subtraction (persistent-feature suppression) ✅
+- **File**: `src/process/utility/BackgroundSubtraction.cpp/.h`, `src/blah2.cpp`,
+  `CMakeLists.txt`, `config/*.yml`, `test/unit/process/utility/TestBackgroundSubtraction.cpp`
+- **Root cause**: Stationary features (SFN repeaters, terrain, buildings) produce persistent
+  peaks in the ambiguity map at fixed delay-Doppler cells.  CFAR fires on them every CPI as
+  if they were real targets.  Wiener-Hopf cancels static clutter in the IQ domain, but
+  residual peaks survive in the ambiguity map.
+- **Approach**: Exponential moving average of the magnitude-squared map per cell, subtracted
+  from the current frame before CFAR.  A configurable warmup period (no subtraction for the
+  first N CPIs) prevents false detections during cold start.  The subtraction is
+  phase-preserving (scales complex magnitude, retains phase).  Configured under
+  `process.backgroundSubtraction` in YAML.
 - **Config**:
   ```yaml
   process:
-    mapAccumulator:
-      enable: false
-      mode: "ema"           # "ema" | "window" | "median"
-      emaAlpha: 0.1         # α for EMA mode (0 < α ≤ 1; smaller = more averaging)
-      windowSize: 20        # K for "window" or "median" modes
+    backgroundSubtraction:
+      enable: false       # default off, opt-in
+      alpha: 0.01         # EMA learning rate (0 < alpha ≤ 1; smaller = slower adaptation)
+      warmupCpis: 20      # CPIs before subtraction activates
   ```
-- **Relationship to Proposal 11 (TBD)**: Multi-frame accumulation is a pre-detection
-  technique (operates on the map before CFAR); TBD is a post-detection technique (operates
-  on candidate tracks after CFAR).  They are complementary: accumulation can pull targets
-  above the CFAR threshold so they appear as primaries; TBD catches the remaining targets
-  still below even the accumulated noise floor.
-- **Effort**: Low-Medium (~50–80 lines new code, config wiring, Catch2 test with synthetic
-  weak-target injection at known range-Doppler cell).
+- **Effort**: ~60 lines new C++ module + ~25 lines wiring + ~100 lines unit tests.
+- **Status**: Implemented.
+
+#### Improvement 13b — Window and median accumulation modes 🟡
+- **File**: `src/process/utility/BackgroundSubtraction.cpp/.h`, `config/*.yml`
+- **Root cause**: EMA subtraction (13a) adapts smoothly but can be slow to suppress a new
+  persistent interferer.  Window and median modes offer faster or more robust alternatives.
+- **Approach**:
+  1. Add a `mode` config key (`"ema"` | `"window"` | `"median"`) alongside the existing
+     `alpha` and `warmupCpis` keys.
+  2. **Window mode**: Maintain a circular buffer of K previous magnitude-squared maps.
+     Subtract the element-wise mean of the buffer from the current frame.  Requires
+     `windowSize` config key.
+  3. **Median mode**: Element-wise median over K frames.  More robust to impulsive
+     interference but requires per-cell sorting.
+- **Performance**: Window mode adds O(K × nDop × nDelay) storage; median mode adds sorting
+  cost per cell.  Both are negligible for typical map sizes.
+- **Effort**: ~30–50 lines.  Requires a circular buffer member and a `mode` config key.
 - **Status**: Not implemented.
 
 ## Signal-Specific Waveform Reconstruction for PBR

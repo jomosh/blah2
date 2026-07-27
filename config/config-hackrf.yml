@@ -20,6 +20,10 @@ process:
     cpi: 0.5
     buffer: 1.5
     overlap: 0
+  backgroundSubtraction:
+    enable: false
+    alpha: 0.01
+    warmupCpis: 20
   ambiguity:
     delayMin: -10
     delayMax: 400

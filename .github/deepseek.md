@@ -353,6 +353,10 @@ capture:
 process:
   ambiguity:
     delayMin: int, delayMax: int, doppler: int
+  backgroundSubtraction:
+    enable: false           # default off, opt-in
+    alpha: 0.01             # EMA learning rate (0.001-0.1 typical)
+    warmupCpis: 20          # CPIs before subtraction activates
   clutter:
     delayMin: int, delayMax: int, nfilt: int
     diagonalLoadScale: float (default 1e-6)
@@ -376,6 +380,7 @@ process:
 | `src/blah2.cpp` | Main entry point: config parsing, pipeline wiring, capture/process/socket orchestration |
 | `src/capture/Capture.cpp` | Capture thread: device read, IqData queue push |
 | `src/process/ambiguity/Ambiguity.cpp` | Cross-ambiguity function (delay-Doppler map) |
+| `src/process/utility/BackgroundSubtraction.cpp` | EMA background subtraction for persistent-feature suppression before CFAR |
 | `src/process/clutter/WienerHopf.cpp` | Clutter cancellation via Wiener-Hopf + Cholesky |
 | `src/process/detection/CfarDetector1D.cpp` | CFAR detection in 1D (prefix-sum based) |
 | `src/process/detection/Centroid.cpp` | Detection centroiding and interpolation |

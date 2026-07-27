@@ -16,6 +16,7 @@
 #include "process/spectrum/SpectrumAnalyser.h"
 #include "process/tracker/Tracker.h"
 #include "process/utility/Socket.h"
+#include "process/utility/BackgroundSubtraction.h"
 #include "data/meta/Constants.h"
 
 #include <httplib.h>
@@ -205,6 +206,42 @@ int main(int argc, char **argv)
   tree["process"]["ambiguity"]["dopplerMax"] >> dopplerMax;
   Ambiguity *ambiguity = new Ambiguity(delayMin, delayMax, 
     dopplerMin, dopplerMax, fs, nSamples, roundHamming);
+
+  // set up background subtraction
+  bool isBackgroundSubtraction = false;
+  double bgAlpha = 0.01;
+  uint64_t bgWarmupCpis = 20;
+  auto bgNode = tree["process"]["backgroundSubtraction"];
+  if (bgNode.valid())
+  {
+    auto enableNode = bgNode["enable"];
+    if (enableNode.valid())
+    {
+      enableNode >> isBackgroundSubtraction;
+    }
+    auto alphaNode = bgNode["alpha"];
+    if (alphaNode.valid())
+    {
+      alphaNode >> bgAlpha;
+    }
+    auto warmupNode = bgNode["warmupCpis"];
+    if (warmupNode.valid())
+    {
+      warmupNode >> bgWarmupCpis;
+    }
+  }
+  if (!std::isfinite(bgAlpha) || bgAlpha <= 0.0 || bgAlpha > 1.0)
+  {
+    std::cerr << "Invalid process.backgroundSubtraction.alpha config: must be finite in (0, 1]" << "\n";
+    return -1;
+  }
+  BackgroundSubtraction *backgroundSubtraction = nullptr;
+  if (isBackgroundSubtraction)
+  {
+    backgroundSubtraction = new BackgroundSubtraction(
+      bgAlpha, bgWarmupCpis,
+      ambiguity->get_n_doppler_bins(), ambiguity->get_n_delay_bins());
+  }
 
   // set up process clutter
   int32_t delayMinClutter, delayMaxClutter;
@@ -413,6 +450,13 @@ int main(int argc, char **argv)
           
           // ambiguity process
           map = ambiguity->process(x, y);
+
+          // background subtraction
+          if (isBackgroundSubtraction && backgroundSubtraction != nullptr)
+          {
+            backgroundSubtraction->process(map);
+          }
+
           map->set_metrics();
           timing_helper(timing_name, timing_time, time, "ambiguity_processing");
           
