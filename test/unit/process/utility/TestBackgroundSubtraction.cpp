@@ -107,27 +107,22 @@ TEST_CASE("BackgroundSubtraction: moving peak survives background subtraction", 
   // CPI 3: peak MOVES to (2, 3) — new position
   auto map3 = make_map(nDoppler, nDelay);
   map3.data[2][3] = Complex(10.0, 0.0);
-  bs.process(&map3); // active: subtract background
+  bs.process(&map3); // active: subtract OLD background (before this CPI)
 
-  // The old peak at (0,0) had 100 accumulated, new peak at (2,3) has 0 background.
-  // alpha=0.5 → background = 0.5*100 + 0.5*0 = 50 at (0,0),
-  // new peak at (2,3) → background = 0.5*0 + 0.5*100 = 50
-  const double step3OldBg = 50.0;
-  const double step3Residual = std::max(0.0, 100.0 - step3OldBg);
-  REQUIRE(magSq(map3.data[2][3]) == Catch::Approx(step3Residual));
-  // The surviving signal at (2,3) should be 50 (half of original 100)
-  REQUIRE(magSq(map3.data[2][3]) == Catch::Approx(50.0));
-
-  // The old position (0,0) has no signal this CPI, so residual = max(0, 0 - 50) = 0
+  // After warmup CPI 2: bg(0,0)=50, bg(2,3)=0
+  // CPI 3 active: subtract OLD bg before updating.
+  //   (2,3): magSq=100, oldBg=0, residual=100, bg_new=0.5*0+0.5*100=50
+  //   (0,0): magSq=0, oldBg=50, residual=max(0,0-50)=0, bg_new=0.5*50+0.5*0=25
+  // Moving peak at (2,3) survives at full power (100).
+  REQUIRE(magSq(map3.data[2][3]) == Catch::Approx(100.0));
   REQUIRE(magSq(map3.data[0][0]) == Catch::Approx(0.0));
 
-  // CPI 4: peak stays at (2, 3) — becomes stationary
+  // CPI 4: peak stays at (2, 3) — becomes stationary, gets suppressed
   auto map4 = make_map(nDoppler, nDelay);
   map4.data[2][3] = Complex(10.0, 0.0);
   bs.process(&map4);
-  // Background at (2,3): 0.5*50 + 0.5*100 = 75
-  // Residual: max(0, 100 - 75) = 25
-  REQUIRE(magSq(map4.data[2][3]) == Catch::Approx(25.0));
+  // (2,3): magSq=100, oldBg=50, residual=50, bg_new=0.5*50+0.5*100=75
+  REQUIRE(magSq(map4.data[2][3]) == Catch::Approx(50.0));
 }
 
 TEST_CASE("BackgroundSubtraction: default-constructed background is all zeros", "[BackgroundSubtraction]")
@@ -142,14 +137,13 @@ TEST_CASE("BackgroundSubtraction: default-constructed background is all zeros", 
   auto map = make_map(nDoppler, nDelay);
   map.data[0][0] = Complex(5.0, 0.0);
 
-  // With warmupCpis=0 and background=0:
-  // background = 0.9*0 + 0.1*25 = 2.5
-  // residual = max(0, 25 - 2.5) = 22.5
-  // newMag = sqrt(22.5) ≈ 4.7434
-  // scale = 4.7434 / 5.0 = 0.94868
+  // With warmupCpis=0: nCpi=1 > 0, so we enter the active branch immediately.
+  // oldBg=0 (freshly initialized), residual = max(0, 25 - 0) = 25 — no suppression
+  // on the first CPI because the background model is empty.
+  // background updates to 0.9*0 + 0.1*25 = 2.5 for the next CPI.
   bs.process(&map);
 
-  const double expectedMagSq = 22.5;
+  const double expectedMagSq = 25.0;
   REQUIRE(magSq(map.data[0][0]) == Catch::Approx(expectedMagSq));
 }
 

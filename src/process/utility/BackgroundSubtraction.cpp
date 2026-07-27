@@ -36,11 +36,15 @@ void BackgroundSubtraction::process(Map<std::complex<double>> *map)
       }
       else
       {
-        // Update background EMA
+        // Save old background before updating, so we subtract the model of
+        // what was persistent *before* this CPI — otherwise the current
+        // frame contaminates its own background and every signal gets
+        // attenuated by (1 - alpha).
+        const double oldBg = background[i][j];
         background[i][j] = (1.0 - alpha) * background[i][j] + alpha * magSq;
 
-        // Subtract background, clamp at zero
-        const double residual = std::max(0.0, magSq - background[i][j]);
+        // Subtract old background, clamp at zero
+        const double residual = std::max(0.0, magSq - oldBg);
 
         // Preserve phase of original complex value, scale magnitude
         const double oldMag = std::sqrt(magSq);
