@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """
+Author: DeepSeek!
+
 Shared script for DeepSeek code review.
 Called by GitHub Actions workflows.
 
