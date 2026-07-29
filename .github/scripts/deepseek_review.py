@@ -19,6 +19,7 @@ Configuration via environment variables:
 
 import json
 import os
+import re
 import sys
 import time
 import urllib.request
@@ -93,7 +94,11 @@ def check_rate_limit() -> None:
     Default: 10.
     """
     run_id = os.environ.get("GITHUB_RUN_ID", "unknown")
-    max_calls = int(os.environ.get("DEEPSEEK_RATE_LIMIT", "10"))
+    try:
+        max_calls = int(os.environ.get("DEEPSEEK_RATE_LIMIT", "10"))
+    except (ValueError, TypeError):
+        print(f"::warning::DEEPSEEK_RATE_LIMIT is not a valid integer, using default 10")
+        max_calls = 10
 
     # Rate limit file is scoped to the run_id
     counter_file = os.path.join(
@@ -172,11 +177,8 @@ def call_deepseek(
             response_json = json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         error_body = e.read().decode("utf-8", errors="replace")
-        # Mask any occurrence of the API key or first 20 chars to prevent leakage
-        safe_body = error_body.replace(api_key, "***")
-        for i in range(len(api_key) - 5):
-            partial = api_key[i:i+20]
-            safe_body = safe_body.replace(partial, "***")
+        # Mask any occurrence of the API key to prevent leakage
+        safe_body = re.sub(re.escape(api_key), "***", error_body)
         print(f"::error::DeepSeek API call failed with status {e.code}")
         print(f"::debug::API error response (key masked): {safe_body[:200]}")
         sys.exit(1)
