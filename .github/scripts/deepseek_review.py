@@ -230,8 +230,10 @@ def write_review_output(text: str, path: str = None):
 
 
 def write_github_output(key: str, value: str):
-    """Write to GITHUB_OUTPUT for sharing between steps."""
+    """Write to GITHUB_OUTPUT for sharing between steps.
+    Escapes GHA multiline output syntax (%0A, %0D, %25)."""
     github_output = os.environ.get("GITHUB_OUTPUT")
     if github_output:
+        safe_value = value.replace("%", "%25").replace("\n", "%0A").replace("\r", "%0D")
         with open(github_output, "a") as f:
-            f.write(f"{key}={value}\n")
+            f.write(f"{key}={safe_value}\n")

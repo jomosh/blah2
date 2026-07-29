@@ -26,23 +26,22 @@ jobs:
         env:
           RAW_COMMENT: ${{ github.event.comment.body }}
         run: |
-          import os, re
+          import sys, os, re
+          sys.path.insert(0, ".github/scripts")
+          from deepseek_review import write_github_output
 
           raw = os.environ["RAW_COMMENT"]
 
           # Strip the /review prefix (case-insensitive, with optional whitespace)
           instructions = re.sub(r'^/review\s*', '', raw, flags=re.IGNORECASE).strip()
 
-          # Sanitize: remove any shell-dangerous characters
-          # Only allow alphanumeric, spaces, punctuation common in code review
-          instructions = re.sub(r'[;&|`$(){}<>!]', '', instructions)
+          # Sanitize: allowlist approach — word chars, spaces, common punctuation
+          instructions = re.sub(r'[^\w\s.,!?\-:;()]', '', instructions)
 
           if not instructions:
               instructions = "Review the overall PR."
 
-          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
-              f.write(f"instructions={instructions}\n")
-
+          write_github_output("instructions", instructions)
           print(f"::debug::Extracted instructions (sanitized): {instructions[:100]}")
 
       - name: Checkout code
