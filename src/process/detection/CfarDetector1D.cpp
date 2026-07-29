@@ -228,6 +228,14 @@ std::unique_ptr<Detection> CfarDetector1D::process(Map<std::complex<double>> *x)
         continue;
       }
 
+      // skip CUTs at the maximum-delay edge where the trailing training
+      // window is truncated, to prevent asymmetric CFAR statistics that
+      // produce inflated false-alarm rates at the map boundary
+      if (j + guard + train >= nDelayBins)
+      {
+        continue;
+      }
+
       const int leadingStart = std::max(firstValidIdx, j - guard - train);
       const int leadingEnd   = std::max(firstValidIdx, std::min(nDelayBins, j - guard));
       const int trailingStart = std::min(nDelayBins, j + guard + 1);
