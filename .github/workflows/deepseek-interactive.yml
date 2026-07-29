@@ -1,0 +1,161 @@
+name: DeepSeek Interactive Review
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  deepseek-interactive:
+    if: |
+      github.event.issue.pull_request
+      && startsWith(github.event.comment.body, '/review')
+      && github.event.comment.user.type != 'Bot'
+      && github.event.comment.user.login == 'jomosh'
+    runs-on: ubuntu-latest
+    name: Respond to /review command in PR comments
+
+    steps:
+      - name: Validate comment and extract instructions (Python - prevents injection)
+        id: validate
+        shell: python3 {0}
+        env:
+          RAW_COMMENT: ${{ github.event.comment.body }}
+        run: |
+          import os, re
+
+          raw = os.environ["RAW_COMMENT"]
+
+          # Strip the /review prefix (case-insensitive, with optional whitespace)
+          instructions = re.sub(r'^/review\s*', '', raw, flags=re.IGNORECASE).strip()
+
+          # Sanitize: remove any shell-dangerous characters
+          # Only allow alphanumeric, spaces, punctuation common in code review
+          instructions = re.sub(r'[;&|`$(){}<>!]', '', instructions)
+
+          if not instructions:
+              instructions = "Review the overall PR."
+
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"instructions={instructions}\n")
+
+          print(f"::debug::Extracted instructions (sanitized): {instructions[:100]}")
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: refs/pull/${{ github.event.issue.number }}/merge
+
+      - name: Get PR base ref and diff
+        id: diff
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUNNER_TEMP: ${{ runner.temp }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+        run: |
+          PR_INFO=$(gh pr view "${{ github.event.issue.number }}" --json baseRefName --jq '.baseRefName')
+          echo "base_ref=$PR_INFO" >> "$GITHUB_OUTPUT"
+          DIFF_PATH="${RUNNER_TEMP}/deepseek_${GITHUB_RUN_ID}_pr_diff.txt"
+          # Checkout already fetched full history (fetch-depth: 0), just diff directly
+          git diff "origin/${PR_INFO}...HEAD" -- . > "$DIFF_PATH"
+          echo "diff_size=$(wc -c < "$DIFF_PATH")" >> "$GITHUB_OUTPUT"
+          MAX_SIZE=100000
+          if [ "$(wc -c < "$DIFF_PATH")" -gt "$MAX_SIZE" ]; then
+            head -c "$MAX_SIZE" "$DIFF_PATH" > "${DIFF_PATH}.truncated"
+            mv "${DIFF_PATH}.truncated" "$DIFF_PATH"
+            echo "diff_truncated=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::Diff was larger than 100KB and was truncated."
+          fi
+
+      - name: Call DeepSeek API with user instructions
+        id: review
+        shell: python3 {0}
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          DEEPSEEK_API_URL: ${{ vars.DEEPSEEK_API_URL || 'https://api.deepseek.com/chat/completions' }}
+          DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL || 'deepseek-chat' }}
+          DEEPSEEK_MAX_TOKENS: ${{ vars.DEEPSEEK_MAX_TOKENS || '4096' }}
+          DEEPSEEK_RATE_LIMIT: ${{ vars.DEEPSEEK_RATE_LIMIT || '10' }}
+          COMMENT_USER: ${{ github.event.comment.user.login }}
+          USER_INSTRUCTIONS: ${{ steps.validate.outputs.instructions }}
+          RUNNER_TEMP: ${{ runner.temp }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+        run: |
+          import sys, os
+          sys.path.insert(0, ".github/scripts")
+          from deepseek_review import load_diff, call_deepseek, write_review_output
+
+          diff_content = load_diff()
+          comment_user = os.environ["COMMENT_USER"]
+          user_instructions = os.environ["USER_INSTRUCTIONS"]
+
+          system_msg = (
+              "You are a senior software engineer reviewing a pull request. "
+              "Be thorough, constructive, and concise."
+          )
+
+          user_msg = (
+              f"Here is the diff of a Pull Request:\n\n"
+              f"{diff_content}\n\n"
+              f"User @{comment_user} gave the following instructions for this review:\n"
+              f"{user_instructions}\n\n"
+              "Provide your review covering code quality, potential bugs, "
+              "security concerns, and suggestions. "
+              "Format your response with clear sections."
+          )
+
+          review_text = call_deepseek(system_msg, user_msg)
+          write_review_output(review_text)
+
+      - name: Post review result as PR comment
+        id: post_comment
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            const runnerTemp = process.env['RUNNER_TEMP'] || '/tmp';
+            const runId = process.env['GITHUB_RUN_ID'] || 'unknown';
+            const reviewPath = path.join(runnerTemp, `deepseek_${runId}_review_output.txt`);
+
+            if (!fs.existsSync(reviewPath)) {
+              console.log('No review output file found. Skipping.');
+              return;
+            }
+
+            const reviewBody = fs.readFileSync(reviewPath, 'utf8');
+            const commentUser = '${{ github.event.comment.user.login }}';
+
+            const { data: reply } = await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## 🤖 DeepSeek Response to @${commentUser}\n\n${reviewBody}\n\n---\n*Powered by DeepSeek API*`,
+            });
+
+            console.log(`Reply posted as comment #${reply.id}`);
+
+      - name: Post error comment on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const commentUser = '${{ github.event.comment.user.login }}';
+
+            const { data: reply } = await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## ❌ DeepSeek Review Failed\n\n@${commentUser} the review request failed. Check the GitHub Actions logs for details (workflow run #${{ github.run_id }}).\n\nCommon causes:\n- Missing \`DEEPSEEK_API_KEY\` secret\n- API rate limit exceeded\n- Network error calling DeepSeek API\n\n---\n*Powered by DeepSeek API*`,
+            });
+
+            console.log(`Error comment posted as #${reply.id}`);

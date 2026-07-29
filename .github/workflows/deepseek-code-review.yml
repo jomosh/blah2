@@ -1,0 +1,141 @@
+name: DeepSeek Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  deepseek-review:
+    if: github.actor == 'jomosh'
+    runs-on: ubuntu-latest
+    name: Review code changes with DeepSeek
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get changed files diff
+        id: diff
+        shell: python3 {0}
+        env:
+          RUNNER_TEMP: ${{ runner.temp }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+        run: |
+          import sys, os, subprocess
+          sys.path.insert(0, ".github/scripts")
+          from deepseek_review import save_diff_path
+
+          diff_path = save_diff_path()
+          base_ref = os.environ.get("GITHUB_BASE_REF", "main")
+
+          # Checkout already fetched full history (fetch-depth: 0), just diff directly
+          # No need to fetch -- the merge base is already available
+          with open(diff_path, "w") as f:
+              subprocess.run(
+                  ["git", "diff", f"origin/{base_ref}...HEAD", "--", "."],
+                  check=True, stdout=f
+              )
+
+          size = os.path.getsize(diff_path)
+          print(f"diff_path={diff_path}", file=open(os.environ["GITHUB_OUTPUT"], "a"))
+          print(f"diff_size={size}", file=open(os.environ["GITHUB_OUTPUT"], "a"))
+
+          # Truncate if too large (100KB)
+          MAX_SIZE = 100000
+          if size > MAX_SIZE:
+              with open(diff_path, "r") as f:
+                  content = f.read(MAX_SIZE)
+              with open(diff_path, "w") as f:
+                  f.write(content)
+              print(f"diff_truncated=true", file=open(os.environ["GITHUB_OUTPUT"], "a"))
+              print(f"::warning::Diff was larger than {MAX_SIZE} bytes and was truncated.")
+              print(f"diff_truncated=true")
+
+      - name: Build and send review request
+        id: review
+        shell: python3 {0}
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          DEEPSEEK_API_URL: ${{ vars.DEEPSEEK_API_URL || 'https://api.deepseek.com/chat/completions' }}
+          DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL || 'deepseek-chat' }}
+          DEEPSEEK_MAX_TOKENS: ${{ vars.DEEPSEEK_MAX_TOKENS || '4096' }}
+          RUNNER_TEMP: ${{ runner.temp }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+        run: |
+          import sys
+          sys.path.insert(0, ".github/scripts")
+          from deepseek_review import load_diff, call_deepseek, write_review_output, write_github_output
+
+          diff_content = load_diff()
+
+          if not diff_content:
+              print("::notice::Diff is empty, skipping review.")
+              write_review_output("No changes detected to review.")
+              write_github_output("review_done", "false")
+              sys.exit(0)
+
+          system_msg = (
+              "You are a senior software engineer reviewing a pull request. "
+              "Be thorough, constructive, and concise."
+          )
+
+          user_msg = (
+              "Review the following pull request diff. "
+              "Provide your analysis in this structure:\n"
+              "\n"
+              "Summary:\n"
+              "- Brief overview of the changes\n"
+              "\n"
+              "Code Quality and Best Practices:\n"
+              "- Issues found (if any)\n"
+              "\n"
+              "Potential Bugs and Security Concerns:\n"
+              "- Issues found (if any)\n"
+              "\n"
+              "Suggestions for Improvement:\n"
+              "- Suggestions (if any)\n"
+              "\n"
+              "Overall Verdict:\n"
+              "- Approve or Request Changes\n"
+              "\n"
+              "Here is the diff:\n"
+              f"{diff_content}"
+          )
+
+          review_text = call_deepseek(system_msg, user_msg)
+          write_review_output(review_text)
+          write_github_output("review_done", "true")
+
+      - name: Post review as PR comment
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            // Find the review output using runner.temp and run_id
+            const runnerTemp = process.env['RUNNER_TEMP'] || '/tmp';
+            const runId = process.env['GITHUB_RUN_ID'] || 'unknown';
+            const reviewPath = path.join(runnerTemp, `deepseek_${runId}_review_output.txt`);
+
+            if (!fs.existsSync(reviewPath)) {
+              console.log('No review output file found. Skipping comment.');
+              return;
+            }
+
+            const reviewBody = fs.readFileSync(reviewPath, 'utf8');
+            const { data: comment } = await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## 🤖 DeepSeek Code Review\n\n${reviewBody}\n\n---\n*Powered by DeepSeek API*`
+            });
+
+            console.log(`Review posted as comment #${comment.id}`);
