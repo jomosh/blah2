@@ -2,6 +2,7 @@ const http = require('http');
 
 var nCpi = 20;
 var spectrum = [];
+var spectrumSurv = [];
 var frequency = [];
 var timestamp = [];
 var ts = '';
@@ -27,8 +28,6 @@ function request_with_error_handling(options, onResponse) {
 }
 
 function update_data() {
-
-  // check if timestamp is updated
   request_with_error_handling(options_timestamp, function(res) {
     res.setEncoding('utf8');
     res.on('data', function (body) {
@@ -44,19 +43,26 @@ function update_data() {
           res.on('end', () => {
             try {
               output = JSON.parse(body_map);
-              // spectrum
               spectrum.push(output.spectrum);
               if (spectrum.length > nCpi) {
                 spectrum.shift();
               }
               output.spectrum = spectrum;
-              // frequency
+
+              if (output.spectrumSurv) {
+                spectrumSurv.push(output.spectrumSurv);
+                if (spectrumSurv.length > nCpi) {
+                  spectrumSurv.shift();
+                }
+                output.spectrumSurv = spectrumSurv;
+              }
+
               frequency.push(output.frequency);
               if (frequency.length > nCpi) {
                 frequency.shift();
               }
               output.frequency = frequency;
-              // timestamp
+
               timestamp.push(output.timestamp);
               if (timestamp.length > nCpi) {
                 timestamp.shift();
@@ -70,7 +76,6 @@ function update_data() {
       }
     });
   });
-
 };
 
 function init(config) {
