@@ -16,17 +16,17 @@
     .gauge-box {
       background: #1a1a1a;
       border-radius: 8px;
-      padding: 12px;
+      padding: 8px 6px;
       text-align: center;
-      margin: 4px 0;
+      margin: 2px 0;
     }
     .gauge-label {
-      font-size: 12px;
+      font-size: 11px;
       text-transform: uppercase;
       color: #888;
     }
     .gauge-value {
-      font-size: 28px;
+      font-size: 22px;
       font-weight: bold;
       font-family: monospace;
     }
@@ -35,78 +35,112 @@
     .gauge-isolation .gauge-value { color: #81c784; }
     .gauge-isolation.warn .gauge-value { color: #fff176; }
     .gauge-isolation.bad .gauge-value { color: #e57373; }
+    .gauge-corr .gauge-value { color: #ce93d8; }
+    .gauge-corr.warn .gauge-value { color: #fff176; }
+    .gauge-corr.bad .gauge-value { color: #e57373; }
     .plot-container {
       background: #1a1a1a;
       border-radius: 4px;
-      margin-bottom: 8px;
+      margin-bottom: 4px;
     }
     .btn-sm-custom {
-      font-size: 11px;
-      padding: 2px 8px;
+      font-size: 10px;
+      padding: 1px 6px;
     }
   </style>
 </head>
 <body>
   <div style="height: 100vh; width: 98vw" class="container-fluid px-2 py-1">
-    <!-- Power Meters Row -->
-    <div class="row g-1 mb-2">
-      <div class="col-md-4">
+    <!-- Power Meters + Correlation Row -->
+    <div class="row g-1 mb-1">
+      <div class="col-md-3">
         <div class="gauge-box gauge-ref">
-          <div class="gauge-label">Reference Total Power</div>
+          <div class="gauge-label">Ref Power</div>
           <div class="gauge-value" id="gauge-ref">-- dB</div>
         </div>
       </div>
-      <div class="col-md-4">
+      <div class="col-md-3">
         <div class="gauge-box gauge-surv">
-          <div class="gauge-label">Surveillance Total Power</div>
+          <div class="gauge-label">Surv Power</div>
           <div class="gauge-value" id="gauge-surv">-- dB</div>
         </div>
       </div>
-      <div class="col-md-4">
+      <div class="col-md-3">
         <div class="gauge-box gauge-isolation" id="gauge-isolation-box">
-          <div class="gauge-label">Isolation (Ref − Surv)</div>
+          <div class="gauge-label">Isolation (Ref−Surv)</div>
           <div class="gauge-value" id="gauge-isolation">-- dB</div>
         </div>
       </div>
+      <div class="col-md-3">
+        <div class="gauge-box gauge-corr" id="gauge-corr-box">
+          <div class="gauge-label">Correlation</div>
+          <div class="gauge-value" id="gauge-corr">--</div>
+        </div>
+      </div>
     </div>
 
-    <!-- Spectrum Overlay + Peak-Hold Row -->
-    <div class="row g-1 mb-2">
-      <div class="col-md-8">
+    <!-- Spectrum Overlay + Peak Hold + Differential Spectrum Row -->
+    <div class="row g-1 mb-1">
+      <div class="col-md-5">
         <div class="plot-container">
-          <div class="d-flex justify-content-between align-items-center px-2 pt-2">
-            <span class="small text-uppercase text-muted">Spectrum Overlay (live)</span>
+          <div class="px-2 pt-1">
+            <span class="small text-uppercase text-muted">Spectrum Overlay</span>
           </div>
-          <div class="justify-content-center" id="plot-spectrum-overlay" style="height: 28vh;"></div>
+          <div class="justify-content-center" id="plot-spectrum-overlay" style="height: 24vh;"></div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="plot-container">
+          <div class="d-flex justify-content-between align-items-center px-2 pt-1">
+            <span class="small text-uppercase text-muted">Peak Hold</span>
+            <button class="btn btn-sm btn-outline-secondary btn-sm-custom" id="btn-reset-peakhold">Reset</button>
+            <button class="btn btn-sm btn-outline-secondary btn-sm-custom" id="btn-reset-trend">Reset Trend</button>
+          </div>
+          <div class="justify-content-center" id="plot-peakhold" style="height: 24vh;"></div>
         </div>
       </div>
       <div class="col-md-4">
         <div class="plot-container">
-          <div class="d-flex justify-content-between align-items-center px-2 pt-2">
-            <span class="small text-uppercase text-muted">Peak Hold</span>
-            <button class="btn btn-sm btn-outline-secondary btn-sm-custom" id="btn-reset-peakhold">Reset</button>
+          <div class="px-2 pt-1">
+            <span class="small text-uppercase text-muted">Differential Spectrum (Ref − Surv)</span>
           </div>
-          <div class="justify-content-center" id="plot-peakhold" style="height: 28vh;"></div>
+          <div class="justify-content-center" id="plot-diff-spectrum" style="height: 24vh;"></div>
         </div>
       </div>
     </div>
 
-    <!-- Constellation Diagrams Row -->
-    <div class="row g-1 mb-2">
-      <div class="col-md-6">
+    <!-- Power Trend + IQ Scatter Row -->
+    <div class="row g-1 mb-1">
+      <div class="col-md-5">
         <div class="plot-container">
-          <div class="px-2 pt-2">
-            <span class="small text-uppercase text-muted">Reference Constellation (I/Q)</span>
+          <div class="px-2 pt-1">
+            <span class="small text-uppercase text-muted">Power Trend</span>
           </div>
-          <div class="justify-content-center" id="plot-const-ref" style="height: 28vh;"></div>
+          <div class="justify-content-center" id="plot-power-trend" style="height: 22vh;"></div>
         </div>
       </div>
-      <div class="col-md-6">
+      <div class="col-md-3">
         <div class="plot-container">
-          <div class="px-2 pt-2">
-            <span class="small text-uppercase text-muted">Surveillance Constellation (I/Q)</span>
+          <div class="px-2 pt-1">
+            <span class="small text-uppercase text-muted">Isolation Histogram</span>
           </div>
-          <div class="justify-content-center" id="plot-const-surv" style="height: 28vh;"></div>
+          <div class="justify-content-center" id="plot-isolation-hist" style="height: 22vh;"></div>
+        </div>
+      </div>
+      <div class="col-md-2">
+        <div class="plot-container">
+          <div class="px-2 pt-1">
+            <span class="small text-uppercase text-muted">Ref IQ Scatter</span>
+          </div>
+          <div class="justify-content-center" id="plot-const-ref" style="height: 22vh;"></div>
+        </div>
+      </div>
+      <div class="col-md-2">
+        <div class="plot-container">
+          <div class="px-2 pt-1">
+            <span class="small text-uppercase text-muted">Surv IQ Scatter</span>
+          </div>
+          <div class="justify-content-center" id="plot-const-surv" style="height: 22vh;"></div>
         </div>
       </div>
     </div>
@@ -115,18 +149,18 @@
     <div class="row g-1">
       <div class="col-md-6">
         <div class="plot-container">
-          <div class="px-2 pt-2">
+          <div class="px-2 pt-1">
             <span class="small text-uppercase text-muted">Reference Waterfall</span>
           </div>
-          <div class="justify-content-center" id="plot-waterfall-ref" style="height: 28vh;"></div>
+          <div class="justify-content-center" id="plot-waterfall-ref" style="height: 22vh;"></div>
         </div>
       </div>
       <div class="col-md-6">
         <div class="plot-container">
-          <div class="px-2 pt-2">
+          <div class="px-2 pt-1">
             <span class="small text-uppercase text-muted">Surveillance Waterfall</span>
           </div>
-          <div class="justify-content-center" id="plot-waterfall-surv" style="height: 28vh;"></div>
+          <div class="justify-content-center" id="plot-waterfall-surv" style="height: 22vh;"></div>
         </div>
       </div>
     </div>
