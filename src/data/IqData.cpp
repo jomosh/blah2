@@ -167,18 +167,22 @@ std::string IqData::to_json(uint64_t timestamp)
     arrayFrequency.PushBack(frequency[i], allocator);
   }
 
-  // store spectrum array
+  // store spectrum array (clamp -Inf to -200 dB for zero/empty bins)
   rapidjson::Value arraySpectrum(rapidjson::kArrayType);
   for (size_t i = 0; i < spectrum.size(); i++)
   {
-    arraySpectrum.PushBack(10 * std::log10(std::abs(spectrum[i])), allocator);
+    double mag = std::abs(spectrum[i]);
+    double db = (mag > 0.0) ? 10 * std::log10(mag) : -200.0;
+    arraySpectrum.PushBack(db, allocator);
   }
 
   // store surveillance spectrum array
   rapidjson::Value arraySpectrumSurv(rapidjson::kArrayType);
   for (size_t i = 0; i < spectrum_surv.size(); i++)
   {
-    arraySpectrumSurv.PushBack(10 * std::log10(std::abs(spectrum_surv[i])), allocator);
+    double mag = std::abs(spectrum_surv[i]);
+    double db = (mag > 0.0) ? 10 * std::log10(mag) : -200.0;
+    arraySpectrumSurv.PushBack(db, allocator);
   }
 
   // store decimated IQ samples for reference IQ scatter

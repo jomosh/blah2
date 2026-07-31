@@ -171,11 +171,14 @@ function computeBandPower(spectrumDb) {
 
 function pearsonCorrelation(x, y) {
   if (!x || !y || x.length !== y.length || x.length < 2) return null;
-  var n = x.length;
   var sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0, sumY2 = 0;
-  for (var i = 0; i < n; i++) {
+  var n = 0;
+  for (var i = 0; i < x.length; i++) {
+    if (!isFinite(x[i]) || !isFinite(y[i])) continue;
     sumX += x[i]; sumY += y[i]; sumXY += x[i] * y[i]; sumX2 += x[i] * x[i]; sumY2 += y[i] * y[i];
+    n++;
   }
+  if (n < 2) return null;
   var num = n * sumXY - sumX * sumY;
   var den = Math.sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY));
   return den === 0 ? 0 : num / den;
