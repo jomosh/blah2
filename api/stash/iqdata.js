@@ -2,6 +2,7 @@ const http = require('http');
 
 var nCpi = 20;
 var spectrum = [];
+var spectrumSurv = [];
 var frequency = [];
 var timestamp = [];
 var ts = '';
@@ -44,24 +45,38 @@ function update_data() {
           res.on('end', () => {
             try {
               output = JSON.parse(body_map);
-              // spectrum
+              // reference spectrum
               spectrum.push(output.spectrum);
               if (spectrum.length > nCpi) {
                 spectrum.shift();
               }
               output.spectrum = spectrum;
+
+              // surveillance spectrum
+              if (output.spectrumSurv) {
+                spectrumSurv.push(output.spectrumSurv);
+                if (spectrumSurv.length > nCpi) {
+                  spectrumSurv.shift();
+                }
+                output.spectrumSurv = spectrumSurv;
+              }
+
               // frequency
               frequency.push(output.frequency);
               if (frequency.length > nCpi) {
                 frequency.shift();
               }
               output.frequency = frequency;
+
               // timestamp
               timestamp.push(output.timestamp);
               if (timestamp.length > nCpi) {
                 timestamp.shift();
               }
               output.timestamp = timestamp;
+
+              // Pass through per-CPI fields to the alignment page
+              // (iqRef, iqSurv, min, max, mean) already on output
             } catch (e) {
               console.error(e.message);
             }

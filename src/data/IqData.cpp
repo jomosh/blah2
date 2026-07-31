@@ -133,9 +133,20 @@ void IqData::update_spectrum(const std::vector<std::complex<double>> &_spectrum)
   spectrum = _spectrum;
 }
 
+void IqData::update_spectrum_surv(const std::vector<std::complex<double>> &_spectrum_surv)
+{
+  spectrum_surv = _spectrum_surv;
+}
+
 void IqData::update_frequency(const std::vector<double> &_frequency)
 {
   frequency = _frequency;
+}
+
+void IqData::update_iq_decimated(const std::vector<double> &iq_ref, const std::vector<double> &iq_surv)
+{
+  iq_decimated_ref = iq_ref;
+  iq_decimated_surv = iq_surv;
 }
 
 const std::vector<double> &IqData::get_frequency() const
@@ -156,11 +167,36 @@ std::string IqData::to_json(uint64_t timestamp)
     arrayFrequency.PushBack(frequency[i], allocator);
   }
 
-  // store spectrum array
+  // store spectrum array (clamp -Inf to -200 dB for zero/empty bins)
   rapidjson::Value arraySpectrum(rapidjson::kArrayType);
   for (size_t i = 0; i < spectrum.size(); i++)
   {
-    arraySpectrum.PushBack(10 * std::log10(std::abs(spectrum[i])), allocator);
+    double mag = std::abs(spectrum[i]);
+    double db = (mag > 0.0) ? 10 * std::log10(mag) : -200.0;
+    arraySpectrum.PushBack(db, allocator);
+  }
+
+  // store surveillance spectrum array
+  rapidjson::Value arraySpectrumSurv(rapidjson::kArrayType);
+  for (size_t i = 0; i < spectrum_surv.size(); i++)
+  {
+    double mag = std::abs(spectrum_surv[i]);
+    double db = (mag > 0.0) ? 10 * std::log10(mag) : -200.0;
+    arraySpectrumSurv.PushBack(db, allocator);
+  }
+
+  // store decimated IQ samples for reference IQ scatter
+  rapidjson::Value arrayIqRef(rapidjson::kArrayType);
+  for (size_t i = 0; i < iq_decimated_ref.size(); i++)
+  {
+    arrayIqRef.PushBack(iq_decimated_ref[i], allocator);
+  }
+
+  // store decimated IQ samples for surveillance IQ scatter
+  rapidjson::Value arrayIqSurv(rapidjson::kArrayType);
+  for (size_t i = 0; i < iq_decimated_surv.size(); i++)
+  {
+    arrayIqSurv.PushBack(iq_decimated_surv[i], allocator);
   }
 
   document.AddMember("timestamp", timestamp, allocator);
@@ -169,6 +205,9 @@ std::string IqData::to_json(uint64_t timestamp)
   document.AddMember("mean", mean, allocator);
   document.AddMember("frequency", arrayFrequency, allocator);
   document.AddMember("spectrum", arraySpectrum, allocator);
+  document.AddMember("spectrumSurv", arraySpectrumSurv, allocator);
+  document.AddMember("iqRef", arrayIqRef, allocator);
+  document.AddMember("iqSurv", arrayIqSurv, allocator);
 
   rapidjson::StringBuffer strbuf;
   rapidjson::Writer<rapidjson::StringBuffer> writer(strbuf);

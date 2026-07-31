@@ -44,11 +44,20 @@ private:
   /// @brief Center frequency of the receiver (Hz), from config capture.fc.
   double fc;
 
-  /// @brief Reusable spectrum output buffer.
+  /// @brief Reusable spectrum output buffer (reference).
   std::vector<std::complex<double>> spectrumBuffer;
+
+  /// @brief Reusable spectrum output buffer (surveillance).
+  std::vector<std::complex<double>> spectrumBufferSurv;
 
   /// @brief Cached frequency bins (kHz).
   std::vector<double> frequencyBins;
+
+  /// @brief Decimation factor for IQ scatter samples.
+  uint32_t iq_decimation;
+
+  /// @brief Target number of IQ scatter points per channel.
+  static constexpr uint32_t kTargetIQScatterPoints = 2000;
 
 public:
   /// @brief Constructor.
@@ -62,8 +71,15 @@ public:
   /// @return Void.
   ~SpectrumAnalyser();
 
-  /// @brief Process spectrum data.
+  /// @brief Process spectrum data for both channels and extract decimated IQ.
   /// @param x Reference samples.
+  /// @param y Surveillance samples.
+  /// @return Void.
+  void process(IqData *x, IqData *y);
+
+  /// @brief Process spectrum data for a single channel (backward compatible).
+  /// @param x Reference samples. A zero-filled dummy buffer is used for the
+  ///           surveillance channel.
   /// @return Void.
   void process(IqData *x);
 };

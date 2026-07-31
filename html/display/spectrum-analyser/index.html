@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="UTF-8">
+  <title>blah2 — Spectrum Analyser</title>
+  <!-- load lib js -->
+  <script src="../../lib/bootstrap-5.2.3.min.js"></script>
+  <script src="../../lib/plotly-2.20.0.min.js"></script>
+  <script src="../../lib/jquery-3.6.4.min.js"></script>
+  <!-- load lib css -->
+  <link rel="stylesheet" href="../../lib/bootstrap-5.2.3.min.css">
+  <link rel="stylesheet" href="../../lib/blah2.css">
+  <style>
+    body { background: #111; color: #ccc; }
+    .gauge-box {
+      background: #1a1a1a;
+      border-radius: 8px;
+      padding: 8px 6px;
+      text-align: center;
+      margin: 2px 0;
+    }
+    .gauge-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      color: #888;
+    }
+    .gauge-value {
+      font-size: 22px;
+      font-weight: bold;
+      font-family: monospace;
+    }
+    .gauge-ref .gauge-value { color: #4fc3f7; }
+    .gauge-surv .gauge-value { color: #ff8a65; }
+    .gauge-isolation .gauge-value { color: #81c784; }
+    .gauge-isolation.warn .gauge-value { color: #fff176; }
+    .gauge-isolation.bad .gauge-value { color: #e57373; }
+    .gauge-corr .gauge-value { color: #ce93d8; }
+    .gauge-corr.warn .gauge-value { color: #fff176; }
+    .gauge-corr.bad .gauge-value { color: #e57373; }
+    .plot-container {
+      background: #1a1a1a;
+      border-radius: 4px;
+      margin-bottom: 4px;
+    }
+    .btn-sm-custom {
+      font-size: 10px;
+      padding: 1px 6px;
+    }
+  </style>
+</head>
+<body>
+  <div style="height: 100vh; width: 98vw" class="container-fluid px-2 py-1">
+    <!-- Power Meters + Correlation Row -->
+    <div class="row g-1 mb-1">
+      <div class="col-md-3">
+        <div class="gauge-box gauge-ref">
+          <div class="gauge-label">Ref Power</div>
+          <div class="gauge-value" id="gauge-ref">-- dB</div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="gauge-box gauge-surv">
+          <div class="gauge-label">Surv Power</div>
+          <div class="gauge-value" id="gauge-surv">-- dB</div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="gauge-box gauge-isolation" id="gauge-isolation-box">
+          <div class="gauge-label">Isolation (Ref−Surv)</div>
+          <div class="gauge-value" id="gauge-isolation">-- dB</div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="gauge-box gauge-corr" id="gauge-corr-box">
+          <div class="gauge-label">Correlation</div>
+          <div class="gauge-value" id="gauge-corr">--</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Spectrum Overlay + Peak Hold + Differential Spectrum Row -->
+    <div class="row g-1 mb-1">
+      <div class="col-md-5">
+        <div class="plot-container">
+          <div class="px-2 pt-1">
+            <span class="small text-uppercase text-muted">Spectrum Overlay</span>
+          </div>
+          <div class="justify-content-center" id="plot-spectrum-overlay" style="height: 24vh;"></div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="plot-container">
+          <div class="d-flex justify-content-between align-items-center px-2 pt-1">
+            <span class="small text-uppercase text-muted">Peak Hold</span>
+            <button class="btn btn-sm btn-outline-secondary btn-sm-custom" id="btn-reset-peakhold">Reset</button>
+            <button class="btn btn-sm btn-outline-secondary btn-sm-custom" id="btn-reset-trend">Reset Trend</button>
+          </div>
+          <div class="justify-content-center" id="plot-peakhold" style="height: 24vh;"></div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="plot-container">
+          <div class="px-2 pt-1">
+            <span class="small text-uppercase text-muted">Differential Spectrum (Ref − Surv)</span>
+          </div>
+          <div class="justify-content-center" id="plot-diff-spectrum" style="height: 24vh;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Power Trend + IQ Scatter Row -->
+    <div class="row g-1 mb-1">
+      <div class="col-md-5">
+        <div class="plot-container">
+          <div class="px-2 pt-1">
+            <span class="small text-uppercase text-muted">Power Trend</span>
+          </div>
+          <div class="justify-content-center" id="plot-power-trend" style="height: 22vh;"></div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="plot-container">
+          <div class="px-2 pt-1">
+            <span class="small text-uppercase text-muted">Isolation Histogram</span>
+          </div>
+          <div class="justify-content-center" id="plot-isolation-hist" style="height: 22vh;"></div>
+        </div>
+      </div>
+      <div class="col-md-2">
+        <div class="plot-container">
+          <div class="px-2 pt-1">
+            <span class="small text-uppercase text-muted">Ref IQ Scatter</span>
+          </div>
+          <div class="justify-content-center" id="plot-iq-scatter-ref" style="height: 22vh;"></div>
+        </div>
+      </div>
+      <div class="col-md-2">
+        <div class="plot-container">
+          <div class="px-2 pt-1">
+            <span class="small text-uppercase text-muted">Surv IQ Scatter</span>
+          </div>
+          <div class="justify-content-center" id="plot-iq-scatter-surv" style="height: 22vh;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dual Waterfall Row -->
+    <div class="row g-1">
+      <div class="col-md-6">
+        <div class="plot-container">
+          <div class="px-2 pt-1">
+            <span class="small text-uppercase text-muted">Reference Waterfall</span>
+          </div>
+          <div class="justify-content-center" id="plot-waterfall-ref" style="height: 22vh;"></div>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="plot-container">
+          <div class="px-2 pt-1">
+            <span class="small text-uppercase text-muted">Surveillance Waterfall</span>
+          </div>
+          <div class="justify-content-center" id="plot-waterfall-surv" style="height: 22vh;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+<script src="../../js/common.js"></script>
+<script src="../../js/plot_spectrum_analyser.js"></script>
+</html>

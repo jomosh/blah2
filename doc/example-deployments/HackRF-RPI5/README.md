@@ -96,6 +96,9 @@ Insert the following line at the end of the file
 
 # Tuning and Troubleshooting
 
-TBC
+For antenna alignment and signal quality assessment, use the **Spectrum Analyser** page
+(Controller → Display → Spectrum Analyser). See the full guide:
+
+[📡 Spectrum Analyser User Guide](../spectrum-analyser-guide.md)
 
 
