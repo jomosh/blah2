@@ -37,9 +37,8 @@ SpectrumAnalyser::SpectrumAnalyser(uint32_t _n, double _bandwidth, double _fc)
     frequencyBins[i] = ((bin * bandwidth) + offset + fc) / 1000;
   }
 
-  // configure IQ decimation for constellation views
-  // target ~2000 points per channel for the scatter plot
-  iq_decimation = nfft / 2000;
+  // configure IQ decimation for IQ scatter views
+  iq_decimation = nfft / kTargetIQScatterPoints;
   if (iq_decimation < 1) iq_decimation = 1;
 }
 
@@ -87,7 +86,7 @@ void SpectrumAnalyser::process(IqData *x, IqData *y)
   }
   x->update_spectrum_surv(spectrumBufferSurv);
 
-  // --- Decimated IQ samples for constellation views ---
+  // --- Decimated IQ samples for IQ scatter views ---
   uint32_t nDecimated = nfft / iq_decimation;
   std::vector<double> iq_ref;
   std::vector<double> iq_surv;

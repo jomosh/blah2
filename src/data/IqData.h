@@ -53,10 +53,10 @@ private:
   /// @brief Frequency vector (kHz).
   std::vector<double> frequency;
 
-  /// @brief Decimated IQ samples for reference channel constellation.
+  /// @brief Decimated IQ samples for reference channel IQ scatter.
   std::vector<double> iq_decimated_ref;
 
-  /// @brief Decimated IQ samples for surveillance channel constellation.
+  /// @brief Decimated IQ samples for surveillance channel IQ scatter.
   std::vector<double> iq_decimated_surv;
 
 public:
@@ -126,7 +126,7 @@ public:
   /// @return Void.
   void clear();
 
-  /// @brief Update the time differences and names.
+  /// @brief Update the reference spectrum vector.
   /// @param spectrum Spectrum vector.
   /// @return Void.
   void update_spectrum(const std::vector<std::complex<double>> &spectrum);
@@ -136,13 +136,8 @@ public:
   /// @return Void.
   void update_spectrum_surv(const std::vector<std::complex<double>> &spectrum_surv);
 
-  /// @brief Update the surveillance frequency vector.
-  /// @param frequency_surv Frequency vector for surveillance channel.
-  /// @return Void.
-  void update_frequency_surv(const std::vector<double> &frequency_surv);
-
-  /// @brief Update the decimated IQ samples for constellation views.
-  /// @param iq_ref Flat vector of I/Q interleaved (real, imag, real, imag…) for reference.
+  /// @brief Update the decimated IQ samples for IQ scatter views.
+  /// @param iq_ref Flat vector of I/Q interleaved for reference.
   /// @param iq_surv Flat vector of I/Q interleaved for surveillance.
   /// @return Void.
   void update_iq_decimated(const std::vector<double> &iq_ref, const std::vector<double> &iq_surv);

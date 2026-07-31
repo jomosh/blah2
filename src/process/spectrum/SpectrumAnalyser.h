@@ -53,8 +53,11 @@ private:
   /// @brief Cached frequency bins (kHz).
   std::vector<double> frequencyBins;
 
-  /// @brief Decimation factor for IQ constellation samples.
+  /// @brief Decimation factor for IQ scatter samples.
   uint32_t iq_decimation;
+
+  /// @brief Target number of IQ scatter points per channel.
+  static constexpr uint32_t kTargetIQScatterPoints = 2000;
 
 public:
   /// @brief Constructor.

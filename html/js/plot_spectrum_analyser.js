@@ -75,7 +75,7 @@ function initPeakhold() {
 }
 
 // =============================================
-// 3. Differential Spectrum (NEW)
+// 3. Differential Spectrum
 // =============================================
 function initDiffSpectrum() {
   var trace = { x: [], y: [], type: 'scatter', mode: 'lines', name: 'Ref−Surv', line: { color: '#a5d6a7', width: 1.2 }, fill: 'tozeroy', fillcolor: 'rgba(165,214,167,0.15)' };
@@ -88,7 +88,7 @@ function initDiffSpectrum() {
 }
 
 // =============================================
-// 4. Power Trend (NEW)
+// 4. Power Trend
 // =============================================
 function initPowerTrend() {
   var traceRef = { x: [], y: [], type: 'scatter', mode: 'lines', name: 'Ref Pwr', line: { color: '#4fc3f7', width: 1.2 }, yaxis: 'y' };
@@ -115,7 +115,7 @@ function initPowerTrend() {
 }
 
 // =============================================
-// 5. Isolation Histogram (NEW)
+// 5. Isolation Histogram
 // =============================================
 function initIsolationHist() {
   var trace = { x: [], type: 'histogram', marker: { color: '#81c784' }, nbinsx: HIST_BINS };
@@ -129,16 +129,16 @@ function initIsolationHist() {
 }
 
 // =============================================
-// 6. IQ Scatter Plots (renamed from "Constellation")
+// 6. IQ Scatter Plots
 // =============================================
-function initConstellation() {
+function initIQScatter() {
   var layoutConst = Object.assign({}, darkLayout, {
     xaxis: { title: { text: 'I' }, color: '#aaa', gridcolor: '#333', zerolinecolor: '#555' },
     yaxis: { title: { text: 'Q' }, color: '#aaa', gridcolor: '#333', zerolinecolor: '#555', scaleanchor: 'x', scaleratio: 1 },
     showlegend: false
   });
-  Plotly.newPlot('plot-const-ref', [{ x: [], y: [], type: 'scattergl', mode: 'markers', marker: { color: '#4fc3f7', size: 2, opacity: 0.5 } }], layoutConst, plotConfig);
-  Plotly.newPlot('plot-const-surv', [{ x: [], y: [], type: 'scattergl', mode: 'markers', marker: { color: '#ff8a65', size: 2, opacity: 0.5 } }], layoutConst, plotConfig);
+  Plotly.newPlot('plot-iq-scatter-ref', [{ x: [], y: [], type: 'scattergl', mode: 'markers', marker: { color: '#4fc3f7', size: 2, opacity: 0.5 } }], layoutConst, plotConfig);
+  Plotly.newPlot('plot-iq-scatter-surv', [{ x: [], y: [], type: 'scattergl', mode: 'markers', marker: { color: '#ff8a65', size: 2, opacity: 0.5 } }], layoutConst, plotConfig);
 }
 
 // =============================================
@@ -284,13 +284,14 @@ function updateWaterfall(freq, ref, surv) {
   Plotly.update('plot-waterfall-surv', { z: [waterfallSurvZ], x: [waterfallFreq], y: [timeLabels] }, lUpdate);
 }
 
-function updateConstellation(iqRef, iqSurv) {
-  if (!iqRef || iqRef.length < 2 || !iqSurv || iqSurv.length < 2) return;
+function updateIQScatter(iqRef, iqSurv) {
+  if (!iqRef || !iqSurv || iqRef.length < 2 || iqSurv.length < 2) return;
+  if (iqRef.length % 2 !== 0 || iqSurv.length % 2 !== 0) return;
   var xRef = [], yRef = [], xSurv = [], ySurv = [];
   for (var i = 0; i < iqRef.length; i += 2) { xRef.push(iqRef[i]); yRef.push(iqRef[i + 1]); }
   for (var i = 0; i < iqSurv.length; i += 2) { xSurv.push(iqSurv[i]); ySurv.push(iqSurv[i + 1]); }
-  Plotly.restyle('plot-const-ref', { x: [xRef], y: [yRef] });
-  Plotly.restyle('plot-const-surv', { x: [xSurv], y: [ySurv] });
+  Plotly.restyle('plot-iq-scatter-ref', { x: [xRef], y: [yRef] });
+  Plotly.restyle('plot-iq-scatter-surv', { x: [xSurv], y: [ySurv] });
 }
 
 // =============================================
@@ -302,7 +303,7 @@ $(document).ready(function() {
   initDiffSpectrum();
   initPowerTrend();
   initIsolationHist();
-  initConstellation();
+  initIQScatter();
   initWaterfalls();
 
   window.setInterval(function() {
@@ -326,7 +327,7 @@ $(document).ready(function() {
             updateWaterfall(freqBins, refSpectrum, survSpectrum);
           }
 
-          if (data.iqRef && data.iqSurv) updateConstellation(data.iqRef, data.iqSurv);
+          if (data.iqRef && data.iqSurv) updateIQScatter(data.iqRef, data.iqSurv);
         });
       }
     });
