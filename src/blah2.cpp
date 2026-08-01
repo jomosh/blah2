@@ -249,7 +249,36 @@ int main(int argc, char **argv)
     std::cout << "Warning: Unsupported cfarMode '" << cfarModeString << "'. Falling back to CA." << "\n";
     cfarMode = CfarMode::CA;
   }
-  CfarDetector1D *cfarDetector1D = new CfarDetector1D(pfa, nGuard, nTrain, minDelay, minDoppler, cfarMode);
+  // set up exclusion zones
+  bool exclusionZonesEnabled = false;
+  std::vector<ExclusionZone> exclusionZones;
+  auto exclusionZonesNode = tree["process"]["detection"]["exclusionZones"];
+  if (exclusionZonesNode.valid())
+  {
+    exclusionZonesNode["enabled"] >> exclusionZonesEnabled;
+    if (exclusionZonesEnabled)
+    {
+      auto zonesNode = tree["process"]["detection"]["exclusionZones"]["zones"];
+      if (zonesNode.valid() && zonesNode.is_seq())
+      {
+        const double delayScaleBins = (fs > 0) ? (static_cast<double>(fs) / static_cast<double>(Constants::c)) : 0.0;
+        for (const auto &zoneChild : zonesNode.children())
+        {
+          ExclusionZone zone;
+          double delayMinMeters = 0.0, delayMaxMeters = 0.0;
+          zoneChild["delayMin"] >> delayMinMeters;
+          zoneChild["delayMax"] >> delayMaxMeters;
+          zoneChild["dopplerMin"] >> zone.dopplerMinHz;
+          zoneChild["dopplerMax"] >> zone.dopplerMaxHz;
+          zone.delayMinBins = delayMinMeters * delayScaleBins;
+          zone.delayMaxBins = delayMaxMeters * delayScaleBins;
+          exclusionZones.push_back(zone);
+        }
+      }
+    }
+  }
+  CfarDetector1D *cfarDetector1D = new CfarDetector1D(pfa, nGuard, nTrain, minDelay, minDoppler, cfarMode,
+    exclusionZonesEnabled, std::move(exclusionZones));
   Interpolate *interpolate = new Interpolate(true, true);
 
   // set up process centroid

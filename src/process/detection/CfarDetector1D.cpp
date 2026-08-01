@@ -148,7 +148,8 @@ double goca_alpha(double pfa, int nLeading, int nTrailing)
 }
 
 // constructor
-CfarDetector1D::CfarDetector1D(double _pfa, int8_t _nGuard, int8_t _nTrain, int8_t _minDelay, double _minDoppler, CfarMode _mode)
+CfarDetector1D::CfarDetector1D(double _pfa, int8_t _nGuard, int8_t _nTrain, int8_t _minDelay, double _minDoppler, CfarMode _mode,
+  bool _exclusionZonesEnabled, std::vector<ExclusionZone> _exclusionZones)
 {
   // input
   pfa = _pfa;
@@ -157,6 +158,8 @@ CfarDetector1D::CfarDetector1D(double _pfa, int8_t _nGuard, int8_t _nTrain, int8
   minDelay = _minDelay;
   minDoppler = _minDoppler;
   mode = _mode;
+  exclusionZonesEnabled = _exclusionZonesEnabled;
+  exclusionZones = std::move(_exclusionZones);
   alphaCache.clear();
 }
 
@@ -327,6 +330,27 @@ std::unique_ptr<Detection> CfarDetector1D::process(Map<std::complex<double>> *x)
       // detection if over threshold
       if (mapRowSquare[j] > threshold)
       {
+        // suppress detections inside exclusion zones
+        if (exclusionZonesEnabled)
+        {
+          const double delayBins = static_cast<double>(j + x->delay[0]);
+          const double dopplerHz = x->doppler[i];
+          bool inZone = false;
+          for (const auto &zone : exclusionZones)
+          {
+            if (delayBins >= zone.delayMinBins && delayBins <= zone.delayMaxBins &&
+              dopplerHz >= zone.dopplerMinHz && dopplerHz <= zone.dopplerMaxHz)
+            {
+              inZone = true;
+              break;
+            }
+          }
+          if (inZone)
+          {
+            continue;
+          }
+        }
+
         delay.push_back(j + x->delay[0]);
         doppler.push_back(x->doppler[i]);
         snr.push_back(mapRowSnr[j]);

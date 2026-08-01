@@ -18,10 +18,30 @@ urlMap = build_api_url(urlMap);
 
 // get truth flag
 var isTruth = false;
+var exclusionZoneShapes = [];
 $.getJSON(urlConfig, function () { })
 .done(function (data_config) {
   if (data_config.truth.adsb.enabled === true) {
     isTruth = true;
+  }
+  // build exclusion zone shapes for the doppler-delay map
+  var ez = data_config.process && data_config.process.detection && data_config.process.detection.exclusionZones;
+  exclusionZoneShapes = [];
+  if (ez && ez.enabled && Array.isArray(ez.zones)) {
+    ez.zones.forEach(function (zone) {
+      exclusionZoneShapes.push({
+        type: 'rect',
+        x0: zone.delayMin / 1000,
+        x1: zone.delayMax / 1000,
+        y0: zone.dopplerMin,
+        y1: zone.dopplerMax,
+        line: {
+          color: 'red',
+          width: 2,
+          dash: 'dash'
+        }
+      });
+    });
   }
 });
 
@@ -41,6 +61,7 @@ var layout = {
   plot_bgcolor: "rgba(0,0,0,0)",
   paper_bgcolor: "rgba(0,0,0,0)",
   annotations: [],
+  shapes: [],
   displayModeBar: false,
   xaxis: {
     title: {
@@ -379,6 +400,7 @@ var intervalId = window.setInterval(function () {
                 'xaxis.range': [data.delay[0], data.delay.slice(-1)[0]],
                 'yaxis.range': [data.doppler[0], data.doppler.slice(-1)[0]]
               };
+              layout_update['shapes'] = exclusionZoneShapes;
               Plotly.relayout('data', layout_update);
 
               var allSelection = getAllAdsbTraceSelection();
@@ -453,6 +475,7 @@ var intervalId = window.setInterval(function () {
               };
 
               var data_trace = [trace1, trace2, trace3, trace4, trace5];
+              layout.shapes = exclusionZoneShapes;
               Plotly.newPlot('data', data_trace, layout, config);
             }
             // case update plot
