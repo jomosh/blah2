@@ -448,6 +448,25 @@ int main(int argc, char **argv)
           // detection process
           if (isDetection)
           {
+            // build allowed zones from active tracks to override exclusion zones
+            if (isTracker)
+            {
+              const double delayGateBins = 3.0;
+              const double dopplerGateHz = 3.0 * (1.0 / tCpi);
+              std::vector<ExclusionZone> allowedZones;
+              for (const auto &pos : tracker->get_active_track_positions())
+              {
+                ExclusionZone zone;
+                const double delayBins = pos.get_delay().front();
+                const double dopplerHz = pos.get_doppler().front();
+                zone.delayMinBins = delayBins - delayGateBins;
+                zone.delayMaxBins = delayBins + delayGateBins;
+                zone.dopplerMinHz = dopplerHz - dopplerGateHz;
+                zone.dopplerMaxHz = dopplerHz + dopplerGateHz;
+                allowedZones.push_back(zone);
+              }
+              cfarDetector1D->set_allowed_zones(std::move(allowedZones));
+            }
             detection1 = cfarDetector1D->process(map);
             detection2 = centroid->process(detection1.get(), map);
             detection = interpolate->process(detection2.get(), map);

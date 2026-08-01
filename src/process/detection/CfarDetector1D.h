@@ -74,6 +74,11 @@ private:
   /// @brief List of exclusion zones (delay in bins, Doppler in Hz).
   std::vector<ExclusionZone> exclusionZones;
 
+  /// @brief List of allowed zones that override exclusion (delay in bins, Doppler in Hz).
+  /// @details Detections inside an exclusion zone are still kept if they also
+  ///          fall inside any allowed zone. Used for track-based overrides.
+  std::vector<ExclusionZone> allowedZones;
+
   /// @brief Pointer to detection data to store result.
   Detection *detection;
 
@@ -94,6 +99,14 @@ public:
   /// @brief Destructor.
   /// @return Void.
   ~CfarDetector1D();
+
+  /// @brief Set allowed zones that override exclusion suppression.
+  /// @details Called before each CPI to inject track-based gate windows.
+  ///          Only detections inside both an exclusion zone AND an allowed
+  ///          zone are kept.
+  /// @param zones Allowed zones (delay in bins, Doppler in Hz).
+  /// @return Void.
+  void set_allowed_zones(std::vector<ExclusionZone> zones);
 
   /// @brief Implement the 1D CFAR detector.
   /// @param x Ambiguity map data of IQ samples.

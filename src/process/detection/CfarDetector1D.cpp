@@ -167,6 +167,11 @@ CfarDetector1D::~CfarDetector1D()
 {
 }
 
+void CfarDetector1D::set_allowed_zones(std::vector<ExclusionZone> zones)
+{
+  allowedZones = std::move(zones);
+}
+
 std::unique_ptr<Detection> CfarDetector1D::process(Map<std::complex<double>> *x)
 { 
   int32_t nDelayBins = x->get_nCols();
@@ -330,24 +335,37 @@ std::unique_ptr<Detection> CfarDetector1D::process(Map<std::complex<double>> *x)
       // detection if over threshold
       if (mapRowSquare[j] > threshold)
       {
-        // suppress detections inside exclusion zones
+        // suppress detections inside exclusion zones (unless overridden by an allowed zone)
         if (exclusionZonesEnabled)
         {
           const double delayBins = static_cast<double>(j + x->delay[0]);
           const double dopplerHz = x->doppler[i];
-          bool inZone = false;
+          bool inExclusion = false;
           for (const auto &zone : exclusionZones)
           {
             if (delayBins >= zone.delayMinBins && delayBins <= zone.delayMaxBins &&
               dopplerHz >= zone.dopplerMinHz && dopplerHz <= zone.dopplerMaxHz)
             {
-              inZone = true;
+              inExclusion = true;
               break;
             }
           }
-          if (inZone)
+          if (inExclusion)
           {
-            continue;
+            bool inAllowed = false;
+            for (const auto &zone : allowedZones)
+            {
+              if (delayBins >= zone.delayMinBins && delayBins <= zone.delayMaxBins &&
+                dopplerHz >= zone.dopplerMinHz && dopplerHz <= zone.dopplerMaxHz)
+              {
+                inAllowed = true;
+                break;
+              }
+            }
+            if (!inAllowed)
+            {
+              continue;
+            }
           }
         }
 
