@@ -169,6 +169,9 @@ CfarDetector1D::~CfarDetector1D()
 
 void CfarDetector1D::set_allowed_zones(std::vector<ExclusionZone> zones)
 {
+  // ExclusionZone struct is reused for track-gate override windows:
+  // the same four geometric fields define a region where detections
+  // are *permitted* rather than suppressed.
   allowedZones = std::move(zones);
 }
 
@@ -352,6 +355,8 @@ std::unique_ptr<Detection> CfarDetector1D::process(Map<std::complex<double>> *x)
           }
           if (inExclusion)
           {
+            // Check override: ExclusionZone struct reused with inverted semantics
+            // (presence in this list *permits* detection rather than suppressing it).
             bool inAllowed = false;
             for (const auto &zone : allowedZones)
             {

@@ -463,6 +463,9 @@ int main(int argc, char **argv)
               {
                 const double delayBins = pos.get_delay().front();
                 const double dopplerHz = pos.get_doppler().front();
+                // ExclusionZone struct reused as a gate window around an
+                // ACTIVE track — detections inside this region override
+                // the exclusion zone suppression.
                 allowedZones.push_back({delayBins - delayGateBins, delayBins + delayGateBins,
                   dopplerHz - dopplerGateHz, dopplerHz + dopplerGateHz});
               }
