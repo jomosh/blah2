@@ -650,6 +650,7 @@ which is O(1) with a ring buffer and negligible latency (<10 μs).
 - [ ] Profile hot paths in DSP pipeline
 - [ ] Optimize memory allocations in tight loops
 - [ ] Benchmark network payload generation
+- [ ] **Low priority:** Consider interval tree or spatial index for exclusion zone lookup if many zones are ever used (current linear scan is sufficient for typical <10 zones, but O(n) per detection could become a bottleneck with 100+ zones)
 - [X] A feature to turn off the UI when running blah2 nodes for 3lips ingestion
 
 ## Installation Architecture
