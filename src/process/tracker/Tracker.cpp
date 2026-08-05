@@ -313,3 +313,18 @@ void Tracker::initiate(Detection *detection)
     }
   }
 }
+
+std::vector<Detection> Tracker::get_active_track_positions() const
+{
+  std::vector<Detection> positions;
+  const uint64_t nTracks = track.get_n();
+  positions.reserve(nTracks);
+  for (uint64_t i = 0; i < nTracks; i++)
+  {
+    if (track.get_state(i) == "ACTIVE")
+    {
+      positions.push_back(track.get_current(i));
+    }
+  }
+  return positions;
+}

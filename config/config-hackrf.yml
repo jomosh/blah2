@@ -43,6 +43,16 @@ process:
     cfarMode: "CAGO" # Available types: CA, CAGO
     postProcessMode: "cluster-centroid" # Available modes: local-peak, cluster-centroid
     nCentroid: 6
+    exclusionZones:
+      enabled: false
+      zones:
+        # Uncomment and adjust to suppress detections in specific regions.
+        # delayMin/delayMax are in meters (bistatic range).
+        # dopplerMin/dopplerMax are in Hz (bistatic Doppler).
+        # - delayMin: 10000
+        #   delayMax: 10100
+        #   dopplerMin: -150
+        #   dopplerMax: 150
   tracker:
     enable: true
     initiate:

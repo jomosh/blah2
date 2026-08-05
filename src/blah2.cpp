@@ -249,7 +249,36 @@ int main(int argc, char **argv)
     std::cout << "Warning: Unsupported cfarMode '" << cfarModeString << "'. Falling back to CA." << "\n";
     cfarMode = CfarMode::CA;
   }
-  CfarDetector1D *cfarDetector1D = new CfarDetector1D(pfa, nGuard, nTrain, minDelay, minDoppler, cfarMode);
+  // set up exclusion zones
+  bool exclusionZonesEnabled = false;
+  std::vector<ExclusionZone> exclusionZones;
+  auto exclusionZonesNode = tree["process"]["detection"]["exclusionZones"];
+  if (exclusionZonesNode.valid())
+  {
+    exclusionZonesNode["enabled"] >> exclusionZonesEnabled;
+    if (exclusionZonesEnabled)
+    {
+      auto zonesNode = tree["process"]["detection"]["exclusionZones"]["zones"];
+      if (zonesNode.valid() && zonesNode.is_seq())
+      {
+        const double delayScaleBins = (fs > 0) ? (static_cast<double>(fs) / static_cast<double>(Constants::c)) : 0.0;
+        for (const auto &zoneChild : zonesNode.children())
+        {
+          ExclusionZone zone;
+          double delayMinMeters = 0.0, delayMaxMeters = 0.0;
+          zoneChild["delayMin"] >> delayMinMeters;
+          zoneChild["delayMax"] >> delayMaxMeters;
+          zoneChild["dopplerMin"] >> zone.dopplerMinHz;
+          zoneChild["dopplerMax"] >> zone.dopplerMaxHz;
+          zone.delayMinBins = delayMinMeters * delayScaleBins;
+          zone.delayMaxBins = delayMaxMeters * delayScaleBins;
+          exclusionZones.push_back(zone);
+        }
+      }
+    }
+  }
+  CfarDetector1D *cfarDetector1D = new CfarDetector1D(pfa, nGuard, nTrain, minDelay, minDoppler, cfarMode,
+    exclusionZonesEnabled, std::move(exclusionZones));
   Interpolate *interpolate = new Interpolate(true, true);
 
   // set up process centroid
@@ -419,6 +448,29 @@ int main(int argc, char **argv)
           // detection process
           if (isDetection)
           {
+            // build allowed zones from active tracks to override exclusion zones
+            if (isTracker)
+            {
+              // Gate values match the tracker's Hungarian assignment gates
+              // (Tracker.cpp lines 179-180).  Keeping them identical ensures
+              // that a detection let through by the CFAR override is also
+              // within range for track association on the next CPI.
+              const double delayGateBins = 3.0;
+              const double dopplerGateHz = 3.0 * (1.0 / tCpi);
+              thread_local std::vector<ExclusionZone> allowedZones;
+              allowedZones.clear();
+              for (const auto &pos : tracker->get_active_track_positions())
+              {
+                const double delayBins = pos.get_delay().front();
+                const double dopplerHz = pos.get_doppler().front();
+                // ExclusionZone struct reused as a gate window around an
+                // ACTIVE track — detections inside this region override
+                // the exclusion zone suppression.
+                allowedZones.push_back({delayBins - delayGateBins, delayBins + delayGateBins,
+                  dopplerHz - dopplerGateHz, dopplerHz + dopplerGateHz});
+              }
+              cfarDetector1D->set_allowed_zones(allowedZones);
+            }
             detection1 = cfarDetector1D->process(map);
             detection2 = centroid->process(detection1.get(), map);
             detection = interpolate->process(detection2.get(), map);

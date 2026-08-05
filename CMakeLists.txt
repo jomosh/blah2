@@ -156,6 +156,18 @@ target_link_libraries(testDetectionPhaseB PRIVATE
 set_target_properties(testDetectionPhaseB PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_TEST_UNIT_DIR}")
 
+add_executable(testExclusionZones
+  test/unit/process/detection/TestExclusionZones.cpp
+  src/data/Map.cpp
+  src/data/Detection.cpp
+  src/process/detection/CfarDetector1D.cpp
+)
+target_link_libraries(testExclusionZones PRIVATE
+  Catch2::Catch2WithMain
+)
+set_target_properties(testExclusionZones PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_TEST_UNIT_DIR}")
+
 add_executable(testCentroid
   test/unit/process/detection/TestCentroid.cpp
   src/data/Detection.cpp

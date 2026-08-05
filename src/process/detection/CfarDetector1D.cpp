@@ -148,7 +148,8 @@ double goca_alpha(double pfa, int nLeading, int nTrailing)
 }
 
 // constructor
-CfarDetector1D::CfarDetector1D(double _pfa, int8_t _nGuard, int8_t _nTrain, int8_t _minDelay, double _minDoppler, CfarMode _mode)
+CfarDetector1D::CfarDetector1D(double _pfa, int8_t _nGuard, int8_t _nTrain, int8_t _minDelay, double _minDoppler, CfarMode _mode,
+  bool _exclusionZonesEnabled, std::vector<ExclusionZone> _exclusionZones)
 {
   // input
   pfa = _pfa;
@@ -157,11 +158,21 @@ CfarDetector1D::CfarDetector1D(double _pfa, int8_t _nGuard, int8_t _nTrain, int8
   minDelay = _minDelay;
   minDoppler = _minDoppler;
   mode = _mode;
+  exclusionZonesEnabled = _exclusionZonesEnabled;
+  exclusionZones = std::move(_exclusionZones);
   alphaCache.clear();
 }
 
 CfarDetector1D::~CfarDetector1D()
 {
+}
+
+void CfarDetector1D::set_allowed_zones(std::vector<ExclusionZone> zones)
+{
+  // ExclusionZone struct is reused for track-gate override windows:
+  // the same four geometric fields define a region where detections
+  // are *permitted* rather than suppressed.
+  allowedZones = std::move(zones);
 }
 
 std::unique_ptr<Detection> CfarDetector1D::process(Map<std::complex<double>> *x)
@@ -327,6 +338,42 @@ std::unique_ptr<Detection> CfarDetector1D::process(Map<std::complex<double>> *x)
       // detection if over threshold
       if (mapRowSquare[j] > threshold)
       {
+        // suppress detections inside exclusion zones (unless overridden by an allowed zone)
+        if (exclusionZonesEnabled)
+        {
+          const double delayBins = static_cast<double>(j + x->delay[0]);
+          const double dopplerHz = x->doppler[i];
+          bool inExclusion = false;
+          for (const auto &zone : exclusionZones)
+          {
+            if (delayBins >= zone.delayMinBins && delayBins <= zone.delayMaxBins &&
+              dopplerHz >= zone.dopplerMinHz && dopplerHz <= zone.dopplerMaxHz)
+            {
+              inExclusion = true;
+              break;
+            }
+          }
+          if (inExclusion)
+          {
+            // Check override: ExclusionZone struct reused with inverted semantics
+            // (presence in this list *permits* detection rather than suppressing it).
+            bool inAllowed = false;
+            for (const auto &zone : allowedZones)
+            {
+              if (delayBins >= zone.delayMinBins && delayBins <= zone.delayMaxBins &&
+                dopplerHz >= zone.dopplerMinHz && dopplerHz <= zone.dopplerMaxHz)
+              {
+                inAllowed = true;
+                break;
+              }
+            }
+            if (!inAllowed)
+            {
+              continue;
+            }
+          }
+        }
+
         delay.push_back(j + x->delay[0]);
         doppler.push_back(x->doppler[i]);
         snr.push_back(mapRowSnr[j]);

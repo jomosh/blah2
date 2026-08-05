@@ -27,6 +27,23 @@ enum class CfarMode
   CAGO
 };
 
+/// @brief A rectangular exclusion zone in the range-Doppler map.
+/// @details Detections falling inside any enabled zone are suppressed.
+struct ExclusionZone
+{
+  /// @brief Minimum delay (bins).
+  double delayMinBins;
+
+  /// @brief Maximum delay (bins).
+  double delayMaxBins;
+
+  /// @brief Minimum Doppler (Hz).
+  double dopplerMinHz;
+
+  /// @brief Maximum Doppler (Hz).
+  double dopplerMaxHz;
+};
+
 class CfarDetector1D
 {
 private:
@@ -51,6 +68,17 @@ private:
   /// @brief Cache for CFAR scaling factors keyed by leading/trailing counts.
   std::unordered_map<uint32_t, double> alphaCache;
 
+  /// @brief Whether exclusion zones are enabled.
+  bool exclusionZonesEnabled;
+
+  /// @brief List of exclusion zones (delay in bins, Doppler in Hz).
+  std::vector<ExclusionZone> exclusionZones;
+
+  /// @brief List of allowed zones that override exclusion (delay in bins, Doppler in Hz).
+  /// @details Detections inside an exclusion zone are still kept if they also
+  ///          fall inside any allowed zone. Used for track-based overrides.
+  std::vector<ExclusionZone> allowedZones;
+
   /// @brief Pointer to detection data to store result.
   Detection *detection;
 
@@ -62,12 +90,23 @@ public:
   /// @param minDelay Minimum delay to process detections (bins).
   /// @param minDoppler Minimum absolute Doppler to process detections (Hz).
   /// @param mode CFAR mode.
+  /// @param exclusionZonesEnabled Whether exclusion zones are enabled.
+  /// @param exclusionZones List of exclusion zones.
   /// @return The object.
-  CfarDetector1D(double pfa, int8_t nGuard, int8_t nTrain, int8_t minDelay, double minDoppler, CfarMode mode = CfarMode::CA);
+  CfarDetector1D(double pfa, int8_t nGuard, int8_t nTrain, int8_t minDelay, double minDoppler, CfarMode mode = CfarMode::CA,
+    bool exclusionZonesEnabled = false, std::vector<ExclusionZone> exclusionZones = {});
 
   /// @brief Destructor.
   /// @return Void.
   ~CfarDetector1D();
+
+  /// @brief Set allowed zones that override exclusion suppression.
+  /// @details Called before each CPI to inject track-based gate windows.
+  ///          Only detections inside both an exclusion zone AND an allowed
+  ///          zone are kept.
+  /// @param zones Allowed zones (delay in bins, Doppler in Hz).
+  /// @return Void.
+  void set_allowed_zones(std::vector<ExclusionZone> zones);
 
   /// @brief Implement the 1D CFAR detector.
   /// @param x Ambiguity map data of IQ samples.

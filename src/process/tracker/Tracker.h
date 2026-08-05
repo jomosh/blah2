@@ -96,6 +96,11 @@ public:
   /// @param detection Detection data for last CPI.
   /// @return Void.
   void initiate(Detection *detection);
+
+  /// @brief Get current positions of all ACTIVE tracks.
+  /// @details Used by exclusion zone override to build allowed zones.
+  /// @return Vector of current Detection positions for ACTIVE tracks.
+  std::vector<Detection> get_active_track_positions() const;
 };
 
 #endif
