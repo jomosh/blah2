@@ -47,7 +47,9 @@ process:
     exclusionZones:
       enabled: false
       zones:
-        # Uncomment and adjust to suppress detections in specific regions:
+        # Uncomment and adjust to suppress detections in specific regions.
+        # delayMin/delayMax are in meters (bistatic range).
+        # dopplerMin/dopplerMax are in Hz (bistatic Doppler).
         # - delayMin: 10000
         #   delayMax: 10100
         #   dopplerMin: -150

@@ -451,21 +451,22 @@ int main(int argc, char **argv)
             // build allowed zones from active tracks to override exclusion zones
             if (isTracker)
             {
+              // Gate values match the tracker's Hungarian assignment gates
+              // (Tracker.cpp lines 179-180).  Keeping them identical ensures
+              // that a detection let through by the CFAR override is also
+              // within range for track association on the next CPI.
               const double delayGateBins = 3.0;
               const double dopplerGateHz = 3.0 * (1.0 / tCpi);
-              std::vector<ExclusionZone> allowedZones;
+              thread_local std::vector<ExclusionZone> allowedZones;
+              allowedZones.clear();
               for (const auto &pos : tracker->get_active_track_positions())
               {
-                ExclusionZone zone;
                 const double delayBins = pos.get_delay().front();
                 const double dopplerHz = pos.get_doppler().front();
-                zone.delayMinBins = delayBins - delayGateBins;
-                zone.delayMaxBins = delayBins + delayGateBins;
-                zone.dopplerMinHz = dopplerHz - dopplerGateHz;
-                zone.dopplerMaxHz = dopplerHz + dopplerGateHz;
-                allowedZones.push_back(zone);
+                allowedZones.push_back({delayBins - delayGateBins, delayBins + delayGateBins,
+                  dopplerHz - dopplerGateHz, dopplerHz + dopplerGateHz});
               }
-              cfarDetector1D->set_allowed_zones(std::move(allowedZones));
+              cfarDetector1D->set_allowed_zones(allowedZones);
             }
             detection1 = cfarDetector1D->process(map);
             detection2 = centroid->process(detection1.get(), map);

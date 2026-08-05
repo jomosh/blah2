@@ -391,6 +391,9 @@ var intervalId = window.setInterval(function () {
         $.getJSON(urlMap, function () { })
           .done(function (data) {
 
+            // ensure exclusion zone shapes are applied on every redraw
+            layout.shapes = exclusionZoneShapes;
+
             // case draw new plot
             if (data.nRows != nRows) {
               nRows = data.nRows;
