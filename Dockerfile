@@ -68,7 +68,7 @@ ADD CMakeLists.txt CMakePresets.json Doxyfile /blah2/
 RUN cmake --preset prod-release \
   -DCMAKE_PREFIX_PATH=$(echo /blah2/lib/vcpkg_installed/*/share) \
   -Wno-dev -Wno-deprecated \
-  && cmake --build build/prod-release -j$(nproc)
+  && cmake --build --preset prod-release --parallel $(nproc)
 
 # CMakeLists.txt sets CMAKE_RUNTIME_OUTPUT_DIRECTORY to ${PROJECT_ROOT}/bin (/blah2/bin)
 RUN chmod +x bin/blah2
