@@ -1,6 +1,8 @@
 FROM ubuntu:questing as blah2_env
+ARG VCPKG_VERSION=2024.05.24
 LABEL maintainer="30hours <nathan@30hours.dev>"
 LABEL org.opencontainers.image.source https://github.com/30hours/blah2
+LABEL vcpkg.version=${VCPKG_VERSION}
 
 WORKDIR /blah2
 ADD lib lib
@@ -40,7 +42,6 @@ RUN git clone https://github.com/EttusResearch/uhd.git /tmp/uhd \
     && rm -rf /tmp/uhd
 # install dependencies from vcpkg
 ENV VCPKG_ROOT=/opt/vcpkg
-ARG VCPKG_VERSION=2024.05.24
 RUN export PATH="/opt/vcpkg:${PATH}" \
   && git clone https://github.com/microsoft/vcpkg /opt/vcpkg \
   && cd /opt/vcpkg \
@@ -91,5 +92,5 @@ RUN cmake --preset prod-release \
   -Wno-dev -Wno-deprecated \
   && cmake --build build/prod-release -j$(nproc)
 
-# CMAKE_RUNTIME_OUTPUT_DIRECTORY redirects the binary to /blah2/bin
+# CMakeLists.txt sets CMAKE_RUNTIME_OUTPUT_DIRECTORY to ${PROJECT_ROOT}/bin (/blah2/bin)
 RUN chmod +x bin/blah2
