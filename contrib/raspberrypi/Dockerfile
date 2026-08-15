@@ -40,10 +40,11 @@ RUN git clone https://github.com/EttusResearch/uhd.git /tmp/uhd \
     && rm -rf /tmp/uhd
 # install dependencies from vcpkg
 ENV VCPKG_ROOT=/opt/vcpkg
+ARG VCPKG_VERSION=2024.05.24
 RUN export PATH="/opt/vcpkg:${PATH}" \
   && git clone https://github.com/microsoft/vcpkg /opt/vcpkg \
   && cd /opt/vcpkg \
-  && git checkout 2024.05.24 \
+  && git checkout ${VCPKG_VERSION} \
   && if [ "$(uname -m)" = "aarch64" ]; then export VCPKG_FORCE_SYSTEM_BINARIES=1; fi \
   && /opt/vcpkg/bootstrap-vcpkg.sh -disableMetrics \
   && cd /blah2/lib && vcpkg integrate install \
@@ -82,10 +83,13 @@ LABEL maintainer="30hours <nathan@30hours.dev>"
 ADD src src
 ADD test test
 ADD CMakeLists.txt CMakePresets.json Doxyfile /blah2/
-# Build using modern CMake preset invocation and flag suppression
+# Build using modern CMake preset invocation.
+# -Wno-dev/-Wno-deprecated override the cmake-pedantic preset (inherited via
+# prod-release), which otherwise promotes dev/deprecated warnings to errors.
 RUN cmake --preset prod-release \
   -DCMAKE_PREFIX_PATH=$(echo /blah2/lib/vcpkg_installed/*/share) \
   -Wno-dev -Wno-deprecated \
   && cmake --build build/prod-release -j$(nproc)
 
-RUN chmod +x build/prod-release/bin/blah2 || chmod +x bin/blah2
+# CMAKE_RUNTIME_OUTPUT_DIRECTORY redirects the binary to /blah2/bin
+RUN chmod +x bin/blah2
