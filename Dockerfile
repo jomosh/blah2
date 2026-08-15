@@ -20,6 +20,8 @@ RUN apt-get update \
 ENV VCPKG_ROOT=/opt/vcpkg
 RUN export PATH="/opt/vcpkg:${PATH}" \
   && git clone https://github.com/microsoft/vcpkg /opt/vcpkg \
+  && cd /opt/vcpkg \
+  && git checkout 2024.05.24 \
   && if [ "$(uname -m)" = "aarch64" ]; then export VCPKG_FORCE_SYSTEM_BINARIES=1; fi \
   && /opt/vcpkg/bootstrap-vcpkg.sh -disableMetrics \
   && cd /blah2/lib && vcpkg integrate install \
@@ -58,7 +60,10 @@ LABEL maintainer="30hours <nathan@30hours.dev>"
 ADD src src
 ADD test test
 ADD CMakeLists.txt CMakePresets.json Doxyfile /blah2/
-RUN mkdir -p build && cd build && cmake -S . --preset prod-release \
-  -DCMAKE_PREFIX_PATH="$(echo /blah2/lib/vcpkg_installed/*);$(echo /blah2/lib/vcpkg_installed/*/share)" .. \
-  && cd prod-release && make
-RUN chmod +x bin/blah2
+# Build using modern CMake preset invocation and flag suppression
+RUN cmake --preset prod-release \
+  -DCMAKE_PREFIX_PATH=$(echo /blah2/lib/vcpkg_installed/*/share) \
+  -Wno-dev -Wno-deprecated \
+  && cmake --build build/prod-release -j$(nproc)
+
+RUN chmod +x build/prod-release/bin/blah2 || chmod +x bin/blah2
