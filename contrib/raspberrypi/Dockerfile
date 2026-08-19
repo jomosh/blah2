@@ -1,6 +1,8 @@
 FROM ubuntu:questing as blah2_env
+ARG VCPKG_VERSION=2024.05.24
 LABEL maintainer="30hours <nathan@30hours.dev>"
 LABEL org.opencontainers.image.source https://github.com/30hours/blah2
+LABEL vcpkg.version=${VCPKG_VERSION}
 
 WORKDIR /blah2
 ADD lib lib
@@ -42,6 +44,8 @@ RUN git clone https://github.com/EttusResearch/uhd.git /tmp/uhd \
 ENV VCPKG_ROOT=/opt/vcpkg
 RUN export PATH="/opt/vcpkg:${PATH}" \
   && git clone https://github.com/microsoft/vcpkg /opt/vcpkg \
+  && cd /opt/vcpkg \
+  && git checkout ${VCPKG_VERSION} \
   && if [ "$(uname -m)" = "aarch64" ]; then export VCPKG_FORCE_SYSTEM_BINARIES=1; fi \
   && /opt/vcpkg/bootstrap-vcpkg.sh -disableMetrics \
   && cd /blah2/lib && vcpkg integrate install \
@@ -80,7 +84,13 @@ LABEL maintainer="30hours <nathan@30hours.dev>"
 ADD src src
 ADD test test
 ADD CMakeLists.txt CMakePresets.json Doxyfile /blah2/
-RUN mkdir -p build && cd build && cmake -S . --preset prod-release \
-  -DCMAKE_PREFIX_PATH=$(echo /blah2/lib/vcpkg_installed/*/share) .. \
-  && cd prod-release && make
+# Build using modern CMake preset invocation.
+# -Wno-dev/-Wno-deprecated override the cmake-pedantic preset (inherited via
+# prod-release), which otherwise promotes dev/deprecated warnings to errors.
+RUN cmake --preset prod-release \
+  -DCMAKE_PREFIX_PATH=$(echo /blah2/lib/vcpkg_installed/*/share) \
+  -Wno-dev -Wno-deprecated \
+  && cmake --build --preset prod-release --parallel $(nproc)
+
+# CMakeLists.txt sets CMAKE_RUNTIME_OUTPUT_DIRECTORY to ${PROJECT_ROOT}/bin (/blah2/bin)
 RUN chmod +x bin/blah2
