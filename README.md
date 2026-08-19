@@ -1,4 +1,4 @@
-# blah2 bootleg
+# blah2 contrail
 
 A real-time radar which can support various SDR platforms.
 
