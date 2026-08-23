@@ -18,3 +18,8 @@ services:
     networks:
       - nginx-web
     container_name: blah2
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "1"
