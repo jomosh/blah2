@@ -16,6 +16,11 @@ services:
     privileged: true
     command: "/blah2/bin/blah2 -c config/config.yml"
     container_name: blah2-node1
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "1"
 
   # Node 1 API bridge
   blah2_api_node1:
@@ -27,6 +32,11 @@ services:
     network_mode: host
     command: "node server.js /usr/src/app/config/config.yml"
     container_name: blah2-api-node1
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "1"
 
   # UI ON/OFF TOGGLE:
   # - UI ON (default): keep this service block enabled.
@@ -39,6 +49,11 @@ services:
     volumes:
       - ./html:/usr/local/apache2/htdocs
     container_name: blah2-web-node1
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "1"
 
   # -------------------------------------------------------------------------
   # OPTIONAL NODE 2 TEMPLATE (copy/paste and uncomment to scale on one host)
@@ -59,6 +74,11 @@ services:
   #   privileged: true
   #   command: "/blah2/bin/blah2 -c config/config-node2.yml"
   #   container_name: blah2-node2
+  #   logging:
+  #     driver: json-file
+  #     options:
+  #       max-size: "10m"
+  #       max-file: "1"
 
   # blah2_api_node2:
   #   restart: always
@@ -69,6 +89,11 @@ services:
   #   network_mode: host
   #   command: "node server.js /usr/src/app/config/config-node2.yml"
   #   container_name: blah2-api-node2
+  #   logging:
+  #     driver: json-file
+  #     options:
+  #       max-size: "10m"
+  #       max-file: "1"
 
   # UI ON/OFF FOR NODE 2:
   # - UI ON: keep this service when enabling node2.
@@ -81,3 +106,8 @@ services:
   #   volumes:
   #     - ./html:/usr/local/apache2/htdocs
   #   container_name: blah2-web-node2
+  #   logging:
+  #     driver: json-file
+  #     options:
+  #       max-size: "10m"
+  #       max-file: "1"
