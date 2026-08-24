@@ -4,7 +4,7 @@ pipeline {
     environment {
         GHCR_REGISTRY = "ghcr.io"
         GHCR_TOKEN = credentials('ghcr-login')
-        BLAH2_NAME = "30hours/blah2"
+        BLAH2_NAME = "jomosh/blah2-contrail"
     }
 
     stages {

@@ -50,10 +50,10 @@
   ```bash
   sudo apt install rtl-sdr*
   ```
-- Install [blah2](https://github.com/30hours/blah2)
-- If the installation had failed, this is likely due to the default Dockerfile. It was written for x64 machines. You need to replace it with [this Dockerfile](/30hours/blah2/blob/main/contrib/raspberrypi/Dockerfile) that was written for ARM devices.
+- Install [blah2-contrail](https://github.com/jomosh/blah2-contrail)
+- If the installation had failed, this is likely due to the default Dockerfile. It was written for x64 machines. You need to replace it with [this Dockerfile](/jomosh/blah2-contrail/blob/main/contrib/raspberrypi/Dockerfile) that was written for ARM devices.
 - Obtain the HackRF One serial numbers by running ```hackrf_info```.
-- Make sure to place the correct config file for HackRF One in ```/opt/blah2/config/config.yml```. Another type of SDR device config could be there be default. All example config files reside in the same directory.
+- Make sure to place the correct config file for HackRF One in ```/opt/blah2-contrail/config/config.yml```. Another type of SDR device config could be there be default. All example config files reside in the same directory.
 - At this stage, you just need to put the serial numbers of the reference and surveillance HackRF One devices. Tuning other parameters will be discussed separately.
 - (Optional) As I have been testing outdoors, it may take the HackRF board a bit of time after a cold start to warm up and stabilise. Hence, I force blah2 to restart after 10mins of boot time
   ```bash
@@ -61,7 +61,7 @@
   ```
   Then, add the following line to the end of the file
   ```bash
-  @reboot sleep 600 && sudo docker compose -f /opt/blah2/docker-compose.yml down; sudo docker compose -f /opt/blah2/docker-compose.yml up
+  @reboot sleep 600 && sudo docker compose -f /opt/blah2-contrail/docker-compose.yml down; sudo docker compose -f /opt/blah2-contrail/docker-compose.yml up
   ```
 - Install [adsb2dd](https://github.com/30hours/adsb2dd). No additional configuration is required for adsb2dd.
 - Install readsb (it helps if the rtl-sdr dongle is plugged in!). Instruction can be found [here](https://github.com/wiedehopf/adsb-scripts/wiki/Automatic-installation-for-readsb).
