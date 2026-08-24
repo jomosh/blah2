@@ -62,16 +62,6 @@ Example deployments:
 - Support for the Kraken SDR with all 5 channels.
 - Add [SoapySDR](https://github.com/pothosware/SoapySDR) support for the [C++ API](https://github.com/pothosware/SoapySDR/wiki/Cpp_API_Example) to include a wide range of SDR platforms.
 
-## FAQ
-
-- If the SDRplay RSPduo does not capture data, restart the API service (on the host) using the script `sudo ./script/blah2_rspduo_restart.bash`.
-
-## Contributing
-
-Pull requests are welcome - especially for adding support for a new SDR.
-
-- Currently have an issue where the USRP B210 is timing out after 5-10 mins and crashes the code. Convinced it's an issue with my usage of the API - contact me for more info.
-
 ## Links
 
 - Join the [Discord](https://discord.gg/ewNQbeK5Zn) chat for sharing results and support.
