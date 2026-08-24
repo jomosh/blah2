@@ -1,7 +1,7 @@
 FROM node:16
 
 LABEL maintainer="30hours <nathan@30hours.dev>"
-LABEL org.opencontainers.image.source https://github.com/30hours/blah2
+LABEL org.opencontainers.image.source https://github.com/jomosh/blah2-contrail
 
 # Create app directory
 WORKDIR /usr/src/app

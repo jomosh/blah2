@@ -1,8 +1,8 @@
-# blah2 contrail
+# blah2-contrail
 
 A real-time radar which can support various SDR platforms.
 
-![blah2 example display](./example.png "blah2")
+![blah2-contrail example display](./example.png "blah2-contrail")
 
 ## Features
 
@@ -22,24 +22,24 @@ A real-time radar which can support various SDR platforms.
 
 ## Services
 
-The build environment consists of a docker-compose.yml file running the following services;
+The build environment consists of a `docker-compose.yml` file running the following services:
 
 - The radar processor responsible for IQ capture and processing.
 - The API middleware responsible for reading TCP ports for delay-Doppler map data, and exposing this on a REST API.
 - The web front-end displaying processed radar data.
 
-## Usage
+## Installation
 
-Building the code using the following instructions; 
+Building the code using the following instructions:
 
 - Install docker and docker-compose on the host machine.
 - Clone this repository to some directory.
-- Install SDRplay API to run service on host.
+- Install the SDRplay API to run the service on the host.
 - Run the docker-compose command.
 
 ```bash
-sudo git clone http://github.com/jomosh/blah2 /opt/blah2
-cd /opt/blah2
+sudo git clone https://github.com/jomosh/blah2-contrail /opt/blah2-contrail
+cd /opt/blah2-contrail
 sudo chown -R $USER .
 sudo chmod a+x ./lib/sdrplay-3.15.2/SDRplay_RSP_API-Linux-3.15.2.run
 sudo ./lib/sdrplay-3.15.2/SDRplay_RSP_API-Linux-3.15.2.run --tar -xvf -C ./lib/sdrplay-3.15.2
@@ -50,7 +50,10 @@ sudo docker compose up -d --build
 
 ## Documentation
 
-- See `doxygen` pages hosted at [http://doc.30hours.dev/blah2](http://doc.30hours.dev/blah2).
+Example deployments:
+
+- [Multi-node deployment](doc/example-deployments/multi-node/README.md) — run 1+ independent `blah2-contrail` nodes on a single host.
+- [HackRF on Raspberry Pi 5](doc/example-deployments/HackRF-RPI5/README.md) — ARM device setup using two HackRF One receivers.
 
 ## Future Work
 
@@ -65,7 +68,7 @@ sudo docker compose up -d --build
 
 ## Contributing
 
-Pull requests are welcome - especially for adding support for a new SDR. 
+Pull requests are welcome - especially for adding support for a new SDR.
 
 - Currently have an issue where the USRP B210 is timing out after 5-10 mins and crashes the code. Convinced it's an issue with my usage of the API - contact me for more info.
 
