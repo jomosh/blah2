@@ -61,8 +61,6 @@ Example deployments:
 ## Future Work
 
 - Add a tracker in delay-Doppler space.
-- Support for the HackRF/RTL-SDR using a front-end mixer, to sample 2 RF channels in 1 stream.
-- Support for the Kraken SDR with all 5 channels.
 - Add [SoapySDR](https://github.com/pothosware/SoapySDR) support for the [C++ API](https://github.com/pothosware/SoapySDR/wiki/Cpp_API_Example) to include a wide range of SDR platforms.
 
 ## Links
